@@ -1,0 +1,22 @@
+.env
+.env.*
+!.env.example
+.planning-research/
+node_modules/
+dist/
+release/
+coverage/
+*.log
+*.tsbuildinfo
+.vite/
+
+# Gradle / Android TV
+apps/tv/.gradle/
+apps/tv/build/
+apps/tv/app/build/
+apps/tv/local.properties
+apps/tv/keystore/
+*.keystore
+*.jks
+
+# Local test and runtime data lives on D:\HomeStream, outside the repo

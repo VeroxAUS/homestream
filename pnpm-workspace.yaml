@@ -1,0 +1,10 @@
+packages:
+  - apps/server
+  - apps/web
+  - apps/desktop
+  - packages/shared
+
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: true

@@ -1,0 +1,11 @@
+import type { Config } from './config.js';
+import type { Db } from './db/index.js';
+import type { EventBus } from './events/bus.js';
+import type { FastifyBaseLogger } from 'fastify';
+
+export interface AppContext {
+  config: Config;
+  db: Db;
+  bus: EventBus;
+  logger: FastifyBaseLogger;
+}
