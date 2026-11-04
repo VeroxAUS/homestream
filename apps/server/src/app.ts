@@ -6,15 +6,18 @@ import { openDatabase, type Db } from './db/index.js';
 import { AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { createLogger } from './logger.js';
+import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerInfoRoutes } from './routes/info.js';
 import { registerStatic, shouldServeSpaFallback } from './routes/static.js';
+import { TmdbService } from './tmdb/service.js';
 
 export interface BuildAppOptions {
   logger?: FastifyBaseLogger;
   db?: Db;
   bus?: EventBus;
+  tmdb?: TmdbService;
   heartbeatMs?: number;
 }
 
@@ -31,7 +34,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   const logger: FastifyBaseLogger = options.logger ?? (ownedLogger as NonNullable<typeof ownedLogger>).logger;
   const db = options.db ?? openDatabase(config.dataDir);
   const bus = options.bus ?? new EventBus();
-  const ctx: AppContext = { config, db, bus, logger };
+  const tmdb = options.tmdb ?? new TmdbService({ config, db, logger });
+  const ctx: AppContext = { config, db, bus, logger, tmdb };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -72,6 +76,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
 
   registerInfoRoutes(app, ctx);
   registerDeviceRoutes(app, ctx);
+  registerCatalogRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
