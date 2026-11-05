@@ -1,120 +1,223 @@
-import { mkdirSync, existsSync } from 'node:fs';
-import { rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { EncoderProcess, type EncoderExit } from './encoderProcess.js';
-import { PROBE_LIMIT_ARGS } from './probe.js';
+import type { EncoderExit } from './encoderProcess.js';
 import type { PidRegistry } from './pidRegistry.js';
+import type { ProbeResult } from './probe.js';
+import { SUBTITLE_DIR, SubtitleRun, type RunKind } from './subtitleRun.js';
+import { SubtitleStore } from './subtitleStore.js';
 
 export const MAX_TEXT_SUBTITLES = 10;
-export const SUBTITLE_DIR = 'subs';
-/** Marks extractor processes in the pid registry; their command line deliberately has no session id (see `buildExtractArgs`). */
-export const EXTRACTOR_MARKER = 'webvtt';
+/** An extractor starts this far before the position it is needed at, so cues already on screen there are not missed. */
+export const PREROLL_SEC = 40;
+/** A request this close ahead of a running extractor's head is simply waited for: 25x realtime gets there in seconds. */
+export const NEAR_AHEAD_SEC = 120;
+/** The fill run for earlier parts of the file waits until the main run has read this much, to leave early bandwidth to the encoder. */
+export const FILL_DELAY_SEC = 60;
+/** A new run is unthrottled until it has read this far past the position it was started for (60 s of cues plus the coverage lag), but never for longer than `BURST_MAX_MS`. */
+const BURST_AHEAD_SEC = 72;
+const BURST_MAX_MS = 25_000;
+/** A run is stopped once it has read this far into the territory of a later run. */
+const HANDOVER_SEC = 10;
+const MAX_RUNS = 2;
+const ENGLISH = /^en(g|glish)?$/i;
 
-const SUBTITLE_FILE = /^(\d{1,5})\.vtt$/;
-
-export function parseSubtitleFileName(name: string): number | null {
-  const match = SUBTITLE_FILE.exec(name);
-  return match ? Number(match[1]) : null;
+export interface TextTrack {
+  index: number;
+  language: string;
+  title: string;
+  forced: boolean;
 }
 
-export function subtitlePath(sessionDir: string, index: number): string {
-  return path.join(sessionDir, SUBTITLE_DIR, `${index}.vtt`);
-}
-
-/**
- * One ffmpeg pass that converts the given text tracks to WebVTT from time 0, so cue times are absolute and
- * independent of where the encoder starts. Output names are relative to the session dir (the process cwd): that keeps the
- * session id off the command line, so a session's encoder stays the only process that matches it.
- */
-export function buildExtractArgs(inputUrl: string, indices: number[]): string[] {
-  const args = ['-hide_banner', '-loglevel', 'error', '-y'];
-  if (/^https?:\/\//i.test(inputUrl)) {
-    args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10');
-  }
-  args.push(...PROBE_LIMIT_ARGS, '-i', inputUrl);
-  for (const index of indices) {
-    args.push('-map', `0:${index}`, '-c:s', 'webvtt', '-f', EXTRACTOR_MARKER, `${SUBTITLE_DIR}/${index}.part`);
-  }
-  return args;
+/** The text tracks that get a rendition: English first when there are more than the maximum, original order kept. */
+export function selectTextTracks(probe: Pick<ProbeResult, 'subtitles'>): TextTrack[] {
+  const text = probe.subtitles.filter((track) => track.kind === 'text');
+  if (text.length <= MAX_TEXT_SUBTITLES) return text;
+  const english = text.filter((track) => ENGLISH.test(track.language));
+  const others = text.filter((track) => !ENGLISH.test(track.language));
+  const chosen = new Set([...english, ...others].slice(0, MAX_TEXT_SUBTITLES).map((track) => track.index));
+  return text.filter((track) => chosen.has(track.index));
 }
 
 export interface SubtitleExtractorOptions {
   ffmpegPath: string;
   sessionId: string;
   sessionDir: string;
-  /** Read at start, so a re-resolved CDN link is picked up. */
+  /** Read at each launch. */
   inputUrl: () => string;
-  indices: number[];
+  videoIndex: number;
+  durationSec: number;
+  tracks: readonly number[];
   registry: PidRegistry;
-  onReady: (index: number) => void;
-  onFailure: (indices: number[], exit: EncoderExit) => void;
+  /** Called once when extraction gave up for good. */
+  onFailure: (exit: EncoderExit) => void;
 }
 
-/** Converts a session's text subtitle tracks to WebVTT in the background, one file per track, published when complete. */
+/**
+ * Keeps a session's subtitle cue store filled. At most two ffmpeg processes run at once: `main` from just before the start
+ * position to the end of the file, a `fill` run that reads what main skipped (the start of the file), and `seek` runs that
+ * `ensureExtractorFor` starts when a request lands where nothing is heading. Independent of encoder restarts.
+ */
 export class SubtitleExtractor {
-  private current: EncoderProcess | null = null;
+  readonly store: SubtitleStore;
+  private readonly runs: SubtitleRun[] = [];
+  private nextRunId = 1;
   private stopped = false;
-  private finished: Promise<void> | null = null;
+  private gaveUp = false;
+  private launching: Promise<void> | null = null;
 
-  constructor(private readonly options: SubtitleExtractorOptions) {}
+  constructor(private readonly options: SubtitleExtractorOptions) {
+    this.store = new SubtitleStore(options.durationSec, options.tracks);
+  }
 
-  start(): void {
-    if (this.finished || this.options.indices.length === 0) return;
-    mkdirSync(path.join(this.options.sessionDir, SUBTITLE_DIR), { recursive: true });
-    this.finished = this.run().catch(() => undefined);
+  /** Starts the main run; call together with the encoder. */
+  start(startSec: number): void {
+    if (this.runs.length > 0 || this.options.tracks.length === 0) return;
+    this.launch('main', Math.max(0, Math.floor(startSec - PREROLL_SEC)), false).needSec = startSec + BURST_AHEAD_SEC;
+  }
+
+  /**
+   * True while a main or seek run is still reading its first stretch after it started. Cues near the playhead are what the
+   * viewer waits for, so these reads are exempt from the throttle that otherwise yields source bandwidth to the encoder.
+   */
+  get bursting(): boolean {
+    const now = Date.now();
+    return this.runs.some(
+      (run) =>
+        run.running &&
+        !run.stopRequested &&
+        run.kind !== 'fill' &&
+        now - run.startedAt < BURST_MAX_MS &&
+        run.headSec < run.needSec,
+    );
+  }
+
+  /** Processes currently alive, including ones that are being stopped. */
+  get processCount(): number {
+    return this.runs.filter((run) => run.running).length;
+  }
+
+  get pids(): number[] {
+    return this.runs.filter((run) => run.running && run.pid !== undefined).map((run) => run.pid as number);
+  }
+
+  /** Makes sure something is reading toward `sec`; a no-op when it is covered or an extractor is about to get there. */
+  ensureExtractorFor(sec: number): void {
+    if (this.stopped || this.gaveUp || this.options.tracks.length === 0) return;
+    if (this.store.complete || this.store.segmentCovered(Math.floor(sec / 4))) return;
+    // A run that started before `sec` covers it as soon as its head is a few seconds past; a second run there would only split the bandwidth.
+    if (this.active().some((run) => run.ss <= sec && sec <= run.headSec + NEAR_AHEAD_SEC)) return;
+    if (this.launching) return;
+    const ss = Math.max(0, Math.floor(sec - PREROLL_SEC));
+    this.launching = this.launchSeek(sec, ss).finally(() => {
+      this.launching = null;
+    });
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
-    await this.current?.stop();
-    await this.finished;
+    await this.launching?.catch(() => undefined);
+    await Promise.all(this.runs.map((run) => run.stop()));
   }
 
-  private async run(): Promise<void> {
-    const { indices } = this.options;
-    let result = await this.pass(indices);
-    // One broken track must not take the others down: retry each on its own.
-    if (result.failed.length > 0 && indices.length > 1 && !this.stopped) {
-      const failed: number[] = [];
-      for (const index of indices) {
-        if (this.stopped) return;
-        result = await this.pass([index]);
-        failed.push(...result.failed);
-      }
-      result = { failed, exit: result.exit };
+  private active(): SubtitleRun[] {
+    return this.runs.filter((run) => run.running && !run.stopRequested);
+  }
+
+  private async launchSeek(sec: number, ss: number): Promise<void> {
+    let victim: SubtitleRun | undefined;
+    if (this.processCount >= MAX_RUNS) {
+      victim = this.active()
+        .filter((run) => run.kind !== 'main')
+        .sort((a, b) => sec - b.headSec - (sec - a.headSec))[0];
+      // Main is only given up when it is the sole candidate left.
+      victim ??= this.active().sort((a, b) => a.headSec - b.headSec)[0];
+      await victim?.stop();
     }
-    if (result.failed.length > 0 && !this.stopped) this.options.onFailure(result.failed, result.exit);
+    if (this.stopped || this.gaveUp || this.processCount >= MAX_RUNS) return;
+    if (this.store.segmentCovered(Math.floor(sec / 4))) return;
+    this.launch('seek', ss, false).needSec = sec + BURST_AHEAD_SEC;
   }
 
-  /** Runs one ffmpeg over `indices`; reports the indices that produced no file. */
-  private async pass(indices: number[]): Promise<{ failed: number[]; exit: EncoderExit }> {
-    const { options } = this;
-    const proc = new EncoderProcess({
-      ffmpegPath: options.ffmpegPath,
-      args: buildExtractArgs(options.inputUrl(), indices),
-      cwd: options.sessionDir,
-      onProgress: () => undefined,
+  private launch(kind: RunKind, ss: number, retried: boolean): SubtitleRun {
+    const id = this.nextRunId;
+    this.nextRunId += 1;
+    const run = new SubtitleRun({
+      id,
+      kind,
+      ss,
+      retried,
+      ffmpegPath: this.options.ffmpegPath,
+      sessionId: this.options.sessionId,
+      sessionDir: this.options.sessionDir,
+      registry: this.options.registry,
+      inputUrl: this.options.inputUrl(),
+      videoIndex: this.options.videoIndex,
+      tracks: this.options.tracks,
+      outputDir: path.join(SUBTITLE_DIR, `run${id}`),
+      onCues: (track, cues) => this.store.addCues(track, cues),
+      onUpdate: (current) => this.onUpdate(current),
+      onExit: (current, exit) => this.onExit(current, exit),
     });
-    this.current = proc;
-    const pid = proc.pid;
-    if (pid !== undefined) options.registry.add({ pid, sessionId: options.sessionId, startedAt: Date.now(), match: EXTRACTOR_MARKER });
-    const exit = await proc.exited;
-    if (pid !== undefined) options.registry.remove(pid);
-    this.current = null;
+    this.runs.push(run);
+    return run;
+  }
 
-    const failed: number[] = [];
-    for (const index of indices) {
-      const part = path.join(options.sessionDir, SUBTITLE_DIR, `${index}.part`);
-      if (!this.stopped && exit.code === 0 && existsSync(part)) {
-        await rename(part, subtitlePath(options.sessionDir, index)).then(
-          () => options.onReady(index),
-          () => failed.push(index),
-        );
-      } else {
-        failed.push(index);
-        await rm(part, { force: true }).catch(() => undefined);
-      }
+  private onUpdate(run: SubtitleRun): void {
+    this.store.setCoverage(run.id, run.coverage());
+    if (!this.stopped) this.evaluate();
+  }
+
+  private onExit(run: SubtitleRun, exit: EncoderExit): void {
+    this.store.setCoverage(run.id, run.coverage());
+    if (this.stopped || run.stopRequested) {
+      if (!this.stopped) this.evaluate();
+      return;
     }
-    return { failed, exit };
+    if (exit.code !== 0) {
+      this.recover(run, exit);
+      return;
+    }
+    this.evaluate();
+  }
+
+  /** A failed run is restarted once from shortly before where it stopped; the second failure ends extraction. */
+  private recover(run: SubtitleRun, exit: EncoderExit): void {
+    if (!run.retried) {
+      this.launch(run.kind, Math.max(0, Math.floor(run.committedHeadSec - PREROLL_SEC)), true);
+      return;
+    }
+    this.gaveUp = true;
+    this.store.markFailed();
+    this.options.onFailure(exit);
+    void Promise.all(this.active().map((other) => other.stop()));
+  }
+
+  private evaluate(): void {
+    if (this.gaveUp) return;
+    if (this.store.complete) {
+      for (const run of this.active()) void run.stop();
+      return;
+    }
+    for (const run of this.active()) {
+      const handedOver = this.runs.some(
+        (other) =>
+          other !== run &&
+          other.ss > run.ss &&
+          (other.done || (other.running && !other.stopRequested)) &&
+          run.headSec >= other.coverStart + HANDOVER_SEC,
+      );
+      if (handedOver) void run.stop();
+    }
+    this.fillGap();
+  }
+
+  /** Starts a run for the first stretch nobody is reading, once the main run is under way and a process slot is free. */
+  private fillGap(): void {
+    if (this.launching || this.processCount >= MAX_RUNS) return;
+    const main = this.runs.findLast((run) => run.kind === 'main');
+    if (main?.running && main.headSec - main.ss < FILL_DELAY_SEC) return;
+    const gap = this.store.firstGap();
+    if (!gap) return;
+    if (this.active().some((run) => Math.abs(run.frontier - gap.start) < 0.01 || (run.ss === 0 && gap.start === 0))) return;
+    this.launch('fill', gap.start === 0 ? 0 : Math.max(0, Math.floor(gap.start - PREROLL_SEC)), false);
   }
 }

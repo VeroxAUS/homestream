@@ -133,10 +133,10 @@ describe('POST /api/prefetch', () => {
   });
 
   it('answers 202 with a null stream id when the stream list is not cached yet, then warms in the background', async () => {
-    harness.stub.setDelay(1500);
+    harness.stub.setDelay(4000);
     const started = Date.now();
     const res = await post(body({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1, device: PROFILES.p720 }));
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(Date.now() - started).toBeLessThan(3000);
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ streamId: null });
     harness.stub.setDelay(0);

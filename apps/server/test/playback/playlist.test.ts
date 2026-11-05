@@ -51,7 +51,8 @@ describe('generatePlaylist', () => {
 
 describe('parseHlsFileName', () => {
   it('accepts only the known HLS file names', () => {
-    expect(parseHlsFileName('index.m3u8')).toEqual({ kind: 'playlist' });
+    expect(parseHlsFileName('index.m3u8')).toEqual({ kind: 'master' });
+    expect(parseHlsFileName('video.m3u8')).toEqual({ kind: 'playlist' });
     expect(parseHlsFileName('init.mp4')).toEqual({ kind: 'init' });
     expect(parseHlsFileName('seg-12.m4s')).toEqual({ kind: 'segment', index: 12, extension: 'm4s' });
     expect(parseHlsFileName('seg-0.ts')).toEqual({ kind: 'segment', index: 0, extension: 'ts' });
@@ -61,6 +62,7 @@ describe('parseHlsFileName', () => {
   });
 
   it('maps files to content types', () => {
+    expect(contentTypeFor({ kind: 'master' })).toBe('application/vnd.apple.mpegurl');
     expect(contentTypeFor({ kind: 'playlist' })).toBe('application/vnd.apple.mpegurl');
     expect(contentTypeFor({ kind: 'init' })).toBe('video/mp4');
     expect(contentTypeFor({ kind: 'segment', index: 0, extension: 'ts' })).toBe('video/mp2t');

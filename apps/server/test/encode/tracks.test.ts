@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { SessionResponse } from '@homestream/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -16,7 +15,7 @@ import {
   type Harness,
   type HarnessOptions,
 } from '../playback/harness.js';
-import { generateHdrBitmapSource, generateSubtitleSources, TEXT_CUES } from '../playback/subtitleSources.js';
+import { generateHdrBitmapSource, generateSubtitleSources } from '../playback/subtitleSources.js';
 
 const TIMEOUT = 180_000;
 
@@ -57,8 +56,6 @@ async function boot(options: Partial<HarnessOptions> = {}): Promise<Harness> {
   return harness;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 async function getSession(harness: Harness, sessionId: string): Promise<SessionResponse> {
   return (await harness.app.inject(`/api/sessions/${sessionId}`)).json();
 }
@@ -72,16 +69,6 @@ async function audioMd5(harness: Harness, sessionId: string, segment: string): P
   const { file } = await probeSegment(harness, sessionId, segment, work);
   const out = await run('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:a', '-f', 'md5', '-']);
   return out.trim();
-}
-
-async function waitForSubtitles(harness: Harness, sessionId: string, indices: number[]): Promise<SessionResponse> {
-  const deadline = Date.now() + 60_000;
-  for (;;) {
-    const session = await getSession(harness, sessionId);
-    const ready = indices.every((index) => session.subtitleTracks.find((track) => track.index === index)?.url);
-    if (ready || Date.now() > deadline) return session;
-    await sleep(200);
-  }
 }
 
 function execBuffer(args: string[]): Promise<Buffer> {
@@ -112,18 +99,6 @@ function meanAbsDiff(a: Buffer, b: Buffer): number {
 async function lowerThirdOf(harness: Harness, sessionId: string, segment: string, frame: number): Promise<Buffer> {
   const { file } = await probeSegment(harness, sessionId, segment, work);
   return lowerThird(file, frame);
-}
-
-function parseVtt(text: string): Array<{ start: number; end: number; text: string }> {
-  const seconds = (stamp: string) => {
-    const parts = stamp.split(':').map(Number);
-    return parts.reduce((total, part) => total * 60 + part, 0);
-  };
-  return [...text.matchAll(/^((?:\d+:)?\d+:\d+\.\d+) --> ((?:\d+:)?\d+:\d+\.\d+)[^\n]*\n(.+)$/gm)].map((match) => ({
-    start: seconds(match[1] as string),
-    end: seconds(match[2] as string),
-    text: (match[3] as string).trim(),
-  }));
 }
 
 describe('audio tracks', () => {
@@ -233,89 +208,6 @@ describe('audio tracks', () => {
     expect(await listFfmpegPids(sessionId)).toEqual(pids);
     expect((await getSession(harness, sessionId)).selectedAudioIndex).toBe(ENG);
     await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${sessionId}` });
-  }, TIMEOUT);
-});
-
-describe('text subtitles', () => {
-  it('extracts WebVTT with absolute cue times, identical for a session that starts later, and sidecar selection keeps the encoder', async () => {
-    const harness = await boot();
-    const first = (await startSession(harness, 'movie', 'desktop')).body;
-    await fetchHls(harness, first.sessionId, 'seg-0.ts');
-    expect(first.subtitleTracks.filter((track) => track.kind === 'text').every((track) => track.url === null)).toBe(true);
-
-    const ready = await waitForSubtitles(harness, first.sessionId, [TEXT_ENG, TEXT_POR]);
-    const text = ready.subtitleTracks.find((track) => track.index === TEXT_ENG);
-    expect(text).toMatchObject({ kind: 'text', language: 'eng', title: 'English', url: `/hls/${first.sessionId}/subs/${TEXT_ENG}.vtt` });
-    expect(ready.subtitleTracks.find((track) => track.index === BITMAP)?.url).toBeNull();
-
-    const res = await harness.app.inject(text?.url as string);
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toContain('text/vtt');
-    expect(res.body.startsWith('WEBVTT')).toBe(true);
-    const cues = parseVtt(res.body);
-    expect(cues.map((cue) => [cue.start, cue.end, cue.text])).toEqual(TEXT_CUES.map((cue) => [cue.startSec, cue.endSec, cue.text]));
-    expect(cues[0]?.start).toBeGreaterThanOrEqual(0);
-    expect(cues.at(-1)?.end).toBeLessThanOrEqual(first.durationSec + 5);
-
-    const portuguese = await harness.app.inject(`/hls/${first.sessionId}/subs/${TEXT_POR}.vtt`);
-    expect(portuguese.body).toContain('First text cue (pt)');
-
-    const later = (await startSession(harness, 'movie', 'desktop', { startPositionSec: 20 })).body;
-    await fetchHls(harness, later.sessionId, 'seg-5.ts');
-    await waitForSubtitles(harness, later.sessionId, [TEXT_ENG]);
-    const laterRes = await harness.app.inject(`/hls/${later.sessionId}/subs/${TEXT_ENG}.vtt`);
-    expect(laterRes.rawPayload.equals(res.rawPayload)).toBe(true);
-
-    const pids = await listFfmpegPids(first.sessionId);
-    expect(pids).toHaveLength(1);
-    const sidecar = await patch(harness, first.sessionId, { subtitle: { index: TEXT_ENG, mode: 'sidecar' } });
-    expect(sidecar.status).toBe(200);
-    expect(sidecar.body.decision.subtitleBurnIn).toBe(false);
-    expect(sidecar.body.selectedSubtitle).toEqual({ index: TEXT_ENG, mode: 'sidecar' });
-    expect(await listFfmpegPids(first.sessionId)).toEqual(pids);
-    expect((await patch(harness, first.sessionId, { subtitle: null })).body.selectedSubtitle).toBeNull();
-    expect(await listFfmpegPids(first.sessionId)).toEqual(pids);
-
-    for (const session of [first, later]) await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${session.sessionId}` });
-    expect(readdirSync(harness.transcodeDir)).toEqual([]);
-  }, TIMEOUT);
-
-  it('answers 404 for tracks that have no WebVTT file', async () => {
-    const harness = await boot();
-    const { sessionId } = (await startSession(harness, 'movie', 'desktop')).body;
-    await waitForSubtitles(harness, sessionId, [TEXT_ENG]);
-    for (const name of [`${BITMAP}.vtt`, '99.vtt', 'x.vtt', `${TEXT_ENG}.srt`]) {
-      const res = await harness.app.inject(`/hls/${sessionId}/subs/${name}`);
-      expect(res.statusCode, name).toBe(404);
-      expect(res.json().error).toMatchObject({ code: 'not_found', hint: expect.any(String) });
-    }
-    expect((await harness.app.inject('/hls/nonexistent/subs/4.vtt')).statusCode).toBe(404);
-    await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${sessionId}` });
-  }, TIMEOUT);
-
-  it('counts subtitle fetches as activity for the idle timeout', async () => {
-    const harness = await boot({ playback: { idleTimeoutMs: 3000, monitorTickMs: 300 } });
-    const { sessionId } = (await startSession(harness, 'movie', 'desktop')).body;
-    await fetchHls(harness, sessionId, 'seg-0.ts');
-    await waitForSubtitles(harness, sessionId, [TEXT_ENG]);
-
-    for (let i = 0; i < 14; i += 1) {
-      await sleep(500);
-      expect((await harness.app.inject(`/hls/${sessionId}/subs/${TEXT_ENG}.vtt`)).statusCode).toBe(200);
-    }
-    expect((await harness.app.inject(`/api/sessions/${sessionId}`)).statusCode).toBe(200);
-
-    await sleep(4500);
-    expect((await harness.app.inject(`/api/sessions/${sessionId}`)).statusCode).toBe(404);
-  }, TIMEOUT);
-
-  it('stops the extraction with the session and leaves no ffmpeg behind', async () => {
-    const harness = await boot();
-    const { sessionId } = (await startSession(harness, 'movie', 'desktop')).body;
-    await fetchHls(harness, sessionId, 'seg-0.ts');
-    await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${sessionId}` });
-    expect(existsSync(path.join(harness.transcodeDir, sessionId))).toBe(false);
-    expect((await listFfmpegCommandLines()).filter((line) => line.includes(harness.transcodeDir) || line.includes('webvtt'))).toEqual([]);
   }, TIMEOUT);
 });
 

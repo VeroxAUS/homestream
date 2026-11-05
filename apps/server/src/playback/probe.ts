@@ -15,7 +15,7 @@ export interface VideoInfo {
   dolbyVisionProfile: number | null;
 }
 
-export type SubtitleTrackInfo = Omit<SubtitleTrack, 'url'> & {
+export type SubtitleTrackInfo = Omit<SubtitleTrack, 'url' | 'fullUrl' | 'status'> & {
   codec: string;
   /** Canvas the bitmap was authored for; absent when the container does not say. */
   canvas?: { width: number; height: number };

@@ -30,7 +30,7 @@ export interface BuildAppOptions {
   tmdb?: TmdbService;
   gateway?: GatewayClient;
   /** Test seams for the playback pipeline (ffprobe, CDN link resolution, segment wait). */
-  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'maxSessions' | 'idleTimeoutMs' | 'monitorTickMs'> & {
+  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'idleTimeoutMs' | 'monitorTickMs'> & {
     probe?: ProbeRunner;
     resolveUrl?: UrlResolver;
   };
@@ -94,6 +94,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
 
   app.setErrorHandler((error: FastifyError | AppError, request, reply) => {
     if (error instanceof AppError) {
+      if (error.headers) reply.headers(error.headers);
       return reply.code(error.statusCode).send(errorBody(error.code, error.message, error.hint));
     }
     const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;

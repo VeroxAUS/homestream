@@ -28,7 +28,9 @@ import { SessionMonitor } from './monitor.js';
 import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
 import {
   SEGMENT_SECONDS,
+  generateMasterPlaylist,
   generatePlaylist,
+  generateSubtitlePlaylist,
   segmentCount,
   segmentFileName,
   segmentFormatFor,
@@ -38,12 +40,9 @@ import {
 import type { RawProgress } from './progress.js';
 import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
-import {
-  MAX_TEXT_SUBTITLES,
-  SubtitleExtractor,
-  subtitlePath,
-} from './subtitleExtractor.js';
+import { SubtitleExtractor, selectTextTracks } from './subtitleExtractor.js';
 import { burnTarget, planPatch, requireAudio, requireSubtitle } from './tracks.js';
+import { renderSegment } from './vtt.js';
 
 export const SEGMENT_WAIT_MS = 30_000;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
@@ -52,10 +51,18 @@ export const MAX_SESSIONS = 4;
 export const IDLE_TIMEOUT_MS = 120_000;
 export const MONITOR_TICK_MS = 2_000;
 const POLL_MS = 100;
+/** A subtitle segment that no extractor has reached yet is waited for this long before the client is told to retry. */
+export const SUBTITLE_HOLD_MS = 6_000;
+const SUBTITLE_PLAYLIST_TYPE = 'application/vnd.apple.mpegurl';
+const SUBTITLE_SEGMENT_TYPE = 'text/vtt; charset=utf-8';
 /** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */
 const MAX_SERVE_ATTEMPTS = 3;
 const STARVED_LEAD_SEC = 30;
-const STARVED_SPEED = 1.2;
+/** Above the 1.2x floor the encoder must keep, so the throttle bites before the floor is reached. */
+const STARVED_SPEED = 1.6;
+const BURST_FLOOR_SPEED = 1.35;
+const SPEED_WINDOW_MS = 4_000;
+const SPEED_WINDOW_MIN_MS = 1_500;
 const GIB = 1024 ** 3;
 
 export interface PlaybackManagerOptions {
@@ -68,6 +75,7 @@ export interface PlaybackManagerOptions {
   /** Every ffprobe/ffmpeg input of a session is a loopback URL served by this proxy. */
   proxy: SourceProxy;
   segmentWaitMs?: number;
+  subtitleHoldMs?: number;
   maxSessions?: number;
   idleTimeoutMs?: number;
   /** Housekeeping interval; 0 disables the timer (tests call `monitorTick()` themselves). */
@@ -83,7 +91,7 @@ type StopReason = 'stopped' | 'idle' | 'disk' | 'shutdown';
 type WaitOutcome = 'ready' | 'lost';
 
 export type ServedFile =
-  | { kind: 'text'; body: string; contentType: string }
+  | { kind: 'text'; body: string; contentType: string; headers?: Record<string, string> }
   | { kind: 'file'; path: string; size: number; contentType: string };
 
 function notFound(message: string, hint = 'Start a new playback session.'): AppError {
@@ -101,8 +109,10 @@ function scrub(text: string): string {
 
 export class PlaybackManager {
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly speedWindows = new WeakMap<SessionRecord, Array<{ at: number; outSec: number }>>();
   private readonly proxy: SourceProxy;
   private readonly segmentWaitMs: number;
+  private readonly subtitleHoldMs: number;
   private readonly maxSessions: number;
   private readonly registry: PidRegistry;
   private readonly monitor: SessionMonitor;
@@ -113,6 +123,7 @@ export class PlaybackManager {
   constructor(private readonly options: PlaybackManagerOptions) {
     this.proxy = options.proxy;
     this.segmentWaitMs = options.segmentWaitMs ?? SEGMENT_WAIT_MS;
+    this.subtitleHoldMs = options.subtitleHoldMs ?? SUBTITLE_HOLD_MS;
     this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
     this.registry = new PidRegistry(path.join(options.config.dataDir, PID_FILE_NAME));
     this.monitor = new SessionMonitor(
@@ -244,7 +255,6 @@ export class PlaybackManager {
       toneMapper: this.libplaceboBroken ? 'opencl' : 'libplacebo',
       process: null,
       subtitles: null,
-      readySubtitles: new Set(),
       startSegment,
       generation: 0,
       retried: false,
@@ -286,6 +296,7 @@ export class PlaybackManager {
     this.sessions.set(id, rec);
     this.ensureTimer();
     this.launch(rec, startSegment);
+    this.startSubtitles(rec);
     this.options.logger.info({ sessionId: id, decision, timingsMs }, 'Playback session started');
     this.event({
       level: 'info',
@@ -394,16 +405,66 @@ export class PlaybackManager {
     this.launch(rec, segment);
   }
 
-  serveSubtitle(id: string, index: number): ServedFile {
+  /** The extractor of a session whose text track `index` has a rendition; touches the session. */
+  private subtitleTrack(id: string, index: number): { rec: SessionRecord; extractor: SubtitleExtractor } {
     const rec = this.require(id);
-    this.touch(id);
-    const track = rec.probe.subtitles.find((item) => item.index === index && item.kind === 'text');
-    if (!track) throw notFound(`Subtitle track ${index} is not a text track of this session.`, 'Use the url of a text track from the session.');
-    if (!rec.readySubtitles.has(index)) {
-      throw new AppError(404, 'subtitle_not_ready', `Subtitle track ${index} is still being prepared.`, 'Wait until its url is set in the session, then fetch it.');
+    rec.lastActivity = Date.now();
+    const extractor = rec.subtitles;
+    if (!extractor?.store.has(index)) {
+      throw notFound(`Subtitle track ${index} is not a text track of this session.`, 'Use the subtitle urls listed in the session or in index.m3u8.');
     }
-    const file = subtitlePath(rec.dir, index);
-    return { kind: 'file', path: file, size: statSync(file).size, contentType: 'text/vtt' };
+    return { rec, extractor };
+  }
+
+  serveSubtitlePlaylist(id: string, index: number): ServedFile {
+    const { rec } = this.subtitleTrack(id, index);
+    return { kind: 'text', body: generateSubtitlePlaylist(rec.probe.durationSec), contentType: SUBTITLE_PLAYLIST_TYPE };
+  }
+
+  /**
+   * A segment whose time range no extractor has read yet is waited for (and an extractor is steered to it); only then does the
+   * client get a 503 to retry. A covered segment always has its full cues, so an empty 200 never stands in for missing data.
+   */
+  async serveSubtitleSegment(id: string, index: number, segment: number, signal?: AbortSignal): Promise<ServedFile> {
+    const { rec, extractor } = this.subtitleTrack(id, index);
+    const { store } = extractor;
+    if (segment >= store.segmentTotal) {
+      throw notFound(`Subtitle segment ${segment} does not exist in this session.`, 'Use the segment names listed in the rendition playlist.');
+    }
+    const deadline = Date.now() + this.subtitleHoldMs;
+    for (;;) {
+      rec.lastActivity = Date.now();
+      if (store.segmentCovered(segment)) {
+        return { kind: 'text', body: store.segment(index, segment), contentType: SUBTITLE_SEGMENT_TYPE };
+      }
+      if (store.status() === 'error') {
+        return {
+          kind: 'text',
+          body: renderSegment([], 0, 0),
+          contentType: SUBTITLE_SEGMENT_TYPE,
+          headers: { 'X-Subtitle-Status': 'failed' },
+        };
+      }
+      if (rec.stopping) throw notFound('This session has ended.');
+      extractor.ensureExtractorFor(segment * SEGMENT_SECONDS);
+      if (Date.now() >= deadline || signal?.aborted) break;
+      await sleep(POLL_MS);
+    }
+    throw new AppError(
+      503,
+      'subtitle_not_ready',
+      `Subtitle segment ${segment} is not extracted yet.`,
+      'Retry the request in a second.',
+      { 'Retry-After': '1', 'Cache-Control': 'no-store' },
+    );
+  }
+
+  serveSubtitleFull(id: string, index: number): ServedFile {
+    const { extractor } = this.subtitleTrack(id, index);
+    if (!extractor.store.complete) {
+      throw new AppError(404, 'subtitle_not_ready', `Subtitle track ${index} is still being extracted.`, 'Wait until fullUrl is set in the session, then fetch it.');
+    }
+    return { kind: 'text', body: extractor.store.full(index), contentType: SUBTITLE_SEGMENT_TYPE };
   }
 
   async monitorTick(): Promise<void> {
@@ -429,6 +490,14 @@ export class PlaybackManager {
     rec.lastActivity = Date.now();
     const contentType = contentTypeFor(file);
 
+    if (file.kind === 'master') {
+      const body = generateMasterPlaylist({
+        decision: rec.decision,
+        fps: rec.probe.video.fps,
+        tracks: selectTextTracks(rec.probe),
+      });
+      return { kind: 'text', body, contentType };
+    }
     if (file.kind === 'playlist') {
       return { kind: 'text', body: generatePlaylist(rec.probe.durationSec, rec.format), contentType };
     }
@@ -439,7 +508,7 @@ export class PlaybackManager {
 
     const expectedExtension = rec.format === 'fmp4' ? 'm4s' : 'ts';
     if (file.extension !== expectedExtension || file.index >= segmentCount(rec.probe.durationSec)) {
-      throw notFound(`Segment ${file.index} does not exist in this session.`, 'Use the segment names listed in index.m3u8.');
+      throw notFound(`Segment ${file.index} does not exist in this session.`, 'Use the segment names listed in video.m3u8.');
     }
     // A track switch replaces the files on disk; nothing from before it may be served.
     while (rec.restart) await rec.restart.catch(() => undefined);
@@ -567,6 +636,7 @@ export class PlaybackManager {
     rec.encoderDone = false;
     rec.parked = false;
     rec.store.forget(startSegment);
+    this.speedWindows.delete(rec);
     rec.stats = { ...rec.stats, headSegment: startSegment, outTimeSec: startSegment * SEGMENT_SECONDS };
     const generation = rec.generation;
 
@@ -617,6 +687,7 @@ export class PlaybackManager {
       rec.statSamples.speedSum += progress.speed;
       rec.statSamples.speedCount += 1;
     }
+    this.trackSpeed(rec);
     this.updateStarved(rec);
     this.markReady(rec);
   }
@@ -629,45 +700,69 @@ export class PlaybackManager {
   /** Subtitle extraction must not compete with an encoder that has little lead over the player or runs slower than 1.2x. */
   private updateStarved(rec: SessionRecord): void {
     const lead = (rec.stats.headSegment - rec.playerSegment) * SEGMENT_SECONDS;
-    const slow = rec.stats.speed > 0 && rec.stats.speed < STARVED_SPEED;
-    rec.source.setEncoderStarved(!rec.encoderDone && (lead < STARVED_LEAD_SEC || slow));
+    if (rec.encoderDone) {
+      rec.source.setEncoderStarved(false);
+      return;
+    }
+    // A fresh extractor takes the bandwidth for its first stretch (the viewer waits for those cues) and only backs off when
+    // the encoder's average speed approaches the 1.2x floor; the encoder catches up afterwards.
+    if (rec.subtitles?.bursting) {
+      rec.source.setEncoderStarved(rec.stats.speed > 0 && rec.stats.speed < BURST_FLOOR_SPEED);
+      return;
+    }
+    const speed = this.recentSpeed(rec) || rec.stats.speed;
+    rec.source.setEncoderStarved(lead < STARVED_LEAD_SEC || (speed > 0 && speed < STARVED_SPEED));
+  }
+
+  /** Encoder speed over the last few seconds; ffmpeg's own figure averages the whole run and reacts too late. 0 while unknown. */
+  private recentSpeed(rec: SessionRecord): number {
+    const window = this.speedWindows.get(rec);
+    const first = window?.[0];
+    const last = window?.at(-1);
+    if (!first || !last || last.at - first.at < SPEED_WINDOW_MIN_MS) return 0;
+    return (last.outSec - first.outSec) / ((last.at - first.at) / 1000);
+  }
+
+  private trackSpeed(rec: SessionRecord): void {
+    const now = Date.now();
+    const window = this.speedWindows.get(rec) ?? [];
+    window.push({ at: now, outSec: rec.stats.outTimeSec });
+    while (window.length > 2 && now - (window[1] as { at: number }).at >= SPEED_WINDOW_MS) window.shift();
+    this.speedWindows.set(rec, window);
   }
 
   private markReady(rec: SessionRecord): void {
     if (rec.state === 'starting' && existsSync(path.join(rec.dir, segmentFileName(rec.startSegment, rec.format)))) {
       rec.state = 'ready';
       this.options.bus.emit('session.update', toActivitySession(rec));
-      this.startSubtitleExtraction(rec);
     }
   }
 
-  /** Waits for the first segment so the extraction does not compete with it for source bandwidth. */
-  private startSubtitleExtraction(rec: SessionRecord): void {
-    if (rec.subtitles || rec.stopping) return;
-    const indices = rec.probe.subtitles
-      .filter((track) => track.kind === 'text')
-      .slice(0, MAX_TEXT_SUBTITLES)
-      .map((track) => track.index);
-    if (indices.length === 0) return;
+  /** The main extractor starts together with the encoder: cues for the start position must not wait for the first segment. */
+  private startSubtitles(rec: SessionRecord): void {
+    const tracks = selectTextTracks(rec.probe).map((track) => track.index);
+    if (tracks.length === 0) return;
     rec.subtitles = new SubtitleExtractor({
       ffmpegPath: this.options.config.ffmpegPath,
       sessionId: rec.id,
       sessionDir: rec.dir,
       inputUrl: () => rec.source.extractorUrl,
-      indices,
+      videoIndex: rec.probe.video.index,
+      durationSec: rec.probe.durationSec,
+      tracks,
       registry: this.registry,
-      onReady: (index) => rec.readySubtitles.add(index),
-      onFailure: (failed, exit) => {
+      onFailure: (exit) => {
         this.event({
           level: 'warn',
           source: 'ffmpeg',
-          message: `Could not extract subtitle track ${failed.join(', ')} to WebVTT; it stays unavailable for this session.`,
-          details: { tracks: failed, detail: scrub(exit.stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '') },
+          message: `Could not extract subtitle tracks ${tracks.join(', ')} to WebVTT; the unread parts stay unavailable for this session.`,
+          details: { tracks, detail: scrub(exit.stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '') },
           sessionId: rec.id,
         });
       },
     });
-    rec.subtitles.start();
+    rec.subtitles.start(rec.requestedStartSec);
+    this.updateStarved(rec);
   }
 
   /** First failure: re-resolve the CDN link (and fall back from libplacebo) and carry on. Second failure ends the session. */

@@ -79,7 +79,12 @@ function dirSize(dir: string): number {
   let total = 0;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    total += entry.isDirectory() ? dirSize(full) : statSync(full).size;
+    try {
+      total += entry.isDirectory() ? dirSize(full) : statSync(full).size;
+    } catch (error) {
+      // The server deletes segments and ffmpeg renames playlist temp files while this walks the directory.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
   return total;
 }
@@ -123,7 +128,7 @@ describe('seeking', () => {
     const first = await timedProbe(harness, body.sessionId, 'seg-150.m4s');
     expect(first.start).toBeCloseTo(600, 1);
     expect(first.seconds).toBeLessThan(10);
-    const playlist = (await harness.app.inject(`/hls/${body.sessionId}/index.m3u8`)).body;
+    const playlist = (await harness.app.inject(`/hls/${body.sessionId}/video.m3u8`)).body;
     expect(playlist.match(/seg-\d+\.m4s/g)).toHaveLength(Math.ceil(body.durationSec / 4));
     expect(playlist).toContain('seg-0.m4s');
     expect(existsSync(path.join(harness.transcodeDir, body.sessionId, 'seg-0.m4s'))).toBe(false);
@@ -309,13 +314,14 @@ describe('transcode disk cap', () => {
 
     let maxSize = 0;
     let parked = false;
-    for (let i = 0; i < 100 && !parked; i += 1) {
+    // The cap is reached after tens of seconds of encoding when the machine is busy with other test files.
+    for (let i = 0; i < 400 && !parked; i += 1) {
       await sleep(300);
       maxSize = Math.max(maxSize, dirSize(dir));
       parked = (await sessionFfmpegCount(body.sessionId)) === 0;
     }
     expect(parked).toBe(true);
-    await sleep(900);
+    await sleep(1500);
     maxSize = Math.max(maxSize, dirSize(dir));
     expect(maxSize).toBeLessThan(capBytes);
 
@@ -335,9 +341,16 @@ describe('transcode disk cap', () => {
 
 describe('no residue', () => {
   it('leaves no ffmpeg processes or session directories after all sessions ended', async () => {
-    for (const harness of harnesses) {
-      expect(readdirSync(harness.transcodeDir)).toEqual([]);
-      expect((await listFfmpegCommandLines()).filter((line) => line.includes(harness.transcodeDir))).toEqual([]);
-    }
+    // Deleting a session directory and reaping its ffmpeg finish a moment after the DELETE answer on a busy machine.
+    const deadline = Date.now() + 15_000;
+    const residue = async (): Promise<string[]> => {
+      const commands = await listFfmpegCommandLines();
+      return harnesses.flatMap((harness) => [
+        ...readdirSync(harness.transcodeDir),
+        ...commands.filter((line) => line.includes(harness.transcodeDir)),
+      ]);
+    };
+    while ((await residue()).length > 0 && Date.now() < deadline) await sleep(300);
+    expect(await residue()).toEqual([]);
   }, TIMEOUT);
 });

@@ -95,6 +95,14 @@ export const AudioTrackSchema = z.object({
 });
 export type AudioTrack = z.infer<typeof AudioTrackSchema>;
 
+export const SUBTITLE_STATUSES = ['extracting', 'complete', 'error'] as const;
+export const SubtitleStatusSchema = z.enum(SUBTITLE_STATUSES);
+export type SubtitleStatus = z.infer<typeof SubtitleStatusSchema>;
+
+/**
+ * Text tracks: url is the HLS rendition playlist (set from session creation), fullUrl the whole WebVTT file once
+ * extraction is complete. Bitmap tracks have url: null and no fullUrl/status.
+ */
 export const SubtitleTrackSchema = z.object({
   index: z.number().int().min(0),
   language: z.string(),
@@ -103,6 +111,8 @@ export const SubtitleTrackSchema = z.object({
   forced: z.boolean(),
   default: z.boolean(),
   url: z.string().nullable(),
+  fullUrl: z.string().nullable().optional(),
+  status: SubtitleStatusSchema.optional(),
 });
 export type SubtitleTrack = z.infer<typeof SubtitleTrackSchema>;
 
@@ -150,7 +160,10 @@ export type ActivityResponse = z.infer<typeof ActivityResponseSchema>;
 
 export const SessionResponseSchema = z.object({
   sessionId: z.string(),
+  /** Master playlist: video plus one WebVTT rendition per text subtitle track. */
   playlistUrl: z.string(),
+  /** Video media playlist the master points to. */
+  mediaPlaylistUrl: z.string(),
   durationSec: z.number().positive(),
   startPositionSec: z.number().min(0),
   state: SessionStateSchema,

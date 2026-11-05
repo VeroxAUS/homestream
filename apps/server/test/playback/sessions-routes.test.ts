@@ -120,12 +120,18 @@ describe('session start with a stubbed probe', () => {
     expect(status).toBe(201);
     expect(body).toMatchObject({
       playlistUrl: `/hls/${body.sessionId}/index.m3u8`,
+      mediaPlaylistUrl: `/hls/${body.sessionId}/video.m3u8`,
       durationSec: 120,
       startPositionSec: 0,
       selectedAudioIndex: 1,
       selectedSubtitle: { index: 2, mode: 'sidecar' },
       audioTracks: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
-      subtitleTracks: [{ index: 2, language: 'eng', title: '', kind: 'text', forced: false, default: false, url: null }],
+      subtitleTracks: [
+        {
+          index: 2, language: 'eng', title: '', kind: 'text', forced: false, default: false,
+          url: `/hls/${body.sessionId}/subs/2/index.m3u8`, fullUrl: null, status: 'extracting',
+        },
+      ],
       decision: { videoCodec: 'hevc', width: 1920, height: 1080, dynamicRange: 'sdr', toneMapped: false, audioCodec: 'aac', audioChannels: 6, subtitleBurnIn: false },
       encoder: { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0, headSegment: 0 },
     });
@@ -136,9 +142,14 @@ describe('session start with a stubbed probe', () => {
     await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${body.sessionId}` });
   });
 
-  it('serves the full playlist immediately, before the encoder produces anything', async () => {
+  it('serves the master playlist and the full video playlist immediately, before the encoder produces anything', async () => {
     const { body } = await startSession(harness, 'movie', 'desktop');
-    const res = await harness.app.inject(`/hls/${body.sessionId}/index.m3u8`);
+    const master = await harness.app.inject(`/hls/${body.sessionId}/index.m3u8`);
+    expect(master.statusCode).toBe(200);
+    expect(master.body).toContain('#EXT-X-STREAM-INF');
+    expect(master.body).toContain('NAME="eng [2]"');
+    expect(master.body).not.toContain('seg-29.ts');
+    const res = await harness.app.inject(`/hls/${body.sessionId}/video.m3u8`);
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('seg-29.ts');
     expect(res.body).not.toContain('#EXT-X-MAP');

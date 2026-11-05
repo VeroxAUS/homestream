@@ -6,13 +6,14 @@ import type {
   SessionResponse,
   SessionState,
   SubtitleSelection,
+  SubtitleTrack,
 } from '@homestream/shared';
 import type { EncoderProcess } from './encoderProcess.js';
 import type { ToneMapper } from './ffmpegArgs.js';
 import type { ProbeResult } from './probe.js';
 import type { SegmentFormat } from './playlist.js';
 import type { SegmentStore } from './segmentStore.js';
-import type { SubtitleExtractor } from './subtitleExtractor.js';
+import { selectTextTracks, type SubtitleExtractor } from './subtitleExtractor.js';
 import type { SourceHandle } from '../sourceproxy/proxy.js';
 
 export interface SessionMeta {
@@ -57,10 +58,8 @@ export interface SessionRecord {
   toneMapper: ToneMapper;
 
   process: EncoderProcess | null;
-  /** Background WebVTT extraction of the text tracks; started once the first segment exists. */
+  /** Progressive WebVTT extraction and cue store of the text tracks; null when the file has none. Independent of encoder restarts. */
   subtitles: SubtitleExtractor | null;
-  /** Text tracks whose WebVTT file is complete and servable. */
-  readySubtitles: Set<number>;
   /** First segment of the current ffmpeg run. */
   startSegment: number;
   generation: number;
@@ -105,19 +104,38 @@ export function toActivitySession(rec: SessionRecord): ActivitySession {
   };
 }
 
+/** Bitmap tracks plus the text tracks that have a rendition (the cap drops the rest); original order. */
+function subtitleTracksOf(rec: SessionRecord): SubtitleTrack[] {
+  const rendered = new Set(selectTextTracks(rec.probe).map((track) => track.index));
+  const status = rec.subtitles?.store.status() ?? 'error';
+  const complete = status === 'complete';
+  const tracks: SubtitleTrack[] = [];
+  for (const { codec: _codec, canvas: _canvas, ...track } of rec.probe.subtitles) {
+    if (track.kind === 'bitmap') {
+      tracks.push({ ...track, url: null });
+    } else if (rendered.has(track.index)) {
+      tracks.push({
+        ...track,
+        url: `/hls/${rec.id}/subs/${track.index}/index.m3u8`,
+        fullUrl: complete ? `/hls/${rec.id}/subs/${track.index}.vtt` : null,
+        status,
+      });
+    }
+  }
+  return tracks;
+}
+
 export function toSessionResponse(rec: SessionRecord): SessionResponse {
   return {
     sessionId: rec.id,
     playlistUrl: `/hls/${rec.id}/index.m3u8`,
+    mediaPlaylistUrl: `/hls/${rec.id}/video.m3u8`,
     durationSec: rec.probe.durationSec,
     startPositionSec: rec.requestedStartSec,
     state: rec.state,
     decision: rec.decision,
     audioTracks: rec.probe.audio,
-    subtitleTracks: rec.probe.subtitles.map(({ codec: _codec, canvas: _canvas, ...track }) => ({
-      ...track,
-      url: rec.readySubtitles.has(track.index) ? `/hls/${rec.id}/subs/${track.index}.vtt` : null,
-    })),
+    subtitleTracks: subtitleTracksOf(rec),
     selectedAudioIndex: rec.selectedAudioIndex,
     selectedSubtitle: rec.selectedSubtitle,
     encoder: rec.stats,

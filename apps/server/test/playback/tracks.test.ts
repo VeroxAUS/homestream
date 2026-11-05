@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { ProbeResult, SubtitleTrackInfo } from '../../src/playback/probe.js';
-import { buildExtractArgs, parseSubtitleFileName, subtitlePath } from '../../src/playback/subtitleExtractor.js';
 import { burnTarget, planPatch, requireAudio, requireSubtitle } from '../../src/playback/tracks.js';
 
 const sub = (index: number, kind: 'text' | 'bitmap', extra: Partial<SubtitleTrackInfo> = {}): SubtitleTrackInfo => ({
@@ -91,26 +90,5 @@ describe('planPatch: when the encoder must restart', () => {
   it('rejects invalid choices before anything changes', () => {
     expect(errorCode(() => planPatch(PROBE, current, { audioIndex: 7 }))).toBe('invalid_audio_index');
     expect(errorCode(() => planPatch(PROBE, current, { subtitle: { index: 3, mode: 'burn' } }))).toBe('subtitle_mode_unsupported');
-  });
-});
-
-describe('subtitle extraction', () => {
-  it('maps every requested track to its own WebVTT part file from time 0', () => {
-    const args = buildExtractArgs('https://cdn.example.test/file.mkv', [3, 7]);
-    expect(args).toEqual(expect.arrayContaining(['-reconnect', '1']));
-    expect(args.join(' ')).toContain('-map 0:3 -c:s webvtt -f webvtt subs/3.part -map 0:7 -c:s webvtt -f webvtt subs/7.part');
-    expect(args).not.toContain('-ss');
-    expect(args).not.toContain('-output_ts_offset');
-  });
-
-  it('keeps output paths relative so the session id stays off the command line', () => {
-    expect(buildExtractArgs('D:\\media\\file.mkv', [3]).join(' ')).not.toMatch(/transcode|[A-F0-9]{8}-/i);
-    expect(buildExtractArgs('D:\\media\\file.mkv', [3])).not.toContain('-reconnect');
-  });
-
-  it('parses subtitle file names strictly', () => {
-    expect(parseSubtitleFileName('4.vtt')).toBe(4);
-    for (const name of ['4.srt', '../4.vtt', '4.vtt.part', 'x.vtt', '']) expect(parseSubtitleFileName(name)).toBeNull();
-    expect(subtitlePath('D:\\t\\abc', 4)).toMatch(/abc[\\/]subs[\\/]4\.vtt$/);
   });
 });

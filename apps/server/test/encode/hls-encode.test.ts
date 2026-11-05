@@ -103,7 +103,7 @@ describe('HLS encode with local sources', () => {
 describe('segments and playlist', () => {
   it('produces 4 s keyframe-aligned fMP4 segments whose start_time matches the playlist', async () => {
     const { body } = await startSession(harness, 'sdr', 'chromecast4k');
-    const playlist = await fetchHls(harness, body.sessionId, 'index.m3u8');
+    const playlist = await fetchHls(harness, body.sessionId, 'video.m3u8');
     expect(playlist.status).toBe(200);
     expect(playlist.headers['content-type']).toContain('application/vnd.apple.mpegurl');
     expect(playlist.headers['cache-control']).toBe('no-cache');
@@ -111,6 +111,12 @@ describe('segments and playlist', () => {
     expect(text).toContain('#EXT-X-MAP:URI="init.mp4"');
     expect(text.match(/seg-\d+\.m4s/g)).toHaveLength(Math.ceil(body.durationSec / 4));
     expect(text.trimEnd().endsWith('#EXT-X-ENDLIST')).toBe(true);
+
+    const master = await fetchHls(harness, body.sessionId, 'index.m3u8');
+    expect(master.status).toBe(200);
+    expect(master.headers['content-type']).toContain('application/vnd.apple.mpegurl');
+    expect(master.body.toString()).toMatch(/#EXT-X-STREAM-INF:BANDWIDTH=\d+,RESOLUTION=1920x1080[^\n]*\nvideo\.m3u8\n/);
+    expect(master.body.toString()).not.toContain('EXT-X-MEDIA');
 
     for (const n of [0, 1, 5]) {
       const probed = await probeSegment(harness, body.sessionId, `seg-${n}.m4s`, work);
