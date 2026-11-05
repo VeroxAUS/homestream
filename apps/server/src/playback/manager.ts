@@ -24,6 +24,7 @@ import type { TmdbService } from '../tmdb/service.js';
 import { decide } from './decision.js';
 import { EncoderProcess } from './encoderProcess.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
+import { MemoryWatchdog, imageNameOf, createWorkingSetSampler, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SessionMonitor } from './monitor.js';
 import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
 import {
@@ -116,6 +117,7 @@ export class PlaybackManager {
   private readonly maxSessions: number;
   private readonly registry: PidRegistry;
   private readonly monitor: SessionMonitor;
+  private readonly watchdog: MemoryWatchdog;
   private timer: NodeJS.Timeout | null = null;
   private starting = 0;
   private libplaceboBroken = false;
@@ -126,6 +128,10 @@ export class PlaybackManager {
     this.subtitleHoldMs = options.subtitleHoldMs ?? SUBTITLE_HOLD_MS;
     this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
     this.registry = new PidRegistry(path.join(options.config.dataDir, PID_FILE_NAME));
+    this.watchdog = new MemoryWatchdog({
+      limitMb: options.config.ffmpegMaxRssMb,
+      sample: createWorkingSetSampler(imageNameOf(options.config.ffmpegPath)),
+    });
     this.monitor = new SessionMonitor(
       {
         liveSessions: () => this.liveRecords(),
@@ -250,6 +256,7 @@ export class PlaybackManager {
       startedAt: now,
       state: 'starting',
       error: null,
+      errorCode: null,
       stats: { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0, headSegment: startSegment },
       statSamples: { speedSum: 0, speedCount: 0, bitrateSum: 0, bitrateCount: 0 },
       toneMapper: this.libplaceboBroken ? 'opencl' : 'libplacebo',
@@ -483,6 +490,7 @@ export class PlaybackManager {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     await this.stopAll();
+    this.watchdog.close();
   }
 
   async serve(id: string, file: HlsFile): Promise<ServedFile> {
@@ -560,7 +568,7 @@ export class PlaybackManager {
       if (!rec.restart && produced && (existsSync(first) || !rec.process?.running)) return rec.generation;
       if (rec.stopping) throw notFound('This session has ended.');
       if (rec.state === 'error') {
-        throw new AppError(502, 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
       }
       if (Date.now() >= deadline) {
         throw new AppError(504, 'segment_timeout', 'The encoder did not start in time.', 'The encoder is behind; try again, or check the health dashboard.');
@@ -631,6 +639,7 @@ export class PlaybackManager {
   }
 
   private launch(rec: SessionRecord, startSegment: number): void {
+    if (rec.state === 'error') return;
     rec.startSegment = startSegment;
     rec.generation += 1;
     rec.encoderDone = false;
@@ -660,6 +669,8 @@ export class PlaybackManager {
       onProgress: (progress) => {
         if (rec.generation === generation) this.onProgress(rec, progress);
       },
+      watchdog: this.watchdog,
+      onMemoryLimit: (hit) => this.onMemoryLimit(rec, 'The video encoder', hit),
     });
     rec.process = proc;
     const pid = proc.pid;
@@ -752,6 +763,8 @@ export class PlaybackManager {
       durationSec: rec.probe.durationSec,
       tracks,
       registry: this.registry,
+      watchdog: this.watchdog,
+      onMemoryLimit: (hit) => this.onMemoryLimit(rec, 'The subtitle extractor', hit),
       onFailure: (exit) => {
         this.event({
           level: 'warn',
@@ -815,6 +828,35 @@ export class PlaybackManager {
     this.options.bus.emit('session.update', toActivitySession(rec));
   }
 
+  /**
+   * An ffmpeg process of the session grew past the memory limit. The session ends with an error right away (the generation bump
+   * keeps the encoder's exit handler from retrying) and every process of it is stopped gently; the caller already stops the offender.
+   */
+  private onMemoryLimit(rec: SessionRecord, who: string, hit: MemoryLimitHit): void {
+    if (rec.stopping || rec.state === 'error') return;
+    const usedMb = Math.round(hit.rssBytes / 1024 ** 2);
+    const limitMb = Math.round(hit.limitBytes / 1024 ** 2);
+    rec.state = 'error';
+    rec.errorCode = 'encoder_memory_limit';
+    rec.error = {
+      message: ` used  MB of memory (limit  MB) and was stopped to keep your computer responsive.`,
+      hint: 'Playback ended. Try again, switch subtitles off, or choose another stream. If it keeps happening, check the ffmpeg tile on the health dashboard.',
+    };
+    rec.generation += 1;
+    rec.source.setEncoderStarved(false);
+    this.options.logger.error({ sessionId: rec.id, pid: hit.pid, usedMb, limitMb }, 'ffmpeg stopped by the memory watchdog');
+    this.event({
+      level: 'error',
+      source: 'ffmpeg',
+      message: rec.error.message,
+      details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb, hint: rec.error.hint },
+      sessionId: rec.id,
+    });
+    finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'error', errorMessage: rec.error.message, ...this.averages(rec) });
+    this.options.bus.emit('session.update', toActivitySession(rec));
+    void Promise.all([rec.process?.stop(), rec.subtitles?.stop()]).catch(() => undefined);
+  }
+
   private hasSegment(rec: SessionRecord, index: number): boolean {
     return existsSync(path.join(rec.dir, segmentFileName(index, rec.format)));
   }
@@ -868,7 +910,7 @@ export class PlaybackManager {
       if (existsSync(target)) return 'ready';
       if (rec.stopping) throw notFound('This session has ended.');
       if (rec.state === 'error') {
-        throw new AppError(502, 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
       }
       if (rec.encoderDone && !rec.process?.running) {
         throw notFound(`Segment ${segment} was not produced.`, 'Seek again or restart playback.');

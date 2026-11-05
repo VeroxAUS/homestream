@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
+import { DEFAULT_MAX_RSS_MB } from './playback/memoryWatchdog.js';
 import { registerSecret, registerSecretUrl } from './redact.js';
 
 export const REQUIRED_KEYS = ['GATEWAY_MANIFEST_URL', 'TMDB_READ_TOKEN'] as const;
@@ -18,6 +19,7 @@ const KNOWN_KEYS = [
   'FFPROBE_PATH',
   'FFMPEG_THREADS',
   'FFMPEG_BURN_THREADS',
+  'FFMPEG_MAX_RSS_MB',
   'SERVER_NAME',
   'SOURCE_PROXY_PORT',
   'HOMESTREAM_WEB_DIR',
@@ -46,6 +48,8 @@ export interface Config {
   ffmpegThreads: number;
   /** Thread cap for jobs with CPU filters (software burn-in, CPU overlay, CPU tone mapping). */
   ffmpegBurnThreads: number;
+  /** Working-set limit per ffmpeg process in MiB; the memory watchdog stops a process above it. */
+  ffmpegMaxRssMb: number;
   serverName: string;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
@@ -159,6 +163,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     ffprobePath: values.FFPROBE_PATH ?? 'ffprobe',
     ffmpegThreads: positiveInteger(values.FFMPEG_THREADS, 4, 'FFMPEG_THREADS', warnings),
     ffmpegBurnThreads: positiveInteger(values.FFMPEG_BURN_THREADS, 8, 'FFMPEG_BURN_THREADS', warnings),
+    ffmpegMaxRssMb: positiveInteger(values.FFMPEG_MAX_RSS_MB, DEFAULT_MAX_RSS_MB, 'FFMPEG_MAX_RSS_MB', warnings),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,

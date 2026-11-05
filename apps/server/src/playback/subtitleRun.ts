@@ -4,6 +4,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { EncoderProcess, type EncoderExit } from './encoderProcess.js';
 import type { Interval } from './intervals.js';
+import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import { PROBE_LIMIT_ARGS } from './probe.js';
 import type { PidRegistry } from './pidRegistry.js';
 import { takeCueBlocks, type Cue } from './vtt.js';
@@ -56,6 +57,8 @@ export interface SubtitleRunOptions extends ExtractJob {
   sessionId: string;
   sessionDir: string;
   registry: PidRegistry;
+  watchdog?: MemoryWatchdog;
+  onMemoryLimit?: (hit: MemoryLimitHit) => void;
   /** Set when this run replaces one that failed. */
   retried: boolean;
   onCues: (track: number, cues: Cue[]) => void;
@@ -126,6 +129,8 @@ export class SubtitleRun {
       args: buildExtractArgs(options),
       cwd: options.sessionDir,
       onProgress: () => undefined,
+      watchdog: options.watchdog,
+      onMemoryLimit: options.onMemoryLimit,
     });
     const pid = this.process.pid;
     if (pid !== undefined) {

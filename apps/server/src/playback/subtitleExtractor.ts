@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { EncoderExit } from './encoderProcess.js';
+import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import type { PidRegistry } from './pidRegistry.js';
 import type { ProbeResult } from './probe.js';
 import { SUBTITLE_DIR, SubtitleRun, type RunKind } from './subtitleRun.js';
@@ -47,6 +48,9 @@ export interface SubtitleExtractorOptions {
   durationSec: number;
   tracks: readonly number[];
   registry: PidRegistry;
+  watchdog?: MemoryWatchdog;
+  /** A run was stopped for exceeding the memory limit; the owner ends the session. */
+  onMemoryLimit?: (hit: MemoryLimitHit) => void;
   /** Called once when extraction gave up for good. */
   onFailure: (exit: EncoderExit) => void;
 }
@@ -149,6 +153,8 @@ export class SubtitleExtractor {
       sessionId: this.options.sessionId,
       sessionDir: this.options.sessionDir,
       registry: this.options.registry,
+      watchdog: this.options.watchdog,
+      onMemoryLimit: this.options.onMemoryLimit,
       inputUrl: this.options.inputUrl(),
       videoIndex: this.options.videoIndex,
       tracks: this.options.tracks,

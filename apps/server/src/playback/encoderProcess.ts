@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { WATCHDOG_STOP_GRACE_MS, type MemoryLimitHit, type MemoryWatchdog } from './memoryWatchdog.js';
 import { lowerPriority } from './priority.js';
 import { ProgressParser, type RawProgress } from './progress.js';
 
@@ -7,6 +8,8 @@ export interface EncoderExit {
   signal: NodeJS.Signals | null;
   /** Last lines ffmpeg wrote to stderr, unredacted. */
   stderrTail: string;
+  /** Set when the memory watchdog stopped the process. */
+  memoryLimit?: MemoryLimitHit;
 }
 
 export interface EncoderProcessOptions {
@@ -14,6 +17,10 @@ export interface EncoderProcessOptions {
   args: string[];
   cwd: string;
   onProgress: (progress: RawProgress) => void;
+  /** Stops the process (q, then kill) once its working set exceeds the watchdog's limit. */
+  watchdog?: MemoryWatchdog;
+  /** Called once, right before the stop, when the watchdog limit was hit. */
+  onMemoryLimit?: (hit: MemoryLimitHit) => void;
 }
 
 const STDERR_LIMIT = 4000;
@@ -39,6 +46,7 @@ export class EncoderProcess {
   readonly exited: Promise<EncoderExit>;
   private readonly child: ChildProcess;
   private done = false;
+  private memoryLimit: MemoryLimitHit | undefined;
 
   constructor(options: EncoderProcessOptions) {
     const parser = new ProgressParser();
@@ -51,6 +59,7 @@ export class EncoderProcess {
     });
     this.pid = this.child.pid;
     lowerPriority(this.pid);
+    const unwatch = this.pid !== undefined && options.watchdog ? options.watchdog.watch(this.pid, (hit) => this.onMemoryLimit(hit, options)) : undefined;
 
     this.child.stdin?.on('error', () => undefined);
     this.child.stdout?.setEncoding('utf8');
@@ -65,13 +74,25 @@ export class EncoderProcess {
     this.exited = new Promise<EncoderExit>((resolve) => {
       this.child.once('error', (error) => {
         this.done = true;
+        unwatch?.();
         resolve({ code: -1, signal: null, stderrTail: error.message });
       });
       this.child.once('close', (code, signal) => {
         this.done = true;
-        resolve({ code, signal, stderrTail: stderr.trim() });
+        unwatch?.();
+        resolve({ code, signal, stderrTail: stderr.trim(), memoryLimit: this.memoryLimit });
       });
     });
+  }
+
+  private onMemoryLimit(hit: MemoryLimitHit, options: EncoderProcessOptions): void {
+    if (this.done || this.memoryLimit) return;
+    this.memoryLimit = hit;
+    try {
+      options.onMemoryLimit?.(hit);
+    } finally {
+      void this.stop(WATCHDOG_STOP_GRACE_MS);
+    }
   }
 
   get running(): boolean {

@@ -50,6 +50,16 @@ describe('loadConfig', () => {
     expect(bad.warnings.join(' ')).toContain('FFMPEG_BURN_THREADS');
   });
 
+  it('reads FFMPEG_MAX_RSS_MB with a 4096 MiB default and rejects values that are not positive whole numbers', () => {
+    const none = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss-default.env', '# nothing\n') }, repoRoot: null });
+    expect(none.ffmpegMaxRssMb).toBe(4096);
+    const set = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss.env', 'FFMPEG_MAX_RSS_MB=2048\n') }, repoRoot: null });
+    expect(set.ffmpegMaxRssMb).toBe(2048);
+    const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss-bad.env', 'FFMPEG_MAX_RSS_MB=-1\n') }, repoRoot: null });
+    expect(bad.ffmpegMaxRssMb).toBe(4096);
+    expect(bad.warnings.join(' ')).toContain('FFMPEG_MAX_RSS_MB');
+  });
+
   it('names only the keys that are missing', () => {
     const file = envFile('partial.env', 'GATEWAY_MANIFEST_URL=https://gw.test/stremio/a/b/manifest.json\n');
     const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });

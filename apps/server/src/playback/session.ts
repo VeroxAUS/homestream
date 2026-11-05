@@ -53,6 +53,8 @@ export interface SessionRecord {
 
   state: SessionState;
   error: { message: string; hint?: string } | null;
+  /** Error code for API errors while the session is failed; null means encoder_failed. */
+  errorCode: string | null;
   stats: EncoderStats;
   statSamples: StatSamples;
   toneMapper: ToneMapper;
