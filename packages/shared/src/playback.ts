@@ -33,6 +33,17 @@ export const SessionStartRequestSchema = z
   });
 export type SessionStartRequest = z.infer<typeof SessionStartRequestSchema>;
 
+/** `subtitle: null` clears the selection; an absent key leaves it unchanged. */
+export const SessionPatchRequestSchema = z
+  .object({
+    audioIndex: z.number().int().min(0).optional(),
+    subtitle: SubtitleSelectionSchema.nullable().optional(),
+  })
+  .refine((body) => body.audioIndex !== undefined || body.subtitle !== undefined, {
+    message: 'send audioIndex, subtitle or both',
+  });
+export type SessionPatchRequest = z.infer<typeof SessionPatchRequestSchema>;
+
 export const DecisionSchema = z.object({
   videoCodec: z.enum(['hevc', 'h264']),
   width: z.number().int().positive(),

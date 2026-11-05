@@ -235,6 +235,18 @@ export async function probeSegment(
   };
 }
 
+/** Running ffmpeg processes whose command line contains `needle` (a session id), with their pids. */
+export async function listFfmpegPids(needle: string): Promise<number[]> {
+  const out = await run('powershell.exe', [
+    '-NoProfile', '-Command',
+    "Get-CimInstance Win32_Process -Filter \"Name='ffmpeg.exe'\" | ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }",
+  ]);
+  return out
+    .split(/\r?\n/)
+    .filter((line) => line.includes(needle))
+    .map((line) => Number(line.slice(0, line.indexOf('|'))));
+}
+
 export async function listFfmpegCommandLines(): Promise<string[]> {
   const out = await run('powershell.exe', [
     '-NoProfile', '-Command',

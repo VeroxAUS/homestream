@@ -180,6 +180,72 @@ describe('tone mapping filters', () => {
   });
 });
 
+describe('subtitle burn-in', () => {
+  const sdr = decision({ dynamicRange: 'sdr', width: 1920, height: 1080, videoCodec: 'h264', audioChannels: 2, subtitleBurnIn: true });
+  const burnJob = (overrides: Partial<EncodeJob> = {}) =>
+    job({
+      decision: sdr,
+      video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 24 },
+      burn: { index: 5 },
+      ...overrides,
+    });
+
+  it('decodes in software so the overlay sees system-memory frames', () => {
+    const args = buildFfmpegArgs(burnJob());
+    expect(args).not.toContain('-hwaccel');
+    expect(args).not.toContain('-hwaccel_output_format');
+  });
+
+  it('replaces -vf with a filter graph that scales the bitmap to the output size and overlays it', () => {
+    const args = buildFfmpegArgs(burnJob());
+    expect(args).not.toContain('-vf');
+    expect(valueAfter(args, '-filter_complex')).toBe(
+      '[0:0]scale=1920:1080:flags=bicubic,format=nv12[v];[0:5]scale=1920:1080:flags=bilinear,format=rgba[s];[v][s]overlay=eof_action=pass:format=auto,format=nv12[vout]',
+    );
+    expect(args.join(' ')).toContain('-map [vout] -map 0:2');
+  });
+
+  it('seeks the input 10 s early and trims the lead-in, so a subtitle already on screen at the seek point is kept', () => {
+    const args = buildFfmpegArgs(burnJob({ startSegment: 10 }));
+    expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'));
+    expect(args.filter((arg) => arg === '-ss')).toHaveLength(2);
+    expect(args[args.indexOf('-ss') + 1]).toBe('30');
+    expect(args.indexOf('-ss', args.indexOf('-i'))).toBeGreaterThan(args.indexOf('-i'));
+    expect(args[args.indexOf('-ss', args.indexOf('-i')) + 1]).toBe('10');
+    expect(valueAfter(args, '-output_ts_offset')).toBe('40');
+  });
+
+  it('trims only what exists before the first segments, and not at all from the start', () => {
+    const early = buildFfmpegArgs(burnJob({ startSegment: 1 }));
+    expect(early.indexOf('-ss')).toBeGreaterThan(early.indexOf('-i'));
+    expect(valueAfter(early, '-ss')).toBe('4');
+    expect(buildFfmpegArgs(burnJob({ startSegment: 0 }))).not.toContain('-ss');
+  });
+
+  it('passes the authoring canvas of the bitmap track when the container states it', () => {
+    const args = buildFfmpegArgs(burnJob({ burn: { index: 5, canvas: { width: 1920, height: 1080 } } }));
+    expect(valueAfter(args, '-canvas_size')).toBe('1920x1080');
+    expect(args.indexOf('-canvas_size')).toBeLessThan(args.indexOf('-i'));
+    expect(buildFfmpegArgs(burnJob())).not.toContain('-canvas_size');
+  });
+
+  it('dims the bitmap to SDR reference white when the output stays HDR10', () => {
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: decision({ subtitleBurnIn: true }) })), '-filter_complex');
+    expect(graph).toContain('format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58[s]');
+    expect(graph).toContain('format=p010le[vout]');
+  });
+
+  it('overlays after tone mapping, which runs in software from the system-memory frames', () => {
+    const mapped = decision({ dynamicRange: 'sdr', toneMapped: true, subtitleBurnIn: true });
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: mapped, video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 } })), '-filter_complex');
+    expect(graph).toMatch(/^\[0:0\]format=p010le,hwupload,libplacebo=.*hwdownload,format=yuv420p\[v\];/);
+  });
+
+  it('is off for a normal job', () => {
+    expect(buildFfmpegArgs(job())).not.toContain('-filter_complex');
+  });
+});
+
 describe('software decode fallback', () => {
   it('uses CPU scaling for sources NVDEC cannot decode', () => {
     const j = job({ decision: decision({ dynamicRange: 'sdr', width: 1920, height: 1080 }), video: { index: 0, codec: 'h264', pixFmt: 'yuv420p10le', fps: 24 } });

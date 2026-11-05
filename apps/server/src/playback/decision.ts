@@ -59,12 +59,18 @@ export function decide(input: DecisionInput): Decision {
   };
 }
 
-/** Requested track if it exists, else the default-flagged one, else English, else the first. */
+const ENGLISH = /^en(g|glish)?$/i;
+
+/**
+ * Requested track if it exists, else default-flagged English, first English, default-flagged, first.
+ * English outranks the default flag: some releases flag a dub as default although the English track is present.
+ */
 export function selectAudioTrack(tracks: AudioTrack[], requestedIndex?: number): AudioTrack | null {
   if (requestedIndex !== undefined) return tracks.find((track) => track.index === requestedIndex) ?? null;
   return (
+    tracks.find((track) => track.default && ENGLISH.test(track.language)) ??
+    tracks.find((track) => ENGLISH.test(track.language)) ??
     tracks.find((track) => track.default) ??
-    tracks.find((track) => /^en(g|glish)?$/i.test(track.language)) ??
     tracks[0] ??
     null
   );

@@ -16,6 +16,8 @@ export interface EncodeJob {
   audioIndex: number | null;
   startSegment: number;
   toneMapper: ToneMapper;
+  /** Bitmap subtitle track overlaid onto the picture. Forces software decode so the overlay sees system-memory frames. */
+  burn?: { index: number; canvas?: { width: number; height: number } } | null;
 }
 
 const HW_DECODE_CODECS = new Set(['h264', 'hevc', 'vp9', 'av1', 'mpeg2video', 'mpeg4', 'vc1', 'vp8']);
@@ -37,6 +39,10 @@ export function canHwDecode(video: Pick<VideoInfo, 'codec' | 'pixFmt'>): boolean
   return true;
 }
 
+function decodesOnGpu(job: EncodeJob): boolean {
+  return !job.burn && canHwDecode(job.video);
+}
+
 function isHttp(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
@@ -46,7 +52,7 @@ const OPENCL_TONEMAP = 'tonemap=hable:t=bt709:m=bt709:p=bt709';
 
 export function buildVideoFilter(job: EncodeJob): string {
   const { width, height, toneMapped, dynamicRange } = job.decision;
-  const hw = canHwDecode(job.video);
+  const hw = decodesOnGpu(job);
   const size = `w=${width}:h=${height}`;
 
   if (toneMapped && job.toneMapper === 'opencl') {
@@ -70,13 +76,24 @@ export function buildVideoFilter(job: EncodeJob): string {
   return `scale=${width}:${height}:flags=bicubic,format=${format}`;
 }
 
+/**
+ * A bitmap subtitle already on screen at the seek point started before it, and an input seek skips that event. Burn-in runs
+ * therefore start a little earlier and the lead-in is trimmed from the output, which still begins exactly on the segment.
+ */
+export const BURN_PREROLL_SEC = 10;
+
+function inputSeekSec(job: EncodeJob): number {
+  const start = job.startSegment * SEGMENT_SECONDS;
+  return job.burn ? Math.max(0, start - BURN_PREROLL_SEC) : start;
+}
+
 function inputArgs(job: EncodeJob): string[] {
   const args: string[] = [];
-  const hw = canHwDecode(job.video);
+  const hw = decodesOnGpu(job);
   const toneMapOpencl = job.decision.toneMapped && job.toneMapper === 'opencl';
   const toneMapPlacebo = job.decision.toneMapped && job.toneMapper === 'libplacebo';
 
-  if (job.startSegment > 0) args.push('-ss', String(job.startSegment * SEGMENT_SECONDS));
+  if (inputSeekSec(job) > 0) args.push('-ss', String(inputSeekSec(job)));
   if (toneMapPlacebo) args.push('-init_hw_device', 'vulkan=vk', '-filter_hw_device', 'vk');
   if (toneMapOpencl) args.push('-init_hw_device', 'opencl=ocl', '-filter_hw_device', 'ocl');
   if (hw) {
@@ -87,8 +104,25 @@ function inputArgs(job: EncodeJob): string[] {
   if (isHttp(job.inputUrl)) {
     args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10');
   }
+  // Bitmap subtitles are placed on the canvas they were authored for; without it ffmpeg assumes the video size.
+  if (job.burn?.canvas) args.push('-canvas_size', `${job.burn.canvas.width}x${job.burn.canvas.height}`);
   args.push(...PROBE_LIMIT_ARGS, '-i', job.inputUrl);
   return args;
+}
+
+/** PQ signal level of 203 nits (SDR reference white); full-scale subtitle white would be 10 000 nits. */
+const PQ_REFERENCE_WHITE = 0.58;
+
+/** Video chain, then the subtitle bitmap scaled to the output size and overlaid on the finished frames. */
+export function buildBurnFilterGraph(job: EncodeJob): string {
+  const { width, height, dynamicRange } = job.decision;
+  const hdr = dynamicRange === 'hdr10';
+  const dim = hdr ? `,colorchannelmixer=rr=${PQ_REFERENCE_WHITE}:gg=${PQ_REFERENCE_WHITE}:bb=${PQ_REFERENCE_WHITE}` : '';
+  return [
+    `[0:${job.video.index}]${buildVideoFilter(job)}[v]`,
+    `[0:${job.burn?.index}]scale=${width}:${height}:flags=bilinear,format=rgba${dim}[s]`,
+    `[v][s]overlay=eof_action=pass:format=auto,format=${hdr ? 'p010le' : 'nv12'}[vout]`,
+  ].join(';');
 }
 
 function videoEncoderArgs(job: EncodeJob): string[] {
@@ -134,6 +168,8 @@ function hlsArgs(job: EncodeJob): string[] {
   const format = segmentFormatFor(job.decision.videoCodec);
   const offset = job.startSegment * SEGMENT_SECONDS;
   const args: string[] = [];
+  const leadIn = offset - inputSeekSec(job);
+  if (leadIn > 0) args.push('-ss', String(leadIn));
   if (offset > 0) args.push('-output_ts_offset', String(offset));
   // Without these MPEG-TS segments start 1.4 s late, which would not match the playlist timeline.
   if (format === 'mpegts') args.push('-muxdelay', '0', '-muxpreload', '0');
@@ -158,10 +194,11 @@ function hlsArgs(job: EncodeJob): string[] {
 export function buildFfmpegArgs(job: EncodeJob): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-y', '-progress', 'pipe:1', '-nostats', '-stats_period', '1'];
   args.push(...inputArgs(job));
-  args.push('-map', `0:${job.video.index}`);
+  if (job.burn) args.push('-filter_complex', buildBurnFilterGraph(job), '-map', '[vout]');
+  else args.push('-map', `0:${job.video.index}`);
   if (job.audioIndex !== null) args.push('-map', `0:${job.audioIndex}`);
   args.push('-map_metadata', '-1', '-map_chapters', '-1', '-sn', '-dn');
-  args.push('-vf', buildVideoFilter(job));
+  if (!job.burn) args.push('-vf', buildVideoFilter(job));
   args.push(...videoEncoderArgs(job), ...audioArgs(job), ...hlsArgs(job));
   return args;
 }

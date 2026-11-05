@@ -15,7 +15,11 @@ export interface VideoInfo {
   dolbyVisionProfile: number | null;
 }
 
-export type SubtitleTrackInfo = Omit<SubtitleTrack, 'url'> & { codec: string };
+export type SubtitleTrackInfo = Omit<SubtitleTrack, 'url'> & {
+  codec: string;
+  /** Canvas the bitmap was authored for; absent when the container does not say. */
+  canvas?: { width: number; height: number };
+};
 
 export interface ProbeResult {
   durationSec: number;
@@ -153,6 +157,7 @@ export function parseProbeOutput(raw: unknown): ProbeResult {
         kind,
         forced: stream.disposition?.forced === 1,
         default: stream.disposition?.default === 1,
+        ...(kind === 'bitmap' && stream.width && stream.height ? { canvas: { width: stream.width, height: stream.height } } : {}),
       });
     }
   }

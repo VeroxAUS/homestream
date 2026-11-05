@@ -110,7 +110,15 @@ describe('selectAudioTrack', () => {
   const eng = audio(2, { index: 2, language: 'eng', default: false });
   const flagged = audio(6, { index: 3, language: 'fra', default: true });
 
-  it('prefers the default-flagged track', () => expect(selectAudioTrack([rus, eng, flagged])?.index).toBe(3));
+  const engFlagged = audio(2, { index: 4, language: 'en', default: true });
+  const engSecond = audio(2, { index: 5, language: 'eng', default: false });
+
+  it('prefers the default-flagged English track', () => expect(selectAudioTrack([rus, engSecond, engFlagged, flagged])?.index).toBe(4));
+  it('picks the first English track over a default-flagged non-English one', () => {
+    expect(selectAudioTrack([rus, eng, flagged])?.index).toBe(2);
+    expect(selectAudioTrack([flagged, engSecond, eng])?.index).toBe(5);
+  });
+  it('falls back to the default-flagged track when nothing is English', () => expect(selectAudioTrack([rus, flagged])?.index).toBe(3));
   it('falls back to English when nothing is flagged', () => expect(selectAudioTrack([rus, eng])?.index).toBe(2));
   it('falls back to the first track', () => expect(selectAudioTrack([rus])?.index).toBe(1));
   it('honours an explicit index and rejects unknown ones', () => {

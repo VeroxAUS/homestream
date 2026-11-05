@@ -1,20 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
-import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
-import type { ActivitySession, SessionResponse, SessionStartRequest } from '@homestream/shared';
+import type { ActivitySession, SessionPatchRequest, SessionResponse, SessionStartRequest } from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { upsertDevice } from '../db/devices.js';
-import { finalizePlay, insertPlay, mediaKeyFor } from '../db/plays.js';
+import { finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision } from '../db/plays.js';
 import { AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import { redact } from '../redact.js';
 import type { StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
-import { decide, selectAudioTrack } from './decision.js';
+import { decide } from './decision.js';
 import { EncoderProcess } from './encoderProcess.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
 import { SessionMonitor } from './monitor.js';
@@ -33,6 +33,12 @@ import type { RawProgress } from './progress.js';
 import { createUrlResolver, type UrlResolver } from './resolveUrl.js';
 import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
+import {
+  MAX_TEXT_SUBTITLES,
+  SubtitleExtractor,
+  subtitlePath,
+} from './subtitleExtractor.js';
+import { burnTarget, planPatch, requireAudio, requireSubtitle } from './tracks.js';
 
 export const SEGMENT_WAIT_MS = 30_000;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
@@ -166,15 +172,10 @@ export class PlaybackManager {
     const probe = await this.probe(sourceUrl);
     const timingsMs = { pickStream: t1 - t0, resolve: t2 - t1, probe: Date.now() - t2 };
 
-    const audio = selectAudioTrack(probe.audio, body.audioIndex);
-    if (body.audioIndex !== undefined && !audio) {
-      throw new AppError(400, 'invalid_audio_index', `The file has no audio track ${body.audioIndex}.`, 'Pick one of the audioTracks of this file.');
-    }
-    if (body.subtitle && !probe.subtitles.some((track) => track.index === body.subtitle?.index)) {
-      throw new AppError(400, 'invalid_subtitle_index', `The file has no subtitle track ${body.subtitle.index}.`, 'Pick one of the subtitleTracks of this file.');
-    }
+    const audio = requireAudio(probe, body.audioIndex);
+    const subtitle = requireSubtitle(probe, body.subtitle);
 
-    const decision = decide({ video: probe.video, audio, device });
+    const decision = decide({ video: probe.video, audio, device, subtitleBurnIn: subtitle?.mode === 'burn' });
     const format = segmentFormatFor(decision.videoCodec);
     const id = randomUUID();
     const dir = path.join(config.transcodeDir, id);
@@ -206,7 +207,7 @@ export class PlaybackManager {
       decision,
       format,
       selectedAudioIndex: audio?.index ?? null,
-      selectedSubtitle: body.subtitle ?? null,
+      selectedSubtitle: subtitle,
       requestedStartSec: body.startPositionSec ?? 0,
       startedAt: now,
       state: 'starting',
@@ -215,6 +216,8 @@ export class PlaybackManager {
       statSamples: { speedSum: 0, speedCount: 0, bitrateSum: 0, bitrateCount: 0 },
       toneMapper: this.libplaceboBroken ? 'opencl' : 'libplacebo',
       process: null,
+      subtitles: null,
+      readySubtitles: new Set(),
       startSegment,
       generation: 0,
       retried: false,
@@ -312,6 +315,69 @@ export class PlaybackManager {
     }
   }
 
+  /**
+   * Switches the audio track and/or the subtitle choice. A new audio track or a changed burn-in restarts the one ffmpeg of the
+   * session at the player's position; the playlist URL and segment names stay the same, so the client only reloads the player.
+   * Choosing a text subtitle only records the choice: the WebVTT file is shown by the player.
+   */
+  async patch(id: string, body: SessionPatchRequest): Promise<SessionResponse> {
+    const rec = this.require(id);
+    while (rec.restart) await rec.restart.catch(() => undefined);
+    if (rec.stopping) throw notFound('This session has ended.');
+    if (rec.state === 'error') {
+      throw new AppError(409, 'session_failed', 'This playback session has failed and cannot switch tracks.', 'Start a new playback session.');
+    }
+
+    const plan = planPatch(rec.probe, { audioIndex: rec.selectedAudioIndex, subtitle: rec.selectedSubtitle }, body);
+    rec.lastActivity = Date.now();
+    rec.selectedSubtitle = plan.subtitle;
+    if (!plan.restart) return toSessionResponse(rec);
+
+    rec.selectedAudioIndex = plan.audio?.index ?? null;
+    rec.decision = decide({ video: rec.probe.video, audio: plan.audio, device: rec.device, subtitleBurnIn: plan.subtitle?.mode === 'burn' });
+    updatePlayDecision(this.options.db, rec.id, rec.decision);
+    const segment = Math.min(segmentCount(rec.probe.durationSec) - 1, Math.floor(rec.positionSec / SEGMENT_SECONDS));
+    this.event({
+      level: 'info',
+      source: 'session',
+      message: `Playback tracks changed (audio ${plan.audio?.index ?? 'none'}, subtitles ${plan.subtitle ? `${plan.subtitle.mode} ${plan.subtitle.index}` : 'off'}); restarting the encoder at segment ${segment}.`,
+      sessionId: rec.id,
+    });
+    rec.restart = this.reconfigure(rec, segment).finally(() => {
+      rec.restart = null;
+    });
+    await rec.restart;
+    return toSessionResponse(rec);
+  }
+
+  /** Output of the previous track selection is thrown away, including init.mp4 whose audio parameters may differ. */
+  private async reconfigure(rec: SessionRecord, segment: number): Promise<void> {
+    const previous = rec.process;
+    rec.generation += 1;
+    await previous?.stop();
+    if (rec.stopping) return;
+    for (const name of await readdir(rec.dir).catch(() => [] as string[])) {
+      if (/^seg-\d+\.(?:ts|m4s)$/.test(name) || name === 'init-ready.mp4') {
+        await rm(path.join(rec.dir, name), { force: true, maxRetries: 5, retryDelay: 100 }).catch(() => undefined);
+      }
+    }
+    rec.store.forget(0);
+    rec.retried = false;
+    this.launch(rec, segment);
+  }
+
+  serveSubtitle(id: string, index: number): ServedFile {
+    const rec = this.require(id);
+    this.touch(id);
+    const track = rec.probe.subtitles.find((item) => item.index === index && item.kind === 'text');
+    if (!track) throw notFound(`Subtitle track ${index} is not a text track of this session.`, 'Use the url of a text track from the session.');
+    if (!rec.readySubtitles.has(index)) {
+      throw new AppError(404, 'subtitle_not_ready', `Subtitle track ${index} is still being prepared.`, 'Wait until its url is set in the session, then fetch it.');
+    }
+    const file = subtitlePath(rec.dir, index);
+    return { kind: 'file', path: file, size: statSync(file).size, contentType: 'text/vtt' };
+  }
+
   async monitorTick(): Promise<void> {
     await this.monitor.tick();
   }
@@ -347,6 +413,8 @@ export class PlaybackManager {
     if (file.extension !== expectedExtension || file.index >= segmentCount(rec.probe.durationSec)) {
       throw notFound(`Segment ${file.index} does not exist in this session.`, 'Use the segment names listed in index.m3u8.');
     }
+    // A track switch replaces the files on disk; nothing from before it may be served.
+    while (rec.restart) await rec.restart.catch(() => undefined);
     rec.playerSegment = file.index;
     if (Date.now() - rec.pingedAt > 30_000) rec.positionSec = file.index * SEGMENT_SECONDS;
 
@@ -481,6 +549,7 @@ export class PlaybackManager {
       audioIndex: rec.selectedAudioIndex,
       startSegment,
       toneMapper: rec.toneMapper,
+      burn: burnTarget(rec.probe, rec.selectedSubtitle),
     });
     const proc = new EncoderProcess({
       ffmpegPath: this.options.config.ffmpegPath,
@@ -523,7 +592,37 @@ export class PlaybackManager {
     if (rec.state === 'starting' && existsSync(path.join(rec.dir, segmentFileName(rec.startSegment, rec.format)))) {
       rec.state = 'ready';
       this.options.bus.emit('session.update', toActivitySession(rec));
+      this.startSubtitleExtraction(rec);
     }
+  }
+
+  /** Waits for the first segment so the extraction does not compete with it for source bandwidth. */
+  private startSubtitleExtraction(rec: SessionRecord): void {
+    if (rec.subtitles || rec.stopping) return;
+    const indices = rec.probe.subtitles
+      .filter((track) => track.kind === 'text')
+      .slice(0, MAX_TEXT_SUBTITLES)
+      .map((track) => track.index);
+    if (indices.length === 0) return;
+    rec.subtitles = new SubtitleExtractor({
+      ffmpegPath: this.options.config.ffmpegPath,
+      sessionId: rec.id,
+      sessionDir: rec.dir,
+      inputUrl: () => rec.sourceUrl,
+      indices,
+      registry: this.registry,
+      onReady: (index) => rec.readySubtitles.add(index),
+      onFailure: (failed, exit) => {
+        this.event({
+          level: 'warn',
+          source: 'ffmpeg',
+          message: `Could not extract subtitle track ${failed.join(', ')} to WebVTT; it stays unavailable for this session.`,
+          details: { tracks: failed, detail: scrub(exit.stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '') },
+          sessionId: rec.id,
+        });
+      },
+    });
+    rec.subtitles.start();
   }
 
   /** First failure: re-resolve the CDN link (and fall back from libplacebo) and carry on. Second failure ends the session. */
@@ -697,7 +796,7 @@ export class PlaybackManager {
     rec.state = 'stopped';
     this.sessions.delete(rec.id);
     await rec.restart?.catch(() => undefined);
-    await rec.process?.stop();
+    await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     await this.removeDir(rec.dir);
     if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.averages(rec) });
     this.options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');

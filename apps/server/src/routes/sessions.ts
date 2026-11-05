@@ -1,10 +1,16 @@
 import { createReadStream } from 'node:fs';
-import { SessionStartRequestSchema, type ActivityResponse, type SessionResponse } from '@homestream/shared';
+import {
+  SessionPatchRequestSchema,
+  SessionStartRequestSchema,
+  type ActivityResponse,
+  type SessionResponse,
+} from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.js';
 import { AppError, invalidRequest } from '../errors.js';
 import { stripIpv6Prefix } from '../net.js';
 import { parseHlsFileName } from '../playback/playlist.js';
+import { parseSubtitleFileName } from '../playback/subtitleExtractor.js';
 
 export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { playback } = ctx;
@@ -22,9 +28,28 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
     playback.get(request.params.id),
   );
 
+  app.patch<{ Params: { id: string } }>('/api/sessions/:id', async (request): Promise<SessionResponse> => {
+    playback.get(request.params.id);
+    const parsed = SessionPatchRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) throw invalidRequest(parsed.error);
+    return playback.patch(request.params.id, parsed.data);
+  });
+
   app.delete<{ Params: { id: string } }>('/api/sessions/:id', async (request) => {
     await playback.stop(request.params.id);
     return { sessionId: request.params.id, state: 'stopped' };
+  });
+
+  app.get<{ Params: { id: string; file: string } }>('/hls/:id/subs/:file', async (request, reply) => {
+    const index = parseSubtitleFileName(request.params.file);
+    if (index === null) {
+      throw new AppError(404, 'not_found', `Unknown subtitle file "${request.params.file.slice(0, 40)}".`, 'Use the url of a subtitle track from the session.');
+    }
+    const served = playback.serveSubtitle(request.params.id, index);
+    reply.header('Content-Type', served.contentType).header('Cache-Control', 'no-cache');
+    if (served.kind === 'text') return reply.send(served.body);
+    reply.header('Content-Length', served.size);
+    return reply.send(createReadStream(served.path));
   });
 
   app.get<{ Params: { id: string; file: string } }>('/hls/:id/:file', async (request, reply) => {

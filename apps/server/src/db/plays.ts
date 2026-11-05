@@ -64,6 +64,11 @@ export function insertPlay(db: Db, play: PlayStart): void {
   );
 }
 
+/** Keeps the stored decision in step with track switches (audio channels, burn-in). */
+export function updatePlayDecision(db: Db, sessionId: string, decision: Decision): void {
+  db.prepare('UPDATE plays SET decision_json = ? WHERE session_id = ?').run(JSON.stringify(decision), sessionId);
+}
+
 export function finalizePlay(db: Db, sessionId: string, end: PlayEnd): void {
   db.prepare(
     `UPDATE plays SET ended_at = ?, status = ?, error_message = ?, avg_bitrate_kbps = ?, avg_speed = ?

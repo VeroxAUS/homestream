@@ -73,6 +73,18 @@ describe('cleanupOrphans', () => {
     expect(registry.list()).toEqual([]);
   }, 30_000);
 
+  it('matches an entry on its own marker instead of the session id when it has one', async () => {
+    const child = sleeper('marker-webvtt-job');
+    const registry = new PidRegistry(path.join(root, 'marker', PID_FILE_NAME));
+    registry.add({ pid: child.pid as number, sessionId: 'id-not-on-command-line', startedAt: Date.now(), match: 'marker-webvtt-job' });
+
+    const result = await cleanupOrphans(registry, path.join(root, 'no-such-dir'));
+    await waitGone(child.pid as number);
+
+    expect(result.killed).toEqual([child.pid]);
+    expect(alive(child.pid as number)).toBe(false);
+  }, 30_000);
+
   it('leaves a process alone when its pid was recycled by something else', async () => {
     const child = sleeper('some-other-program');
     const registry = new PidRegistry(path.join(root, 'recycled', PID_FILE_NAME));

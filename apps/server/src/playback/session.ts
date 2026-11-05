@@ -12,6 +12,7 @@ import type { ToneMapper } from './ffmpegArgs.js';
 import type { ProbeResult } from './probe.js';
 import type { SegmentFormat } from './playlist.js';
 import type { SegmentStore } from './segmentStore.js';
+import type { SubtitleExtractor } from './subtitleExtractor.js';
 
 export interface SessionMeta {
   mediaKey: string;
@@ -57,6 +58,10 @@ export interface SessionRecord {
   toneMapper: ToneMapper;
 
   process: EncoderProcess | null;
+  /** Background WebVTT extraction of the text tracks; started once the first segment exists. */
+  subtitles: SubtitleExtractor | null;
+  /** Text tracks whose WebVTT file is complete and servable. */
+  readySubtitles: Set<number>;
   /** First segment of the current ffmpeg run. */
   startSegment: number;
   generation: number;
@@ -110,7 +115,10 @@ export function toSessionResponse(rec: SessionRecord): SessionResponse {
     state: rec.state,
     decision: rec.decision,
     audioTracks: rec.probe.audio,
-    subtitleTracks: rec.probe.subtitles.map(({ codec: _codec, ...track }) => ({ ...track, url: null })),
+    subtitleTracks: rec.probe.subtitles.map(({ codec: _codec, canvas: _canvas, ...track }) => ({
+      ...track,
+      url: rec.readySubtitles.has(track.index) ? `/hls/${rec.id}/subs/${track.index}.vtt` : null,
+    })),
     selectedAudioIndex: rec.selectedAudioIndex,
     selectedSubtitle: rec.selectedSubtitle,
     encoder: rec.stats,

@@ -6,6 +6,8 @@ export interface PidEntry {
   pid: number;
   sessionId: string;
   startedAt: number;
+  /** Text the process command line must contain for the pid to be treated as ours; defaults to the session id. */
+  match?: string;
 }
 
 export const PID_FILE_NAME = 'ffmpeg-pids.json';
@@ -116,7 +118,7 @@ export async function cleanupOrphans(registry: PidRegistry, transcodeDir: string
   const killed: number[] = [];
   for (const entry of recorded) {
     const line = lines.get(entry.pid);
-    if (line?.toLowerCase().includes(entry.sessionId.toLowerCase())) {
+    if (line?.toLowerCase().includes((entry.match ?? entry.sessionId).toLowerCase())) {
       await killTree(entry.pid);
       killed.push(entry.pid);
     }
