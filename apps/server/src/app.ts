@@ -5,12 +5,15 @@ import type { AppContext } from './context.js';
 import { openDatabase, type Db } from './db/index.js';
 import { AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
+import { GatewayClient } from './gateway/client.js';
 import { createLogger } from './logger.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerInfoRoutes } from './routes/info.js';
 import { registerStatic, shouldServeSpaFallback } from './routes/static.js';
+import { registerStreamRoutes } from './routes/streams.js';
+import { StreamService } from './streams/service.js';
 import { TmdbService } from './tmdb/service.js';
 
 export interface BuildAppOptions {
@@ -18,6 +21,7 @@ export interface BuildAppOptions {
   db?: Db;
   bus?: EventBus;
   tmdb?: TmdbService;
+  gateway?: GatewayClient;
   heartbeatMs?: number;
 }
 
@@ -35,7 +39,9 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   const db = options.db ?? openDatabase(config.dataDir);
   const bus = options.bus ?? new EventBus();
   const tmdb = options.tmdb ?? new TmdbService({ config, db, logger });
-  const ctx: AppContext = { config, db, bus, logger, tmdb };
+  const gateway = options.gateway ?? new GatewayClient({ config, db, logger });
+  const streams = new StreamService(gateway, db);
+  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -77,9 +83,11 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerInfoRoutes(app, ctx);
   registerDeviceRoutes(app, ctx);
   registerCatalogRoutes(app, ctx);
+  registerStreamRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
+    if (!options.gateway) gateway.close();
     if (!options.db) db.close();
     await ownedLogger?.close();
   });
