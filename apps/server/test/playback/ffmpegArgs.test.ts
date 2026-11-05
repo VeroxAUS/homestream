@@ -201,7 +201,7 @@ describe('subtitle burn-in', () => {
     const args = buildFfmpegArgs(burnJob());
     expect(args).not.toContain('-vf');
     expect(valueAfter(args, '-filter_complex')).toBe(
-      '[0:0]scale=1920:1080:flags=bicubic,format=nv12[v];[0:5]scale=1920:1080:flags=bilinear,format=rgba[s];[v][s]overlay=eof_action=pass:format=auto,format=nv12[vout]',
+      '[0:0]scale=1920:1080:flags=bicubic,format=nv12[v];[0:5]fps=24.000,scale=1920:1080:flags=bilinear,format=rgba[s];[v][s]overlay=eof_action=pass:format=auto,format=nv12[vout]',
     );
     expect(args.join(' ')).toContain('-map [vout] -map 0:2');
   });
@@ -233,8 +233,25 @@ describe('subtitle burn-in', () => {
   it('dims the bitmap to SDR reference white when the output stays HDR10', () => {
     const hdr = decision({ subtitleBurnIn: true, width: 1920, height: 1080 });
     const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: hdr })), '-filter_complex');
-    expect(graph).toContain('format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58[s]');
+    expect(graph).toContain('format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58,format=yuva420p10le[s]');
     expect(graph).toContain('format=p010le[vout]');
+  });
+
+  it('overlays HDR10 in 10-bit YUV so the picture never goes through 8-bit RGBA', () => {
+    const hdr = decision({ subtitleBurnIn: true, width: 1920, height: 1080 });
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: hdr })), '-filter_complex');
+    expect(graph).toContain('format=p010le,format=yuv420p10le[v]');
+    expect(graph).toContain('overlay=eof_action=pass:format=yuv420p10,format=p010le[vout]');
+  });
+
+  it.each([[24], [23.976023976], [60]])('limits the bitmap input to the video frame rate (%d fps), so audio packets cannot flood the overlay', (fps) => {
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps } })), '-filter_complex');
+    expect(graph).toContain(`[0:5]fps=${fps.toFixed(3)},scale=`);
+  });
+
+  it('falls back to 24 fps when the video frame rate is unknown', () => {
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 0 } })), '-filter_complex');
+    expect(graph).toContain('[0:5]fps=24.000,');
   });
 
   describe('2160p HDR10 kept', () => {
@@ -247,9 +264,9 @@ describe('subtitle burn-in', () => {
       expect(valueAfter(args, '-hwaccel')).toBe('cuda');
       expect(valueAfter(args, '-hwaccel_output_format')).toBe('cuda');
       expect(valueAfter(args, '-filter_complex')).toBe(
-        '[0:0]scale_cuda=w=3840:h=2160:format=p010le,hwdownload,format=p010le[v];' +
-          '[0:4]scale=1920:1080:flags=bilinear,format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58,scale=3840:2160:flags=neighbor[s];' +
-          '[v][s]overlay=eof_action=pass:format=auto,format=p010le[vout]',
+        '[0:0]scale_cuda=w=3840:h=2160:format=p010le,hwdownload,format=p010le,format=yuv420p10le[v];' +
+          '[0:4]fps=24.000,scale=1920:1080:flags=bilinear,format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58,scale=3840:2160:flags=neighbor,format=yuva420p10le[s];' +
+          '[v][s]overlay=eof_action=pass:format=yuv420p10,format=p010le[vout]',
       );
     });
 

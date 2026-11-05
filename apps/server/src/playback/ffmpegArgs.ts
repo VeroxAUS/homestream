@@ -135,23 +135,44 @@ function inputArgs(job: EncodeJob): string[] {
 /** PQ signal level of 203 nits (SDR reference white); full-scale subtitle white would be 10 000 nits. */
 const PQ_REFERENCE_WHITE = 0.58;
 
-/** Video chain, then the subtitle bitmap scaled to the output size and overlaid on the finished frames. */
+/**
+ * ffmpeg feeds a bitmap subtitle input one canvas frame for every packet of ANY stream in the same file (the sub2video
+ * heartbeat). A TrueHD track has ~1200 packets per second, so each second queued ~1200 upscaled 4K canvases in the overlay
+ * (4 GB in under 2 s, measured). Resampling the subtitle to the video frame rate right at its input drops those duplicates
+ * before any real work: one canvas per video frame is all the overlay can use.
+ */
+function subtitleRate(job: EncodeJob): string {
+  const fps = job.video.fps > 0 && Number.isFinite(job.video.fps) ? job.video.fps : 24;
+  return `fps=${fps.toFixed(3)}`;
+}
+
+/**
+ * Video chain, then the subtitle bitmap scaled to the output size and overlaid on the finished frames. HDR10 output overlays
+ * in 10-bit YUV: with `format=auto` the overlay converted the whole 4K picture to 8-bit RGBA and back.
+ */
 export function buildBurnFilterGraph(job: EncodeJob): string {
   const { width, height, dynamicRange } = job.decision;
   const hdr = dynamicRange === 'hdr10';
   const dim = hdr ? `,colorchannelmixer=rr=${PQ_REFERENCE_WHITE}:gg=${PQ_REFERENCE_WHITE}:bb=${PQ_REFERENCE_WHITE}` : '';
-  if (burnsOnGpu(job)) {
-    // PGS is authored at 1080p: render it there and upscale the finished bitmap, which is much cheaper than scaling at 4K.
+  const rate = subtitleRate(job);
+  const subtitle = `[0:${job.burn?.index}]${rate}`;
+  if (hdr) {
+    // PGS is authored at 1080p: on the GPU path render it there and upscale the finished bitmap, which is much cheaper than scaling at 4K.
+    const gpu = burnsOnGpu(job);
+    const video = gpu ? `${buildVideoFilter(job)},hwdownload,format=p010le` : buildVideoFilter(job);
+    const sized = gpu
+      ? `scale=1920:1080:flags=bilinear,format=rgba${dim},scale=${width}:${height}:flags=neighbor`
+      : `scale=${width}:${height}:flags=bilinear,format=rgba${dim}`;
     return [
-      `[0:${job.video.index}]${buildVideoFilter(job)},hwdownload,format=p010le[v]`,
-      `[0:${job.burn?.index}]scale=1920:1080:flags=bilinear,format=rgba${dim},scale=${width}:${height}:flags=neighbor[s]`,
-      '[v][s]overlay=eof_action=pass:format=auto,format=p010le[vout]',
+      `[0:${job.video.index}]${video},format=yuv420p10le[v]`,
+      `${subtitle},${sized},format=yuva420p10le[s]`,
+      '[v][s]overlay=eof_action=pass:format=yuv420p10,format=p010le[vout]',
     ].join(';');
   }
   return [
     `[0:${job.video.index}]${buildVideoFilter(job)}[v]`,
-    `[0:${job.burn?.index}]scale=${width}:${height}:flags=bilinear,format=rgba${dim}[s]`,
-    `[v][s]overlay=eof_action=pass:format=auto,format=${hdr ? 'p010le' : 'nv12'}[vout]`,
+    `${subtitle},scale=${width}:${height}:flags=bilinear,format=rgba[s]`,
+    '[v][s]overlay=eof_action=pass:format=auto,format=nv12[vout]',
   ].join(';');
 }
 
