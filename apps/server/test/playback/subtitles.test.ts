@@ -260,6 +260,12 @@ describe('extractor command line', () => {
     expect(joined).toContain(`-map 0:7 -c:s webvtt -flush_packets 1 -f ${EXTRACTOR_MARKER} ${path.join('subs', 'run1', '7.vtt')}`);
   });
 
+  it('caps the decoder at 2 threads before the input', () => {
+    const args = buildExtractArgs(job);
+    expect(args[args.indexOf('-threads') + 1]).toBe('2');
+    expect(args.indexOf('-threads')).toBeLessThan(args.indexOf('-i'));
+  });
+
   it('reads the coverage head from the last complete line of the packet listing', () => {
     const header = '#format: frame checksums\n#tb 0: 1/1000\n#media_type 0: video\n';
     expect(parseCoverTimebase(header)).toBe(0.001);

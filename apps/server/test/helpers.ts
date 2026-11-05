@@ -5,7 +5,7 @@ import { buildApp, type BuildAppOptions } from '../src/app.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { createSilentLogger } from '../src/logger.js';
 
-const TEST_ROOT = 'D:\\HomeStream\\test-tmp';
+export const TEST_ROOT = process.env.HOMESTREAM_TEST_ROOT?.trim() || 'E:\\HomeStream\\test-tmp';
 
 const DEFAULT_ENV_FILE =
   'GATEWAY_MANIFEST_URL=https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/manifest.json\nTMDB_READ_TOKEN=tmdb-test-token-123456\n';

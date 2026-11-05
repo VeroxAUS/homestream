@@ -7,7 +7,7 @@ import { isAbort, rangeInfo } from './upstream.js';
 /** Extractor reads from the CDN are slowed to this rate while the encoder is short of lead. */
 export const STARVED_BYTES_PER_SEC = 2 * 1024 * 1024;
 /** An upstream read stops before the next cached block; looking this far ahead keeps one request per long streak. */
-const MAX_BLOCK_SCAN = 1024;
+export const MAX_BLOCK_SCAN = 256;
 const MAX_STALLS = 3;
 
 export interface ProxyCounters {

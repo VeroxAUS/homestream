@@ -15,12 +15,13 @@ function decision(overrides: Partial<Decision> = {}): Decision {
 function job(overrides: Partial<EncodeJob> = {}): EncodeJob {
   return {
     inputUrl: 'https://store-001.example.test/file.mkv',
-    sessionDir: 'D:\\HomeStream\\transcode\\abc',
+    sessionDir: 'E:\\HomeStream\\transcode\\abc',
     decision: decision(),
     video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 },
     audioIndex: 2,
     startSegment: 0,
     toneMapper: 'libplacebo',
+    threads: { gpu: 4, cpu: 8 },
     ...overrides,
   };
 }
@@ -55,7 +56,7 @@ describe('buildFfmpegArgs: shared structure', () => {
   });
 
   it('writes the playlist under the session dir, with relative segment names', () => {
-    expect(args.at(-1)).toBe('D:\\HomeStream\\transcode\\abc\\enc.m3u8');
+    expect(args.at(-1)).toBe('E:\\HomeStream\\transcode\\abc\\enc.m3u8');
     expect(valueAfter(args, '-hls_segment_filename')).toBe('seg-%d.m4s');
     expect(valueAfter(args, '-hls_fmp4_init_filename')).toBe('init.mp4');
   });
@@ -302,5 +303,52 @@ describe('software decode fallback', () => {
     ['wmv3', 'yuv420p', false],
   ])('canHwDecode(%s, %s) = %s', (codec, pixFmt, expected) => {
     expect(canHwDecode({ codec, pixFmt })).toBe(expected);
+  });
+});
+
+describe('thread caps', () => {
+  const threadFlags = (args: string[]) => ({
+    threads: valueAfter(args, '-threads'),
+    filter: valueAfter(args, '-filter_threads'),
+    complex: valueAfter(args, '-filter_complex_threads'),
+  });
+  const sdrHd = decision({ dynamicRange: 'sdr', width: 1920, height: 1080, videoCodec: 'h264', audioChannels: 2 });
+
+  it('uses the GPU cap on all three flags for a CUDA decode and filter path, before the input', () => {
+    const args = buildFfmpegArgs(job());
+    expect(threadFlags(args)).toEqual({ threads: '4', filter: '4', complex: '4' });
+    for (const flag of ['-threads', '-filter_threads', '-filter_complex_threads']) {
+      expect(args.indexOf(flag)).toBeLessThan(args.indexOf('-i'));
+    }
+    expect(args.filter((arg) => arg === '-threads')).toHaveLength(1);
+  });
+
+  it('follows the configured caps', () => {
+    expect(threadFlags(buildFfmpegArgs(job({ threads: { gpu: 2, cpu: 6 } })))).toEqual({ threads: '2', filter: '2', complex: '2' });
+  });
+
+  it('uses the CPU cap for software burn-in, the hwdownload plus CPU overlay path and the CPU tone-map fallback', () => {
+    const burn = job({ decision: sdrHd, video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 24 }, burn: { index: 5 } });
+    expect(threadFlags(buildFfmpegArgs(burn)).threads).toBe('8');
+    const uhdBurn = job({ decision: decision({ subtitleBurnIn: true }), burn: { index: 4 } });
+    expect(threadFlags(buildFfmpegArgs(uhdBurn)).threads).toBe('8');
+    const opencl = job({ decision: decision({ dynamicRange: 'sdr', toneMapped: true }), toneMapper: 'opencl' });
+    expect(threadFlags(buildFfmpegArgs(opencl))).toEqual({ threads: '8', filter: '8', complex: '8' });
+  });
+
+  it('uses the CPU cap when NVDEC cannot decode the source', () => {
+    const software = job({ decision: sdrHd, video: { index: 0, codec: 'h264', pixFmt: 'yuv420p10le', fps: 24 } });
+    expect(threadFlags(buildFfmpegArgs(software)).threads).toBe('8');
+  });
+
+  it('keeps the GPU cap for libplacebo tone mapping on a CUDA decode', () => {
+    const mapped = job({ decision: decision({ dynamicRange: 'sdr', toneMapped: true }) });
+    expect(threadFlags(buildFfmpegArgs(mapped)).threads).toBe('4');
+  });
+
+  it('does not raise -thread_queue_size or add extra hardware frames', () => {
+    const args = buildFfmpegArgs(job());
+    expect(args).not.toContain('-thread_queue_size');
+    expect(args).not.toContain('-extra_hw_frames');
   });
 });

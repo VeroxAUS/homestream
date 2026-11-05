@@ -39,7 +39,7 @@ export interface ExtractJob {
  * (forced or signs) track would hold it back for minutes. `-copyts` keeps all times absolute.
  */
 export function buildExtractArgs(job: ExtractJob): string[] {
-  const args = ['-hide_banner', '-loglevel', 'error', '-nostats', '-y', ...PROBE_LIMIT_ARGS, '-copyts'];
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostats', '-y', '-threads', '2', ...PROBE_LIMIT_ARGS, '-copyts'];
   if (job.ss > 0) args.push('-ss', String(job.ss));
   args.push('-i', job.inputUrl);
   args.push('-map', `0:${job.videoIndex}`, '-c', 'copy', '-flush_packets', '1', '-f', 'framecrc', path.join(job.outputDir, COVER_FILE));

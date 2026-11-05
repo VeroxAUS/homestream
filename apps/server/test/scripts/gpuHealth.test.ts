@@ -1,12 +1,18 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   buildQueryScript,
+  DEFAULT_MIN_FREE_GB,
   evaluate,
   filterNewer,
   MAX_TEMP_C,
   parseArgs,
   parseEvents,
   parseNvidiaSmi,
+  parseSystemInfo,
+  readMemory,
+  SYSTEM_INFO_SCRIPT,
 } from '../../../../scripts/gpu-health.mjs';
 
 const FECS = {
@@ -24,6 +30,20 @@ describe('parseArgs', () => {
     const parsed = parseArgs(['--since', '2026-11-05T18:30:00+10:00']);
     expect(parsed.since).toBe('2026-11-05T08:30:00.000Z');
     expect(parsed.sinceMs).toBe(Date.parse('2026-11-05T08:30:00Z'));
+  });
+
+  it('defaults the free RAM minimum to 4 GB and reads --min-free-gb', () => {
+    expect(DEFAULT_MIN_FREE_GB).toBe(4);
+    expect(parseArgs(['--since', '2026-11-05T08:30:00Z']).minFreeGb).toBe(4);
+    expect(parseArgs(['--since', '2026-11-05T08:30:00Z', '--min-free-gb', '6.5']).minFreeGb).toBe(6.5);
+    expect(parseArgs(['--min-free-gb', '2', '--since', '2026-11-05T08:30:00Z']).minFreeGb).toBe(2);
+  });
+
+  it('rejects a missing, negative or non-numeric --min-free-gb', () => {
+    const since = ['--since', '2026-11-05T08:30:00Z'];
+    expect(() => parseArgs([...since, '--min-free-gb'])).toThrow(/min-free-gb/);
+    expect(() => parseArgs([...since, '--min-free-gb', 'lots'])).toThrow(/min-free-gb/);
+    expect(() => parseArgs([...since, '--min-free-gb', '-1'])).toThrow(/min-free-gb/);
   });
 
   it('rejects a missing or invalid --since', () => {
@@ -106,28 +126,85 @@ describe('parseNvidiaSmi', () => {
 
 describe('evaluate', () => {
   const cool = { tempC: 60 };
+  const roomy = { freeGb: 12 };
 
-  it('is healthy without events and below the temperature limit', () => {
-    expect(evaluate({ events: [], gpu: cool, errors: [] })).toEqual({ ok: true, reasons: [] });
-    expect(evaluate({ events: [], gpu: { tempC: MAX_TEMP_C }, errors: [] }).ok).toBe(true);
+  it('is healthy without events, below the temperature limit and with enough free RAM', () => {
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, errors: [] })).toEqual({ ok: true, reasons: [] });
+    expect(evaluate({ events: [], gpu: { tempC: MAX_TEMP_C }, memory: roomy, errors: [] }).ok).toBe(true);
+  });
+
+  it('fails with low_memory below the minimum and passes at exactly the minimum', () => {
+    const low = evaluate({ events: [], gpu: cool, memory: { freeGb: 3.99 }, errors: [] });
+    expect(low.ok).toBe(false);
+    expect(low.reasons).toHaveLength(1);
+    expect(low.reasons[0]).toMatch(/^low_memory:/);
+    expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 4 }, errors: [] }).ok).toBe(true);
+  });
+
+  it('honours a custom minimum', () => {
+    expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 6 }, minFreeGb: 8, errors: [] }).reasons[0]).toMatch(/^low_memory:.*8 GB/);
+    expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 6 }, minFreeGb: 5, errors: [] }).ok).toBe(true);
+  });
+
+  it('fails closed when free RAM is unknown', () => {
+    for (const memory of [null, undefined, { freeGb: Number.NaN }]) {
+      const result = evaluate({ events: [], gpu: cool, memory, errors: [] });
+      expect(result.ok).toBe(false);
+      expect(result.reasons[0]).toContain('could not check');
+    }
+  });
+
+  it('reports every failing check, not just the first', () => {
+    const result = evaluate({ events: parseEvents(JSON.stringify([FECS])), gpu: { tempC: 90 }, memory: { freeGb: 1 }, errors: [] });
+    expect(result.reasons).toHaveLength(3);
   });
 
   it('fails on any new nvlddmkm event', () => {
-    const result = evaluate({ events: parseEvents(JSON.stringify([FECS, GPUID])), gpu: cool, errors: [] });
+    const result = evaluate({ events: parseEvents(JSON.stringify([FECS, GPUID])), gpu: cool, memory: roomy, errors: [] });
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain('2 new GPU driver');
   });
 
   it('fails above 83 C', () => {
-    const result = evaluate({ events: [], gpu: { tempC: 84 }, errors: [] });
+    const result = evaluate({ events: [], gpu: { tempC: 84 }, memory: roomy, errors: [] });
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain('84 C');
   });
 
   it('fails closed when a source could not be read', () => {
-    const result = evaluate({ events: [], gpu: null, errors: ['nvidia-smi: nvidia-smi failed'] });
+    const result = evaluate({ events: [], gpu: null, memory: roomy, errors: ['nvidia-smi: nvidia-smi failed'] });
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain('could not check');
+  });
+});
+
+describe('readMemory', () => {
+  it('converts free bytes to GB with two decimals', () => {
+    expect(readMemory(4 * 1024 ** 3).freeGb).toBe(4);
+    expect(readMemory(3.5 * 1024 ** 3 + 12_345).freeGb).toBe(3.5);
+    expect(readMemory(0).freeGb).toBe(0);
+  });
+});
+
+describe('parseSystemInfo (info only)', () => {
+  it('reads pagefile usage and the D: disk queue length', () => {
+    const info = parseSystemInfo(
+      JSON.stringify({ pagefile: { name: 'E:\\pagefile.sys', usedMiB: 354, sizeMiB: 18432 }, diskQueueD: 1.5 }),
+    );
+    expect(info).toEqual({ pagefile: [{ name: 'E:\\pagefile.sys', usedMiB: 354, sizeMiB: 18432 }], diskQueueD: 1.5 });
+  });
+
+  it('accepts several pagefiles, a missing queue counter and empty output', () => {
+    const info = parseSystemInfo(JSON.stringify({ pagefile: [{ name: 'a', usedMiB: 1, sizeMiB: 2 }, { name: 'b', usedMiB: 3, sizeMiB: 4 }], diskQueueD: null }));
+    expect(info.pagefile).toHaveLength(2);
+    expect(info.diskQueueD).toBeNull();
+    expect(parseSystemInfo('')).toEqual({ pagefile: [], diskQueueD: null });
+  });
+
+  it('reads the pagefile and the PhysicalDisk queue counter', () => {
+    expect(SYSTEM_INFO_SCRIPT).toContain('Win32_PageFileUsage');
+    expect(SYSTEM_INFO_SCRIPT).toContain('PhysicalDisk(*)');
+    expect(SYSTEM_INFO_SCRIPT).toContain('Current Disk Queue Length');
   });
 });
 
@@ -138,5 +215,14 @@ describe('buildQueryScript', () => {
     expect(script).toContain("ProviderName = 'Display'");
     expect(script).toContain('LiveKernelEvent');
     expect(script).toContain('FromUnixTimeMilliseconds(1788000000123)');
+  });
+});
+
+describe('command line entry', () => {
+  it('runs main() and fails closed on bad arguments, also when the repo path goes through a junction', () => {
+    const script = fileURLToPath(new URL('../../../../scripts/gpu-health.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, '--since', 'not-a-date'], { encoding: 'utf8', windowsHide: true });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false });
   });
 });

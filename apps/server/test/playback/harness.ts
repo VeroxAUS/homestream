@@ -10,6 +10,7 @@ import { openDatabase, type Db } from '../../src/db/index.js';
 import { GatewayClient } from '../../src/gateway/client.js';
 import { RateLimiter } from '../../src/gateway/rateLimiter.js';
 import { createSilentLogger } from '../../src/logger.js';
+import { lowerPriority } from '../../src/playback/priority.js';
 import { createFfprobeRunner, type ProbeRunner } from '../../src/playback/probe.js';
 import { TmdbService } from '../../src/tmdb/service.js';
 import { startStubGateway, stubStream, type StubGateway } from '../gateway/stubGateway.js';
@@ -37,12 +38,24 @@ export const PROFILES = {
 
 export type ProfileName = keyof typeof PROFILES;
 
+/** Every ffmpeg the tests start gets a thread cap on its output (the last argument) and below-normal priority. */
+export function withThreadCap(command: string, args: string[]): string[] {
+  if (command !== 'ffmpeg' || args.includes('-threads')) return args;
+  return [...args.slice(0, -1), '-threads', '4', ...args.slice(-1)];
+}
+
 export function run(command: string, args: string[], timeoutMs = 120_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
-      if (error) reject(new Error(`${command} failed: ${stderr || error.message}`));
-      else resolve(stdout);
-    });
+    const child = execFile(
+      command,
+      withThreadCap(command, args),
+      { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
+      (error, stdout, stderr) => {
+        if (error) reject(new Error(`${command} failed: ${stderr || error.message}`));
+        else resolve(stdout);
+      },
+    );
+    lowerPriority(child.pid);
   });
 }
 

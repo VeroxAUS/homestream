@@ -651,6 +651,7 @@ export class PlaybackManager {
       startSegment,
       toneMapper: rec.toneMapper,
       burn: burnTarget(rec.probe, rec.selectedSubtitle),
+      threads: { gpu: this.options.config.ffmpegThreads, cpu: this.options.config.ffmpegBurnThreads },
     });
     const proc = new EncoderProcess({
       ffmpegPath: this.options.config.ffmpegPath,

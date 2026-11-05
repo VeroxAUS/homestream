@@ -18,6 +18,8 @@ export interface EncodeJob {
   toneMapper: ToneMapper;
   /** Bitmap subtitle track overlaid onto the picture. Decodes in software (or NVDEC plus hwdownload for 4K HDR10) so the overlay sees system-memory frames. */
   burn?: { index: number; canvas?: { width: number; height: number } } | null;
+  /** Thread caps from the config: `gpu` for jobs whose filters run on the GPU, `cpu` for jobs with CPU filters or software decode. */
+  threads: { gpu: number; cpu: number };
 }
 
 const HW_DECODE_CODECS = new Set(['h264', 'hevc', 'vp9', 'av1', 'mpeg2video', 'mpeg4', 'vc1', 'vp8']);
@@ -50,6 +52,17 @@ function burnsOnGpu(job: EncodeJob): boolean {
 
 function decodesOnGpu(job: EncodeJob): boolean {
   return (!job.burn || burnsOnGpu(job)) && canHwDecode(job.video);
+}
+
+/** Burn-in overlays, the OpenCL tone-map path and software decode all run filters or decoding on the CPU. */
+function usesCpuFilters(job: EncodeJob): boolean {
+  const cpuToneMap = job.decision.toneMapped && job.toneMapper === 'opencl';
+  return !!job.burn || cpuToneMap || !decodesOnGpu(job);
+}
+
+function threadArgs(job: EncodeJob): string[] {
+  const n = String(usesCpuFilters(job) ? job.threads.cpu : job.threads.gpu);
+  return ['-threads', n, '-filter_threads', n, '-filter_complex_threads', n];
 }
 
 function isHttp(url: string): boolean {
@@ -115,7 +128,7 @@ function inputArgs(job: EncodeJob): string[] {
   }
   // Bitmap subtitles are placed on the canvas they were authored for; without it ffmpeg assumes the video size.
   if (job.burn?.canvas) args.push('-canvas_size', `${job.burn.canvas.width}x${job.burn.canvas.height}`);
-  args.push(...PROBE_LIMIT_ARGS, '-i', job.inputUrl);
+  args.push(...threadArgs(job), ...PROBE_LIMIT_ARGS, '-i', job.inputUrl);
   return args;
 }
 

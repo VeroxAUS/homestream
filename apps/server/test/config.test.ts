@@ -23,13 +23,31 @@ describe('loadConfig', () => {
     const file = envFile('empty.env', '# nothing\n');
     const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });
     expect(config.port).toBe(8600);
-    expect(config.dataDir).toBe('D:\\HomeStream\\data');
-    expect(config.transcodeDir).toBe('D:\\HomeStream\\transcode');
+    expect(config.dataDir).toBe('E:\\HomeStream\\data');
+    expect(config.transcodeDir).toBe('E:\\HomeStream\\transcode');
+    expect(config.ffmpegThreads).toBe(4);
+    expect(config.ffmpegBurnThreads).toBe(8);
     expect(config.transcodeMaxGb).toBe(20);
     expect(config.ffmpegPath).toBe('ffmpeg');
     expect(config.serverName).toMatch(/^HomeStream on /);
     expect(config.missingKeys).toEqual(['GATEWAY_MANIFEST_URL', 'TMDB_READ_TOKEN']);
     expect(config.configFile).toMatchObject({ path: file, exists: true, source: 'env' });
+  });
+
+  it('reads FFMPEG_THREADS and FFMPEG_BURN_THREADS and rejects values that are not positive whole numbers', () => {
+    const set = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('threads.env', 'FFMPEG_THREADS=2\nFFMPEG_BURN_THREADS=6\n') },
+      repoRoot: null,
+    });
+    expect([set.ffmpegThreads, set.ffmpegBurnThreads]).toEqual([2, 6]);
+
+    const bad = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('badthreads.env', 'FFMPEG_THREADS=0\nFFMPEG_BURN_THREADS=2.5\n') },
+      repoRoot: null,
+    });
+    expect([bad.ffmpegThreads, bad.ffmpegBurnThreads]).toEqual([4, 8]);
+    expect(bad.warnings.join(' ')).toContain('FFMPEG_THREADS');
+    expect(bad.warnings.join(' ')).toContain('FFMPEG_BURN_THREADS');
   });
 
   it('names only the keys that are missing', () => {

@@ -1,6 +1,6 @@
 export const BLOCK_SIZE = 1024 * 1024;
-export const GLOBAL_CAP_BYTES = 1.5 * 1024 ** 3;
-export const PER_SOURCE_CAP_BYTES = 768 * 1024 ** 2;
+export const GLOBAL_CAP_BYTES = 512 * 1024 ** 2;
+export const PER_SOURCE_CAP_BYTES = 384 * 1024 ** 2;
 /** Blocks ending this far behind the playhead are the first to go; the encoder also re-reads a little before the playhead. */
 export const KEEP_BEHIND_BYTES = 96 * 1024 ** 2;
 

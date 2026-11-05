@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import type { SessionResponse } from '@homestream/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { lowerPriority } from '../../src/playback/priority.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
 import {
@@ -12,6 +13,7 @@ import {
   probeSegment,
   run,
   startSession,
+  withThreadCap,
   type Harness,
   type HarnessOptions,
 } from '../playback/harness.js';
@@ -73,10 +75,11 @@ async function audioMd5(harness: Harness, sessionId: string, segment: string): P
 
 function execBuffer(args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    execFile('ffmpeg', args, { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+    const child = execFile('ffmpeg', withThreadCap('ffmpeg', args), { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
       if (error) reject(new Error(`ffmpeg failed: ${stderr.toString()}`));
       else resolve(stdout);
     });
+    lowerPriority(child.pid);
   });
 }
 

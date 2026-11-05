@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_SIZE, BlockCache, KEEP_BEHIND_BYTES, type BlockOwner } from '../../src/sourceproxy/blockCache.js';
+import {
+  BLOCK_SIZE,
+  BlockCache,
+  GLOBAL_CAP_BYTES,
+  KEEP_BEHIND_BYTES,
+  PER_SOURCE_CAP_BYTES,
+  type BlockOwner,
+} from '../../src/sourceproxy/blockCache.js';
+import { MAX_BLOCK_SCAN } from '../../src/sourceproxy/serve.js';
+import { HEAD_BYTES, TAIL_BYTES } from '../../src/sourceproxy/sourceEntry.js';
 
 const MB = BLOCK_SIZE;
 
@@ -8,6 +17,20 @@ function owner(playheadByte = 0): BlockOwner {
 }
 
 const block = () => Buffer.alloc(MB);
+
+describe('memory caps', () => {
+  it('keeps the proxy at 512 MiB overall, 384 MiB per source and a 256-block upstream scan', () => {
+    expect(GLOBAL_CAP_BYTES).toBe(512 * MB);
+    expect(PER_SOURCE_CAP_BYTES).toBe(384 * MB);
+    expect(MAX_BLOCK_SCAN).toBe(256);
+  });
+
+  it('keeps the 96 MiB behind the playhead and the fast-start head and tail buffers', () => {
+    expect(KEEP_BEHIND_BYTES).toBe(96 * MB);
+    expect(HEAD_BYTES).toBe(16 * MB);
+    expect(TAIL_BYTES).toBe(8 * MB);
+  });
+});
 
 describe('BlockCache', () => {
   it('stores and returns blocks and counts bytes', () => {

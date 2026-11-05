@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { lowerPriority } from './priority.js';
 import { ProgressParser, type RawProgress } from './progress.js';
 
 export interface EncoderExit {
@@ -49,6 +50,7 @@ export class EncoderProcess {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.pid = this.child.pid;
+    lowerPriority(this.pid);
 
     this.child.stdin?.on('error', () => undefined);
     this.child.stdout?.setEncoding('utf8');

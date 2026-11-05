@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-// GPU health gate (AGENTS.md "GPU safety"). Usage: node scripts/gpu-health.mjs --since <ISO-8601>
-// Prints one JSON line. Exit 0 = healthy, 1 = new GPU driver events, temperature above the limit,
-// or the state could not be read (a gate that cannot look fails closed).
+// GPU health gate (AGENTS.md "GPU safety"). Usage: node scripts/gpu-health.mjs --since <ISO-8601> [--min-free-gb 4]
+// Prints one JSON line. Exit 0 = healthy, 1 = new GPU driver events, temperature above the limit, free RAM below
+// the minimum (low_memory), or the state could not be read (a gate that cannot look fails closed).
 import { execFile } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 export const MAX_TEMP_C = 83;
+export const DEFAULT_MIN_FREE_GB = 4;
+const GIB = 1024 ** 3;
 
 const SMI_FIELDS = ['temperature.gpu', 'utilization.gpu', 'utilization.encoder', 'utilization.decoder', 'memory.used', 'power.draw'];
 
@@ -16,7 +20,17 @@ export function parseArgs(argv) {
   if (!raw) throw new Error('missing --since <ISO-8601 time the GPU step started>');
   const sinceMs = Date.parse(raw);
   if (Number.isNaN(sinceMs)) throw new Error(`--since is not a valid date: ${raw}`);
-  return { since: new Date(sinceMs).toISOString(), sinceMs };
+
+  let minFreeGb = DEFAULT_MIN_FREE_GB;
+  const minIndex = argv.indexOf('--min-free-gb');
+  if (minIndex >= 0) {
+    const rawMin = argv[minIndex + 1];
+    minFreeGb = Number(rawMin);
+    if (rawMin === undefined || rawMin.trim() === '' || !Number.isFinite(minFreeGb) || minFreeGb < 0) {
+      throw new Error(`--min-free-gb is not a valid number of GB: ${rawMin}`);
+    }
+  }
+  return { since: new Date(sinceMs).toISOString(), sinceMs, minFreeGb };
 }
 
 /**
@@ -86,11 +100,48 @@ export function parseNvidiaSmi(stdout) {
   };
 }
 
-/** @param {{events: object[], gpu: {tempC: number | null} | null, errors: string[]}} input */
-export function evaluate({ events, gpu, errors }) {
+/**
+ * Free physical RAM (what is available without paging) as the gate sees it.
+ * @param {number} freeBytes
+ */
+export function readMemory(freeBytes = os.freemem()) {
+  return { freeGb: Math.round((freeBytes / GIB) * 100) / 100, totalGb: Math.round((os.totalmem() / GIB) * 100) / 100 };
+}
+
+/**
+ * Parses the JSON of the info-only query: pagefile usage and the D: disk queue length. Either part may be missing.
+ * @param {string} stdout
+ */
+export function parseSystemInfo(stdout) {
+  const text = stdout.trim();
+  if (!text) return { pagefile: [], diskQueueD: null };
+  const data = JSON.parse(text);
+  const pageList = Array.isArray(data.pagefile) ? data.pagefile : data.pagefile ? [data.pagefile] : [];
+  return {
+    pagefile: pageList
+      .filter((p) => p && typeof p === 'object')
+      .map((p) => ({ name: String(p.name ?? ''), usedMiB: num(p.usedMiB), sizeMiB: num(p.sizeMiB) })),
+    diskQueueD: num(data.diskQueueD),
+  };
+}
+
+/** PowerShell for the info-only readings; a failure here never fails the gate. */
+export const SYSTEM_INFO_SCRIPT = `
+$ErrorActionPreference = 'SilentlyContinue'
+$pf = @(Get-CimInstance Win32_PageFileUsage | ForEach-Object { [pscustomobject]@{ name = $_.Name; usedMiB = $_.CurrentUsage; sizeMiB = $_.AllocatedBaseSize } })
+$q = Get-Counter '\\PhysicalDisk(*)\\Current Disk Queue Length' | Select-Object -ExpandProperty CounterSamples | Where-Object { $_.InstanceName -match ' D:$' } | Select-Object -First 1
+[pscustomobject]@{ pagefile = $pf; diskQueueD = if ($q) { $q.CookedValue } else { $null } } | ConvertTo-Json -Compress -Depth 3
+`;
+
+/**
+ * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, errors: string[]}} input
+ */
+export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, errors }) {
   const reasons = [];
   if (events.length > 0) reasons.push(`${events.length} new GPU driver/TDR event(s)`);
   if (gpu && gpu.tempC !== null && gpu.tempC > MAX_TEMP_C) reasons.push(`temperature ${gpu.tempC} C is above ${MAX_TEMP_C} C`);
+  if (!memory || !Number.isFinite(memory.freeGb)) reasons.push('could not check: free RAM is unknown');
+  else if (memory.freeGb < minFreeGb) reasons.push(`low_memory: ${memory.freeGb} GB of RAM free, below the ${minFreeGb} GB minimum`);
   for (const error of errors) reasons.push(`could not check: ${error}`);
   return { ok: reasons.length === 0, reasons };
 }
@@ -154,21 +205,45 @@ async function readGpu() {
   return parseNvidiaSmi(await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000));
 }
 
+async function readSystemInfo() {
+  const encoded = Buffer.from(SYSTEM_INFO_SCRIPT, 'utf16le').toString('base64');
+  return parseSystemInfo(await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 20_000));
+}
+
 export async function main(argv) {
-  const { since, sinceMs } = parseArgs(argv);
+  const { since, sinceMs, minFreeGb } = parseArgs(argv);
   const errors = [];
-  const [eventsResult, gpuResult] = await Promise.allSettled([readEvents(sinceMs), readGpu()]);
+  const [eventsResult, gpuResult, infoResult] = await Promise.allSettled([readEvents(sinceMs), readGpu(), readSystemInfo()]);
   if (eventsResult.status === 'rejected') errors.push(`event log: ${eventsResult.reason.message}`);
   if (gpuResult.status === 'rejected') errors.push(`nvidia-smi: ${gpuResult.reason.message}`);
   const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
   const gpu = gpuResult.status === 'fulfilled' ? gpuResult.value : null;
-  const { ok, reasons } = evaluate({ events, gpu, errors });
+  let memory = null;
+  try {
+    memory = readMemory();
+  } catch (error) {
+    errors.push(`memory: ${error.message}`);
+  }
+  const system = infoResult.status === 'fulfilled' ? infoResult.value : null;
+  const { ok, reasons } = evaluate({ events, gpu, memory, minFreeGb, errors });
   const shown = events.map((e) => ({ ...e, message: e.message.slice(0, 600) }));
-  console.log(JSON.stringify({ ok, since, checkedAt: new Date().toISOString(), eventCount: events.length, events: shown, gpu, reasons }));
+  console.log(
+    JSON.stringify({ ok, since, checkedAt: new Date().toISOString(), eventCount: events.length, events: shown, gpu, memory, minFreeGb, system, reasons }),
+  );
   return ok ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node resolves a junction in the main module's path, so argv[1] is compared by its real path; a mismatch would skip the gate silently.
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error) => {

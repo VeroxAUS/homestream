@@ -16,6 +16,8 @@ const KNOWN_KEYS = [
   'TRANSCODE_MAX_GB',
   'FFMPEG_PATH',
   'FFPROBE_PATH',
+  'FFMPEG_THREADS',
+  'FFMPEG_BURN_THREADS',
   'SERVER_NAME',
   'SOURCE_PROXY_PORT',
   'HOMESTREAM_WEB_DIR',
@@ -40,6 +42,10 @@ export interface Config {
   transcodeMaxGb: number;
   ffmpegPath: string;
   ffprobePath: string;
+  /** Thread cap for ffmpeg jobs whose filters run on the GPU. */
+  ffmpegThreads: number;
+  /** Thread cap for jobs with CPU filters (software burn-in, CPU overlay, CPU tone mapping). */
+  ffmpegBurnThreads: number;
   serverName: string;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
@@ -99,6 +105,16 @@ function positiveNumber(raw: string | undefined, fallback: number, name: string,
   return value;
 }
 
+function positiveInteger(raw: string | undefined, fallback: number, name: string, warnings: string[]): number {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    warnings.push(`${name}="${raw}" is not a positive whole number; using ${fallback}.`);
+    return fallback;
+  }
+  return value;
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): Config {
   const env = options.env ?? process.env;
   const warnings: string[] = [];
@@ -136,11 +152,13 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     host: '0.0.0.0',
     port,
     sourceProxyPort,
-    dataDir: values.DATA_DIR ?? 'D:\\HomeStream\\data',
-    transcodeDir: values.TRANSCODE_DIR ?? 'D:\\HomeStream\\transcode',
+    dataDir: values.DATA_DIR ?? 'E:\\HomeStream\\data',
+    transcodeDir: values.TRANSCODE_DIR ?? 'E:\\HomeStream\\transcode',
     transcodeMaxGb: positiveNumber(values.TRANSCODE_MAX_GB, 20, 'TRANSCODE_MAX_GB', warnings),
     ffmpegPath: values.FFMPEG_PATH ?? 'ffmpeg',
     ffprobePath: values.FFPROBE_PATH ?? 'ffprobe',
+    ffmpegThreads: positiveInteger(values.FFMPEG_THREADS, 4, 'FFMPEG_THREADS', warnings),
+    ffmpegBurnThreads: positiveInteger(values.FFMPEG_BURN_THREADS, 8, 'FFMPEG_BURN_THREADS', warnings),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import type { AudioTrack, SourceHdr, SubtitleTrack } from '@homestream/shared';
 import { AppError } from '../errors.js';
 import { redact } from '../redact.js';
+import { lowerPriority } from './priority.js';
 
 export interface VideoInfo {
   index: number;
@@ -187,7 +188,7 @@ export const PROBE_LIMIT_ARGS = ['-probesize', '8M', '-analyzeduration', '3M'];
 export function createFfprobeRunner(ffprobePath: string, timeoutMs = 60_000): ProbeRunner {
   return (url) =>
     new Promise<ProbeResult>((resolve, reject) => {
-      execFile(
+      const child = execFile(
         ffprobePath,
         ['-v', 'error', ...PROBE_LIMIT_ARGS, '-print_format', 'json', '-show_format', '-show_streams', url],
         { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
@@ -211,5 +212,6 @@ export function createFfprobeRunner(ffprobePath: string, timeoutMs = 60_000): Pr
           }
         },
       );
+      lowerPriority(child.pid);
     });
 }
