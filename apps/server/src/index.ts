@@ -36,11 +36,12 @@ async function main(): Promise<void> {
 
   const app = await buildApp(config, { logger });
   await app.ctx.playback.recoverOrphans();
+  const proxyPort = await app.ctx.sourceProxy.listen();
   await app.listen({ port: config.port, host: config.host });
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : config.port;
   logger.info(
-    { port, config: config.configFile.path, gateway: displayGatewayUrl(config.gatewayManifestUrl) },
+    { port, sourceProxyPort: proxyPort, config: config.configFile.path, gateway: displayGatewayUrl(config.gatewayManifestUrl) },
     `HomeStream server ${SERVER_VERSION} listening`,
   );
 

@@ -93,4 +93,25 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // SQLite cannot alter a CHECK constraint, so the events table is rebuilt to admit the 'prefetch' source.
+    version: 2,
+    sql: `
+      CREATE TABLE events_v2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        level TEXT NOT NULL CHECK (level IN ('info', 'warn', 'error')),
+        source TEXT NOT NULL CHECK (source IN ('gateway', 'tmdb', 'torbox', 'ffmpeg', 'session', 'health', 'server', 'prefetch')),
+        message TEXT NOT NULL,
+        details_json TEXT,
+        session_id TEXT
+      );
+      INSERT INTO events_v2 (id, ts, level, source, message, details_json, session_id)
+        SELECT id, ts, level, source, message, details_json, session_id FROM events;
+      DROP TABLE events;
+      ALTER TABLE events_v2 RENAME TO events;
+      CREATE INDEX idx_events_ts ON events (ts DESC);
+      CREATE INDEX idx_events_level_source ON events (level, source);
+    `,
+  },
 ];

@@ -67,6 +67,14 @@ describe('database', () => {
     reopened.close();
   });
 
+  it('accepts prefetch events and keeps the other event sources working', () => {
+    const db = openDatabase(':memory:');
+    db.prepare("INSERT INTO events (ts, level, source, message) VALUES (1, 'info', 'prefetch', 'x')").run();
+    db.prepare("INSERT INTO events (ts, level, source, message) VALUES (2, 'info', 'server', 'y')").run();
+    expect((db.prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n).toBe(2);
+    db.close();
+  });
+
   it('rejects an event with an unknown level', () => {
     const db = openDatabase(':memory:');
     expect(() =>

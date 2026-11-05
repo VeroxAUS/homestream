@@ -56,6 +56,16 @@ describe('loadConfig', () => {
     expect(config.warnings.join(' ')).toContain('PORT');
   });
 
+  it('puts the source proxy on PORT+50 unless SOURCE_PROXY_PORT overrides it', () => {
+    const file = envFile('proxyport.env', 'PORT=8606\n');
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null }).sourceProxyPort).toBe(8656);
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, SOURCE_PROXY_PORT: '8690' }, repoRoot: null }).sourceProxyPort).toBe(8690);
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, PORT: '0' }, repoRoot: null }).sourceProxyPort).toBe(0);
+    const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, SOURCE_PROXY_PORT: 'banana' }, repoRoot: null });
+    expect(bad.sourceProxyPort).toBe(8656);
+    expect(bad.warnings.join(' ')).toContain('SOURCE_PROXY_PORT');
+  });
+
   it('prefers HOMESTREAM_ENV_FILE over the repo .env, and the repo .env over %APPDATA%', () => {
     const repo = path.join(root, 'repo');
     const appData = path.join(root, 'appdata');

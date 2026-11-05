@@ -33,6 +33,25 @@ export const SessionStartRequestSchema = z
   });
 export type SessionStartRequest = z.infer<typeof SessionStartRequestSchema>;
 
+/** Warm-up of the stream the next `POST /api/sessions` with `streamId: "auto"` would pick for this device. */
+export const PrefetchRequestSchema = z
+  .object({
+    mediaType: MediaTypeSchema,
+    tmdbId: z.number().int().positive(),
+    season: z.number().int().min(0).optional(),
+    episode: z.number().int().min(1).optional(),
+    device: CapabilityProfileSchema,
+  })
+  .refine((body) => body.mediaType === 'movie' || (body.season !== undefined && body.episode !== undefined), {
+    message: 'season and episode are required for tv',
+    path: ['season'],
+  });
+export type PrefetchRequest = z.infer<typeof PrefetchRequestSchema>;
+
+/** `streamId` is null while the stream list is not cached yet or when no cached stream can be chosen. */
+export const PrefetchResponseSchema = z.object({ streamId: z.string().nullable() });
+export type PrefetchResponse = z.infer<typeof PrefetchResponseSchema>;
+
 /** `subtitle: null` clears the selection; an absent key leaves it unchanged. */
 export const SessionPatchRequestSchema = z
   .object({

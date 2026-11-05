@@ -108,6 +108,7 @@ export interface HarnessOptions {
   /** Extra config values (TRANSCODE_MAX_GB, FFMPEG_PATH, ...). */
   env?: Record<string, string>;
   playback?: BuildAppOptions['playback'];
+  prefetch?: BuildAppOptions['prefetch'];
 }
 
 /** App wired to a stub gateway whose stream URLs resolve to local files, so ffprobe/ffmpeg run for real. */
@@ -131,6 +132,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const bus = new EventBus();
   const app = await buildApp(config, {
     logger, db, tmdb, gateway, bus,
+    prefetch: options.prefetch,
     playback: {
       resolveUrl: async (raw) => {
         resolveCalls.push(raw);

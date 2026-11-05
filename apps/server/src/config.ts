@@ -17,10 +17,12 @@ const KNOWN_KEYS = [
   'FFMPEG_PATH',
   'FFPROBE_PATH',
   'SERVER_NAME',
+  'SOURCE_PROXY_PORT',
   'HOMESTREAM_WEB_DIR',
 ] as const;
 
 export const DEFAULT_PORT = 8600;
+export const SOURCE_PROXY_PORT_OFFSET = 50;
 
 export interface ConfigFileInfo {
   path: string;
@@ -31,6 +33,8 @@ export interface ConfigFileInfo {
 export interface Config {
   host: string;
   port: number;
+  /** Loopback source proxy port; 0 picks a free port. Never reachable from the LAN. */
+  sourceProxyPort: number;
   dataDir: string;
   transcodeDir: string;
   transcodeMaxGb: number;
@@ -117,11 +121,21 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     else warnings.push(`PORT="${portRaw}" is not a valid port; using ${DEFAULT_PORT}.`);
   }
 
+  let sourceProxyPort = port === 0 ? 0 : port + SOURCE_PROXY_PORT_OFFSET;
+  const proxyPortRaw = values.SOURCE_PROXY_PORT;
+  if (proxyPortRaw !== undefined) {
+    const parsed = Number(proxyPortRaw);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 65535) sourceProxyPort = parsed;
+    else warnings.push(`SOURCE_PROXY_PORT="${proxyPortRaw}" is not a valid port; using ${sourceProxyPort}.`);
+  }
+  if (sourceProxyPort > 65535) sourceProxyPort = 0;
+
   const missingKeys = REQUIRED_KEYS.filter((key) => !values[key]);
 
   const config: Config = {
     host: '0.0.0.0',
     port,
+    sourceProxyPort,
     dataDir: values.DATA_DIR ?? 'D:\\HomeStream\\data',
     transcodeDir: values.TRANSCODE_DIR ?? 'D:\\HomeStream\\transcode',
     transcodeMaxGb: positiveNumber(values.TRANSCODE_MAX_GB, 20, 'TRANSCODE_MAX_GB', warnings),

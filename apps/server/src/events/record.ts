@@ -3,7 +3,7 @@ import { redact, redactDeep } from '../redact.js';
 import type { EventBus } from './bus.js';
 
 export type EventLevel = 'info' | 'warn' | 'error';
-export type EventSource = 'gateway' | 'tmdb' | 'torbox' | 'ffmpeg' | 'session' | 'health' | 'server';
+export type EventSource = 'gateway' | 'tmdb' | 'torbox' | 'ffmpeg' | 'session' | 'health' | 'server' | 'prefetch';
 
 export interface LogEventInput {
   level: EventLevel;

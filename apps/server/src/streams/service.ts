@@ -2,7 +2,7 @@ import type { StreamOption, StreamsResponse } from '@homestream/shared';
 import type { Db } from '../db/index.js';
 import { getDevice } from '../db/devices.js';
 import type { GatewayClient } from '../gateway/client.js';
-import { queryFromKey, type GatewayStream, type StreamQuery } from '../gateway/types.js';
+import { queryFromKey, queryKey, type GatewayStream, type StreamQuery } from '../gateway/types.js';
 import { matchesEpisode } from './episode.js';
 import { parseStream } from './parse.js';
 import { deviceMaxRank, rankStreams, recommendStream } from './rank.js';
@@ -21,7 +21,16 @@ export class StreamService {
   ) {}
 
   async list(query: StreamQuery, deviceId?: string): Promise<StreamsResponse> {
-    const raw = await this.gateway.lookup(query);
+    return this.rank(await this.gateway.lookup(query), query, deviceId);
+  }
+
+  /** Like `list`, but only from a fresh gateway cache entry: never waits for or triggers a lookup. Null when not cached. */
+  cachedList(query: StreamQuery, deviceId?: string): StreamsResponse | null {
+    const entry = this.gateway.cache.getFresh(queryKey(query));
+    return entry ? this.rank(entry.streams, query, deviceId) : null;
+  }
+
+  private rank(raw: GatewayStream[], query: StreamQuery, deviceId?: string): StreamsResponse {
     const relevant =
       query.type === 'tv' ? raw.filter((stream) => matchesEpisode(stream.filename, query.season, query.episode)) : raw;
     const ranked = rankStreams(relevant.map(parseStream));

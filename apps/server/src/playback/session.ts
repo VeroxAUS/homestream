@@ -13,6 +13,7 @@ import type { ProbeResult } from './probe.js';
 import type { SegmentFormat } from './playlist.js';
 import type { SegmentStore } from './segmentStore.js';
 import type { SubtitleExtractor } from './subtitleExtractor.js';
+import type { SourceHandle } from '../sourceproxy/proxy.js';
 
 export interface SessionMeta {
   mediaKey: string;
@@ -39,10 +40,8 @@ export interface SessionRecord {
   meta: SessionMeta;
   store: SegmentStore;
   device: CapabilityProfile;
-  /** Gateway link; server-side only. */
-  rawUrl: string;
-  /** Resolved TorBox CDN URL; server-side only. */
-  sourceUrl: string;
+  /** The source proxy entry every ffprobe/ffmpeg of this session reads from; holds the CDN link, which never leaves it. */
+  source: SourceHandle;
   probe: ProbeResult;
   decision: Decision;
   format: SegmentFormat;

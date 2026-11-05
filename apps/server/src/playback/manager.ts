@@ -3,7 +3,13 @@ import { existsSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
-import type { ActivitySession, SessionPatchRequest, SessionResponse, SessionStartRequest } from '@homestream/shared';
+import type {
+  ActivitySession,
+  CapabilityProfile,
+  SessionPatchRequest,
+  SessionResponse,
+  SessionStartRequest,
+} from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { upsertDevice } from '../db/devices.js';
@@ -12,6 +18,7 @@ import { AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import { redact } from '../redact.js';
+import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
 import type { StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
 import { decide } from './decision.js';
@@ -28,9 +35,7 @@ import {
   contentTypeFor,
   type HlsFile,
 } from './playlist.js';
-import { createFfprobeRunner, type ProbeRunner } from './probe.js';
 import type { RawProgress } from './progress.js';
-import { createUrlResolver, type UrlResolver } from './resolveUrl.js';
 import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
 import {
@@ -49,6 +54,8 @@ export const MONITOR_TICK_MS = 2_000;
 const POLL_MS = 100;
 /** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */
 const MAX_SERVE_ATTEMPTS = 3;
+const STARVED_LEAD_SEC = 30;
+const STARVED_SPEED = 1.2;
 const GIB = 1024 ** 3;
 
 export interface PlaybackManagerOptions {
@@ -58,8 +65,8 @@ export interface PlaybackManagerOptions {
   logger: FastifyBaseLogger;
   tmdb: TmdbService;
   streams: StreamService;
-  probe?: ProbeRunner;
-  resolveUrl?: UrlResolver;
+  /** Every ffprobe/ffmpeg input of a session is a loopback URL served by this proxy. */
+  proxy: SourceProxy;
   segmentWaitMs?: number;
   maxSessions?: number;
   idleTimeoutMs?: number;
@@ -94,8 +101,7 @@ function scrub(text: string): string {
 
 export class PlaybackManager {
   private readonly sessions = new Map<string, SessionRecord>();
-  private readonly probe: ProbeRunner;
-  private readonly resolveUrl: UrlResolver;
+  private readonly proxy: SourceProxy;
   private readonly segmentWaitMs: number;
   private readonly maxSessions: number;
   private readonly registry: PidRegistry;
@@ -105,8 +111,7 @@ export class PlaybackManager {
   private libplaceboBroken = false;
 
   constructor(private readonly options: PlaybackManagerOptions) {
-    this.probe = options.probe ?? createFfprobeRunner(options.config.ffprobePath);
-    this.resolveUrl = options.resolveUrl ?? createUrlResolver();
+    this.proxy = options.proxy;
     this.segmentWaitMs = options.segmentWaitMs ?? SEGMENT_WAIT_MS;
     this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
     this.registry = new PidRegistry(path.join(options.config.dataDir, PID_FILE_NAME));
@@ -159,25 +164,48 @@ export class PlaybackManager {
   }
 
   private async startSession(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse> {
-    const { config, db, tmdb } = this.options;
+    const { db, tmdb } = this.options;
 
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
     const device = upsertDevice(db, body.device, clientIp).capabilities;
 
+    const id = randomUUID();
     const t0 = Date.now();
     const stream = await this.pickStream(body, details.imdbId, device.deviceId);
     const t1 = Date.now();
-    const sourceUrl = await this.resolveUrl(stream.url);
+    // A prefetch of the same stream has already resolved the link, warmed the proxy and run ffprobe.
+    const source = await this.proxy.acquire(stream.url, id);
+    try {
+      return await this.startWithSource(body, clientIp, { id, stream, source, device, details, timings: { t0, t1 } });
+    } catch (error) {
+      source.release();
+      throw error;
+    }
+  }
+
+  private async startWithSource(
+    body: SessionStartRequest,
+    clientIp: string | null,
+    context: {
+      id: string;
+      stream: Awaited<ReturnType<PlaybackManager['pickStream']>>;
+      source: SourceHandle;
+      device: CapabilityProfile;
+      details: { title: string };
+      timings: { t0: number; t1: number };
+    },
+  ): Promise<SessionResponse> {
+    const { config, db } = this.options;
+    const { id, stream, source, device, details } = context;
     const t2 = Date.now();
-    const probe = await this.probe(sourceUrl);
-    const timingsMs = { pickStream: t1 - t0, resolve: t2 - t1, probe: Date.now() - t2 };
+    const probe = await source.probe();
+    const timingsMs = { pickStream: context.timings.t1 - context.timings.t0, source: t2 - context.timings.t1, probe: Date.now() - t2 };
 
     const audio = requireAudio(probe, body.audioIndex);
     const subtitle = requireSubtitle(probe, body.subtitle);
 
     const decision = decide({ video: probe.video, audio, device, subtitleBurnIn: subtitle?.mode === 'burn' });
     const format = segmentFormatFor(decision.videoCodec);
-    const id = randomUUID();
     const dir = path.join(config.transcodeDir, id);
     const total = segmentCount(probe.durationSec);
     const startSegment = Math.min(total - 1, Math.floor((body.startPositionSec ?? 0) / SEGMENT_SECONDS));
@@ -201,8 +229,7 @@ export class PlaybackManager {
       },
       store: new SegmentStore(dir),
       device,
-      rawUrl: stream.url,
-      sourceUrl,
+      source,
       probe,
       decision,
       format,
@@ -310,6 +337,7 @@ export class PlaybackManager {
     rec.pingedAt = now;
     rec.positionSec = Math.max(0, update.positionSec);
     rec.playerSegment = Math.floor(rec.positionSec / SEGMENT_SECONDS);
+    this.followPlayhead(rec);
     if (update.state && (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused')) {
       rec.state = update.state === 'paused' ? 'paused' : 'playing';
     }
@@ -417,6 +445,7 @@ export class PlaybackManager {
     while (rec.restart) await rec.restart.catch(() => undefined);
     rec.playerSegment = file.index;
     if (Date.now() - rec.pingedAt > 30_000) rec.positionSec = file.index * SEGMENT_SECONDS;
+    this.followPlayhead(rec);
 
     const target = path.join(rec.dir, segmentFileName(file.index, rec.format));
     for (let attempt = 1; ; attempt += 1) {
@@ -541,8 +570,10 @@ export class PlaybackManager {
     rec.stats = { ...rec.stats, headSegment: startSegment, outTimeSec: startSegment * SEGMENT_SECONDS };
     const generation = rec.generation;
 
+    rec.source.setEncoderStarved(true);
+
     const args = buildFfmpegArgs({
-      inputUrl: rec.sourceUrl,
+      inputUrl: rec.source.url,
       sessionDir: rec.dir,
       decision: rec.decision,
       video: rec.probe.video,
@@ -567,6 +598,7 @@ export class PlaybackManager {
       if (rec.generation !== generation || rec.stopping) return;
       if (exit.code === 0) {
         rec.encoderDone = true;
+        rec.source.setEncoderStarved(false);
         this.markReady(rec);
         return;
       }
@@ -585,7 +617,20 @@ export class PlaybackManager {
       rec.statSamples.speedSum += progress.speed;
       rec.statSamples.speedCount += 1;
     }
+    this.updateStarved(rec);
     this.markReady(rec);
+  }
+
+  private followPlayhead(rec: SessionRecord): void {
+    rec.source.setPlayhead(rec.positionSec / rec.probe.durationSec);
+    this.updateStarved(rec);
+  }
+
+  /** Subtitle extraction must not compete with an encoder that has little lead over the player or runs slower than 1.2x. */
+  private updateStarved(rec: SessionRecord): void {
+    const lead = (rec.stats.headSegment - rec.playerSegment) * SEGMENT_SECONDS;
+    const slow = rec.stats.speed > 0 && rec.stats.speed < STARVED_SPEED;
+    rec.source.setEncoderStarved(!rec.encoderDone && (lead < STARVED_LEAD_SEC || slow));
   }
 
   private markReady(rec: SessionRecord): void {
@@ -608,7 +653,7 @@ export class PlaybackManager {
       ffmpegPath: this.options.config.ffmpegPath,
       sessionId: rec.id,
       sessionDir: rec.dir,
-      inputUrl: () => rec.sourceUrl,
+      inputUrl: () => rec.source.extractorUrl,
       indices,
       registry: this.registry,
       onReady: (index) => rec.readySubtitles.add(index),
@@ -644,11 +689,8 @@ export class PlaybackManager {
       this.libplaceboBroken = true;
       this.options.logger.warn({ sessionId: rec.id }, 'libplacebo tone mapping failed to start; falling back to tonemap_opencl');
     }
-    try {
-      rec.sourceUrl = await this.resolveUrl(rec.rawUrl);
-    } catch {
-      // keep the previous link; the retry may still work
-    }
+    // The proxy re-resolves expired links by itself; this covers the encoder failing for another reason with a stale link.
+    await rec.source.refresh().catch(() => undefined);
     if (rec.stopping) return;
     this.launch(rec, this.resumePoint(rec));
   }
@@ -797,6 +839,7 @@ export class PlaybackManager {
     this.sessions.delete(rec.id);
     await rec.restart?.catch(() => undefined);
     await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
+    rec.source.release();
     await this.removeDir(rec.dir);
     if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.averages(rec) });
     this.options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');
