@@ -40,6 +40,12 @@ describe('buildFfmpegArgs: shared structure', () => {
     expect(buildFfmpegArgs(job({ inputUrl: 'D:\\local\\file.mkv' }))).not.toContain('-reconnect');
   });
 
+  it('bounds input probing before the input', () => {
+    expect(valueAfter(args, '-probesize')).toBe('8M');
+    expect(valueAfter(args, '-analyzeduration')).toBe('3M');
+    expect(args.indexOf('-probesize')).toBeLessThan(args.indexOf('-i'));
+  });
+
   it('forces a keyframe every 4 s and reports progress on stdout', () => {
     expect(valueAfter(args, '-force_key_frames')).toBe('expr:gte(t,n_forced*4)');
     expect(valueAfter(args, '-g')).toBe('96');
@@ -52,6 +58,12 @@ describe('buildFfmpegArgs: shared structure', () => {
     expect(args.at(-1)).toBe('D:\\HomeStream\\transcode\\abc\\enc.m3u8');
     expect(valueAfter(args, '-hls_segment_filename')).toBe('seg-%d.m4s');
     expect(valueAfter(args, '-hls_fmp4_init_filename')).toBe('init.mp4');
+  });
+
+  it('keeps fMP4 fragment times absolute across restarts (frag_discont) and not for MPEG-TS', () => {
+    expect(valueAfter(args, '-hls_segment_options')).toBe('movflags=+frag_discont');
+    const ts = buildFfmpegArgs(job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', audioChannels: 2 }) }));
+    expect(ts).not.toContain('-hls_segment_options');
   });
 
   it('derives the GOP from the source frame rate', () => {

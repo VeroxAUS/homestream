@@ -3,7 +3,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { CapabilityProfile, SessionResponse } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../../src/app.js';
+import { buildApp, type BuildAppOptions } from '../../src/app.js';
+import type { Config } from '../../src/config.js';
+import { EventBus } from '../../src/events/bus.js';
 import { openDatabase, type Db } from '../../src/db/index.js';
 import { GatewayClient } from '../../src/gateway/client.js';
 import { RateLimiter } from '../../src/gateway/rateLimiter.js';
@@ -73,10 +75,24 @@ export async function generateSources(dir: string): Promise<LocalSources> {
   return { sdr, hdr };
 }
 
+/** 25-minute 640x360 H.264 source, long enough to seek 20+ minutes ahead; encodes in a few seconds with x264 ultrafast. */
+export async function generateLongSource(dir: string): Promise<string> {
+  mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'source-long.mkv');
+  await run('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '1500', '-c:v', 'libx264', '-preset', 'ultrafast',
+    '-crf', '32', '-g', '48', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', file,
+  ], 300_000);
+  return file;
+}
+
 export interface Harness {
   app: FastifyInstance;
   db: Db;
   stub: StubGateway;
+  config: Config;
+  bus: EventBus;
   transcodeDir: string;
   probeCalls: string[];
   resolveCalls: string[];
@@ -89,6 +105,9 @@ export interface HarnessOptions {
   root: string;
   sources: Record<string, { filename: string; path: string }>;
   probe?: ProbeRunner;
+  /** Extra config values (TRANSCODE_MAX_GB, FFMPEG_PATH, ...). */
+  env?: Record<string, string>;
+  playback?: BuildAppOptions['playback'];
 }
 
 /** App wired to a stub gateway whose stream URLs resolve to local files, so ffprobe/ffmpeg run for real. */
@@ -97,7 +116,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const stub = await startStubGateway(() => ({
     body: { streams: keys.map((key, i) => stubStream(i, (options.sources[key] as { filename: string }).filename, { cached: true })) },
   }));
-  const config = testConfig(options.root, { GATEWAY_MANIFEST_URL: stub.manifestUrl });
+  const config = testConfig(options.root, { GATEWAY_MANIFEST_URL: stub.manifestUrl, ...options.env });
   mkdirSync(config.transcodeDir, { recursive: true });
   const db = openDatabase(config.dataDir);
   const logger = createSilentLogger();
@@ -109,8 +128,9 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const probeCalls: string[] = [];
   const resolveCalls: string[] = [];
   const realProbe = createFfprobeRunner('ffprobe');
+  const bus = new EventBus();
   const app = await buildApp(config, {
-    logger, db, tmdb, gateway,
+    logger, db, tmdb, gateway, bus,
     playback: {
       resolveUrl: async (raw) => {
         resolveCalls.push(raw);
@@ -123,6 +143,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
         return (options.probe ?? realProbe)(url);
       },
       segmentWaitMs: 20_000,
+      ...options.playback,
     },
   });
   await app.ready();
@@ -135,7 +156,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   }
 
   return {
-    app, db, stub, transcodeDir: config.transcodeDir, probeCalls, resolveCalls, streamIds,
+    app, db, stub, config, bus, transcodeDir: config.transcodeDir, probeCalls, resolveCalls, streamIds,
     close: async () => {
       await app.close();
       db.close();
@@ -190,7 +211,11 @@ export async function probeSegment(
   const seg = await fetchHls(harness, sessionId, segment);
   if (seg.status !== 200) throw new Error(`${segment} returned ${seg.status}: ${seg.body.toString()}`);
   const parts: Buffer[] = [];
-  if (segment.endsWith('.m4s')) parts.push((await fetchHls(harness, sessionId, 'init.mp4')).body);
+  if (segment.endsWith('.m4s')) {
+    const init = await fetchHls(harness, sessionId, 'init.mp4');
+    if (init.status !== 200) throw new Error(`init.mp4 returned ${init.status}: ${init.body.toString()}`);
+    parts.push(init.body);
+  }
   parts.push(seg.body);
   const file = path.join(workDir, `${sessionId.slice(0, 8)}-${segment.replace('.m4s', '.mp4')}`);
   writeFileSync(file, Buffer.concat(parts));

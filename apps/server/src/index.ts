@@ -35,6 +35,7 @@ async function main(): Promise<void> {
   }
 
   const app = await buildApp(config, { logger });
+  await app.ctx.playback.recoverOrphans();
   await app.listen({ port: config.port, host: config.host });
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : config.port;

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Decision } from '@homestream/shared';
 import { audioBitrateKbps, videoBitrate } from './decision.js';
-import type { VideoInfo } from './probe.js';
+import { PROBE_LIMIT_ARGS, type VideoInfo } from './probe.js';
 import { SEGMENT_SECONDS, segmentExtension, segmentFormatFor } from './playlist.js';
 
 export type ToneMapper = 'libplacebo' | 'opencl';
@@ -87,7 +87,7 @@ function inputArgs(job: EncodeJob): string[] {
   if (isHttp(job.inputUrl)) {
     args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10');
   }
-  args.push('-i', job.inputUrl);
+  args.push(...PROBE_LIMIT_ARGS, '-i', job.inputUrl);
   return args;
 }
 
@@ -146,7 +146,9 @@ function hlsArgs(job: EncodeJob): string[] {
     '-start_number', String(job.startSegment),
     '-hls_segment_filename', `seg-%d.${segmentExtension(format)}`,
   );
-  if (format === 'fmp4') args.push('-hls_fmp4_init_filename', 'init.mp4');
+  // Without frag_discont the mp4 muxer writes run-relative fragment times and puts the start offset of a restarted run in an
+  // edit list of that run's init.mp4, so segments of different runs would not fit one init. With it the times are absolute.
+  if (format === 'fmp4') args.push('-hls_fmp4_init_filename', 'init.mp4', '-hls_segment_options', 'movflags=+frag_discont');
   // An absolute playlist path also puts the session id on the command line, which orphan cleanup relies on.
   args.push(path.join(job.sessionDir, ENCODER_PLAYLIST));
   return args;

@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { SessionStartRequestSchema, type SessionResponse } from '@homestream/shared';
+import { SessionStartRequestSchema, type ActivityResponse, type SessionResponse } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.js';
 import { AppError, invalidRequest } from '../errors.js';
@@ -15,6 +15,8 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const session = await playback.start(parsed.data, stripIpv6Prefix(request.ip));
     return reply.code(201).send(session);
   });
+
+  app.get('/api/activity', async (): Promise<ActivityResponse> => ({ sessions: playback.activity() }));
 
   app.get<{ Params: { id: string } }>('/api/sessions/:id', async (request): Promise<SessionResponse> =>
     playback.get(request.params.id),

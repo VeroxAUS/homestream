@@ -172,12 +172,19 @@ export function parseProbeOutput(raw: unknown): ProbeResult {
 
 export type ProbeRunner = (url: string) => Promise<ProbeResult>;
 
+/**
+ * Bounded stream analysis: container headers already describe every track, so reading ~3 s / 8 MB of a remote remux is enough
+ * and keeps both ffprobe and the encoder's own input probing from downloading far more before the first frame.
+ */
+export const PROBE_LIMIT_ARGS = ['-probesize', '8M', '-analyzeduration', '3M'];
+
+
 export function createFfprobeRunner(ffprobePath: string, timeoutMs = 60_000): ProbeRunner {
   return (url) =>
     new Promise<ProbeResult>((resolve, reject) => {
       execFile(
         ffprobePath,
-        ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', url],
+        ['-v', 'error', ...PROBE_LIMIT_ARGS, '-print_format', 'json', '-show_format', '-show_streams', url],
         { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
         (error, stdout, stderr) => {
           if (error) {

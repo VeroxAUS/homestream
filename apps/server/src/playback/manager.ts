@@ -3,18 +3,22 @@ import { existsSync, statSync } from 'node:fs';
 import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
-import type { SessionResponse, SessionStartRequest } from '@homestream/shared';
+import type { ActivitySession, SessionResponse, SessionStartRequest } from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { upsertDevice } from '../db/devices.js';
 import { finalizePlay, insertPlay, mediaKeyFor } from '../db/plays.js';
 import { AppError } from '../errors.js';
+import type { EventBus } from '../events/bus.js';
+import { logEvent, type LogEventInput } from '../events/record.js';
 import { redact } from '../redact.js';
 import type { StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
 import { decide, selectAudioTrack } from './decision.js';
 import { EncoderProcess } from './encoderProcess.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
+import { SessionMonitor } from './monitor.js';
+import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
 import {
   SEGMENT_SECONDS,
   generatePlaylist,
@@ -27,23 +31,43 @@ import {
 import { createFfprobeRunner, type ProbeRunner } from './probe.js';
 import type { RawProgress } from './progress.js';
 import { createUrlResolver, type UrlResolver } from './resolveUrl.js';
-import { toSessionResponse, type SessionRecord } from './session.js';
+import { SegmentStore } from './segmentStore.js';
+import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
 
 export const SEGMENT_WAIT_MS = 30_000;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
 export const SEEK_WINDOW_SEGMENTS = 5;
+export const MAX_SESSIONS = 4;
+export const IDLE_TIMEOUT_MS = 120_000;
+export const MONITOR_TICK_MS = 2_000;
 const POLL_MS = 100;
+/** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */
+const MAX_SERVE_ATTEMPTS = 3;
+const GIB = 1024 ** 3;
 
 export interface PlaybackManagerOptions {
   config: Config;
   db: Db;
+  bus: EventBus;
   logger: FastifyBaseLogger;
   tmdb: TmdbService;
   streams: StreamService;
   probe?: ProbeRunner;
   resolveUrl?: UrlResolver;
   segmentWaitMs?: number;
+  maxSessions?: number;
+  idleTimeoutMs?: number;
+  /** Housekeeping interval; 0 disables the timer (tests call `monitorTick()` themselves). */
+  monitorTickMs?: number;
 }
+
+export interface PingUpdate {
+  positionSec: number;
+  state?: 'playing' | 'paused' | 'buffering';
+}
+
+type StopReason = 'stopped' | 'idle' | 'disk' | 'shutdown';
+type WaitOutcome = 'ready' | 'lost';
 
 export type ServedFile =
   | { kind: 'text'; body: string; contentType: string }
@@ -57,20 +81,78 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** ffmpeg echoes the input URL (with its token) in many errors; none of that may reach users or logs. */
+function scrub(text: string): string {
+  return redact(text).replace(/\b(?:https?|ftp):\/\/\S+/gi, '<url>');
+}
+
 export class PlaybackManager {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly probe: ProbeRunner;
   private readonly resolveUrl: UrlResolver;
   private readonly segmentWaitMs: number;
+  private readonly maxSessions: number;
+  private readonly registry: PidRegistry;
+  private readonly monitor: SessionMonitor;
+  private timer: NodeJS.Timeout | null = null;
+  private starting = 0;
   private libplaceboBroken = false;
 
   constructor(private readonly options: PlaybackManagerOptions) {
     this.probe = options.probe ?? createFfprobeRunner(options.config.ffprobePath);
     this.resolveUrl = options.resolveUrl ?? createUrlResolver();
     this.segmentWaitMs = options.segmentWaitMs ?? SEGMENT_WAIT_MS;
+    this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
+    this.registry = new PidRegistry(path.join(options.config.dataDir, PID_FILE_NAME));
+    this.monitor = new SessionMonitor(
+      {
+        liveSessions: () => this.liveRecords(),
+        allSessions: () => [...this.sessions.values()].filter((rec) => !rec.stopping),
+        stopIdle: (rec) => this.stopIdle(rec),
+        stopForDisk: (rec) => this.stopForDisk(rec),
+        park: (rec) => this.park(rec),
+        resume: (rec) => this.resume(rec),
+        publish: (rec) => this.options.bus.emit('session.update', toActivitySession(rec)),
+      },
+      { idleTimeoutMs: options.idleTimeoutMs ?? IDLE_TIMEOUT_MS, capBytes: options.config.transcodeMaxGb * GIB },
+    );
+  }
+
+  /** Kills ffmpeg processes left by a crashed server run and wipes stale session directories. Call once at server start. */
+  async recoverOrphans(): Promise<void> {
+    const { killed, wipedDirs } = await cleanupOrphans(this.registry, this.options.config.transcodeDir);
+    if (killed.length > 0 || wipedDirs.length > 0) {
+      this.event({
+        level: 'warn',
+        source: 'session',
+        message: `Cleaned up after an unclean shutdown: stopped ${killed.length} leftover ffmpeg process(es), removed ${wipedDirs.length} stale session folder(s).`,
+        details: { killedPids: killed },
+      });
+    }
   }
 
   async start(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse> {
+    this.reserveSlot();
+    try {
+      return await this.startSession(body, clientIp);
+    } finally {
+      this.starting -= 1;
+    }
+  }
+
+  private reserveSlot(): void {
+    if (this.liveRecords().length + this.starting >= this.maxSessions) {
+      throw new AppError(
+        429,
+        'too_many_sessions',
+        `The limit of ${this.maxSessions} playback sessions at the same time is reached.`,
+        'Stop playback on another device, or wait a couple of minutes for idle sessions to time out, then try again.',
+      );
+    }
+    this.starting += 1;
+  }
+
+  private async startSession(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse> {
     const { config, db, tmdb } = this.options;
 
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
@@ -100,10 +182,23 @@ export class PlaybackManager {
     const startSegment = Math.min(total - 1, Math.floor((body.startPositionSec ?? 0) / SEGMENT_SECONDS));
 
     const title = await this.titleFor(body, details.title);
+    const mediaKey = mediaKeyFor(body.mediaType, body.tmdbId, body.season, body.episode);
     const now = Date.now();
     const rec: SessionRecord = {
       id,
       dir,
+      meta: {
+        mediaKey,
+        mediaType: body.mediaType,
+        tmdbId: body.tmdbId,
+        title: title.title,
+        showTitle: title.showTitle,
+        season: body.season ?? null,
+        episode: body.episode ?? null,
+        streamFilename: stream.stream.filename,
+        clientIp,
+      },
+      store: new SegmentStore(dir),
       device,
       rawUrl: stream.url,
       sourceUrl,
@@ -117,7 +212,7 @@ export class PlaybackManager {
       state: 'starting',
       error: null,
       stats: { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0, headSegment: startSegment },
-      statSamples: { speedSum: 0, bitrateSum: 0, count: 0 },
+      statSamples: { speedSum: 0, speedCount: 0, bitrateSum: 0, bitrateCount: 0 },
       toneMapper: this.libplaceboBroken ? 'opencl' : 'libplacebo',
       process: null,
       startSegment,
@@ -126,14 +221,18 @@ export class PlaybackManager {
       encoderDone: false,
       stopping: false,
       restart: null,
+      parked: false,
       lastActivity: now,
+      positionSec: body.startPositionSec ?? 0,
+      pingedAt: 0,
+      playerSegment: startSegment,
     };
 
     await mkdir(dir, { recursive: true });
     try {
       insertPlay(db, {
         sessionId: id,
-        mediaKey: mediaKeyFor(body.mediaType, body.tmdbId, body.season, body.episode),
+        mediaKey,
         type: body.mediaType,
         tmdbId: body.tmdbId,
         title: title.title,
@@ -155,8 +254,17 @@ export class PlaybackManager {
     }
 
     this.sessions.set(id, rec);
+    this.ensureTimer();
     this.launch(rec, startSegment);
     this.options.logger.info({ sessionId: id, decision, timingsMs }, 'Playback session started');
+    this.event({
+      level: 'info',
+      source: 'session',
+      message: `Playback started: ${title.showTitle ? `${title.showTitle} - ` : ''}${title.title} on ${device.deviceName}.`,
+      details: { decision, timingsMs },
+      sessionId: id,
+    });
+    this.options.bus.emit('session.start', toActivitySession(rec));
     return toSessionResponse(rec);
   }
 
@@ -172,12 +280,54 @@ export class PlaybackManager {
     return [...this.sessions.values()].map(toSessionResponse);
   }
 
+  /** Sessions that are being played or prepared; a failed encode is no longer live. */
+  activity(): ActivitySession[] {
+    return this.liveRecords()
+      .sort((a, b) => a.startedAt - b.startedAt)
+      .map(toActivitySession);
+  }
+
+  /** Total finished-segment bytes across live sessions and the configured cap. */
+  diskUsage(): { bytes: number; capBytes: number } {
+    let bytes = 0;
+    for (const rec of this.sessions.values()) bytes += rec.store.totalBytes;
+    return { bytes, capBytes: this.options.config.transcodeMaxGb * GIB };
+  }
+
+  /** Marks client activity that is not an HLS request (progress pings, subtitle fetches). */
+  touch(id: string): void {
+    this.require(id).lastActivity = Date.now();
+  }
+
+  /** Records a progress ping: counts as activity, updates the reported position and the playing/paused state. */
+  ping(id: string, update: PingUpdate): void {
+    const rec = this.require(id);
+    const now = Date.now();
+    rec.lastActivity = now;
+    rec.pingedAt = now;
+    rec.positionSec = Math.max(0, update.positionSec);
+    rec.playerSegment = Math.floor(rec.positionSec / SEGMENT_SECONDS);
+    if (update.state && (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused')) {
+      rec.state = update.state === 'paused' ? 'paused' : 'playing';
+    }
+  }
+
+  async monitorTick(): Promise<void> {
+    await this.monitor.tick();
+  }
+
   async stop(id: string): Promise<void> {
-    await this.end(this.require(id));
+    await this.end(this.require(id), 'stopped');
   }
 
   async stopAll(): Promise<void> {
-    await Promise.all([...this.sessions.values()].map((rec) => this.end(rec)));
+    await Promise.all([...this.sessions.values()].map((rec) => this.end(rec, 'shutdown')));
+  }
+
+  async close(): Promise<void> {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    await this.stopAll();
   }
 
   async serve(id: string, file: HlsFile): Promise<ServedFile> {
@@ -197,36 +347,87 @@ export class PlaybackManager {
     if (file.extension !== expectedExtension || file.index >= segmentCount(rec.probe.durationSec)) {
       throw notFound(`Segment ${file.index} does not exist in this session.`, 'Use the segment names listed in index.m3u8.');
     }
-    const target = path.join(rec.dir, segmentFileName(file.index, rec.format));
-    if (!existsSync(target)) await this.ensureEncoder(rec, file.index);
-    return this.fileResponse(rec, target, contentType, file.index);
-  }
+    rec.playerSegment = file.index;
+    if (Date.now() - rec.pingedAt > 30_000) rec.positionSec = file.index * SEGMENT_SECONDS;
 
-  private async fileResponse(rec: SessionRecord, target: string, contentType: string, segment: number): Promise<ServedFile> {
-    await this.waitForFile(rec, target, segment);
+    const target = path.join(rec.dir, segmentFileName(file.index, rec.format));
+    for (let attempt = 1; ; attempt += 1) {
+      if (!existsSync(target)) await this.ensureEncoder(rec, file.index);
+      if ((await this.waitForFile(rec, target, file.index)) === 'ready') break;
+      if (attempt >= MAX_SERVE_ATTEMPTS) {
+        throw new AppError(504, 'segment_timeout', `Segment ${file.index} was not ready in time.`, 'The encoder is busy with another seek; try again.');
+      }
+    }
     this.markReady(rec);
+    rec.lastActivity = Date.now();
     return { kind: 'file', path: target, size: statSync(target).size, contentType };
   }
 
   /**
-   * ffmpeg creates init.mp4 early but only finishes it together with the first segment, and a restart rewrites it.
-   * A copy taken once a segment exists is stable and identical for every run of the session.
+   * ffmpeg creates init.mp4 early but only finishes it together with the first segment of a run, and every run rewrites
+   * it (with identical content, thanks to frag_discont). The served copy is therefore taken once, after a run finished
+   * its first segment, so a half-written file is never served.
    */
   private async initResponse(rec: SessionRecord, contentType: string): Promise<ServedFile> {
     const ready = path.join(rec.dir, 'init-ready.mp4');
-    if (!existsSync(ready)) {
-      await this.waitForFile(rec, path.join(rec.dir, segmentFileName(rec.startSegment, rec.format)), rec.startSegment);
+    while (!existsSync(ready)) {
+      const generation = await this.runWithFinishedFirstSegment(rec);
       const temp = path.join(rec.dir, `init-${randomUUID()}.tmp`);
       await copyFile(path.join(rec.dir, 'init.mp4'), temp);
+      if (rec.generation !== generation) {
+        // A restart began while copying, so the copy may be torn.
+        await rm(temp, { force: true });
+        continue;
+      }
       await rename(temp, ready);
     }
     return { kind: 'file', path: ready, size: statSync(ready).size, contentType };
+  }
+
+  /** Waits until the current ffmpeg run has finished its first segment, which also completes that run's init.mp4. */
+  private async runWithFinishedFirstSegment(rec: SessionRecord): Promise<number> {
+    const deadline = Date.now() + this.segmentWaitMs;
+    for (;;) {
+      const first = path.join(rec.dir, segmentFileName(rec.startSegment, rec.format));
+      const produced = rec.stats.headSegment > rec.startSegment || rec.encoderDone;
+      // A stopped run left its init.mp4 complete even when disk eviction already removed its first segment.
+      if (!rec.restart && produced && (existsSync(first) || !rec.process?.running)) return rec.generation;
+      if (rec.stopping) throw notFound('This session has ended.');
+      if (rec.state === 'error') {
+        throw new AppError(502, 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+      }
+      if (Date.now() >= deadline) {
+        throw new AppError(504, 'segment_timeout', 'The encoder did not start in time.', 'The encoder is behind; try again, or check the health dashboard.');
+      }
+      await sleep(POLL_MS);
+    }
   }
 
   private require(id: string): SessionRecord {
     const rec = this.sessions.get(id);
     if (!rec) throw notFound(`Session ${id.slice(0, 64)} was not found.`);
     return rec;
+  }
+
+  private liveRecords(): SessionRecord[] {
+    return [...this.sessions.values()].filter((rec) => rec.state !== 'error' && !rec.stopping);
+  }
+
+  private ensureTimer(): void {
+    const interval = this.options.monitorTickMs ?? MONITOR_TICK_MS;
+    if (this.timer || interval <= 0) return;
+    this.timer = setInterval(() => {
+      void this.monitor.tick().catch((error: unknown) => this.options.logger.warn({ err: error }, 'Session housekeeping failed'));
+    }, interval);
+    this.timer.unref();
+  }
+
+  private event(input: LogEventInput): void {
+    try {
+      logEvent({ db: this.options.db, bus: this.options.bus }, input);
+    } catch (error) {
+      this.options.logger.warn({ err: error }, 'Could not record an event');
+    }
   }
 
   private async pickStream(body: SessionStartRequest, imdbId: string | null, deviceId: string) {
@@ -267,7 +468,9 @@ export class PlaybackManager {
     rec.startSegment = startSegment;
     rec.generation += 1;
     rec.encoderDone = false;
-    rec.stats = { ...rec.stats, headSegment: startSegment };
+    rec.parked = false;
+    rec.store.forget(startSegment);
+    rec.stats = { ...rec.stats, headSegment: startSegment, outTimeSec: startSegment * SEGMENT_SECONDS };
     const generation = rec.generation;
 
     const args = buildFfmpegArgs({
@@ -288,7 +491,10 @@ export class PlaybackManager {
       },
     });
     rec.process = proc;
+    const pid = proc.pid;
+    if (pid !== undefined) this.registry.add({ pid, sessionId: rec.id, startedAt: Date.now() });
     void proc.exited.then((exit) => {
+      if (pid !== undefined) this.registry.remove(pid);
       if (rec.generation !== generation || rec.stopping) return;
       if (exit.code === 0) {
         rec.encoderDone = true;
@@ -303,11 +509,12 @@ export class PlaybackManager {
     const last = segmentCount(rec.probe.durationSec) - 1;
     // ffmpeg reports output time relative to the run's first segment.
     const head = Math.min(last, rec.startSegment + Math.floor(progress.outTimeSec / SEGMENT_SECONDS));
-    rec.stats = { ...progress, outTimeSec: progress.outTimeSec + rec.startSegment * SEGMENT_SECONDS, headSegment: head };
+    // The HLS muxer reports no bitrate, so it is derived from segment sizes by the monitor.
+    const bitrateKbps = progress.bitrateKbps > 0 ? progress.bitrateKbps : rec.stats.bitrateKbps;
+    rec.stats = { ...progress, bitrateKbps, outTimeSec: progress.outTimeSec + rec.startSegment * SEGMENT_SECONDS, headSegment: head };
     if (progress.speed > 0) {
       rec.statSamples.speedSum += progress.speed;
-      rec.statSamples.bitrateSum += progress.bitrateKbps;
-      rec.statSamples.count += 1;
+      rec.statSamples.speedCount += 1;
     }
     this.markReady(rec);
   }
@@ -315,6 +522,7 @@ export class PlaybackManager {
   private markReady(rec: SessionRecord): void {
     if (rec.state === 'starting' && existsSync(path.join(rec.dir, segmentFileName(rec.startSegment, rec.format)))) {
       rec.state = 'ready';
+      this.options.bus.emit('session.update', toActivitySession(rec));
     }
   }
 
@@ -325,6 +533,13 @@ export class PlaybackManager {
       return;
     }
     rec.retried = true;
+    this.event({
+      level: 'warn',
+      source: 'ffmpeg',
+      message: `The video encoder stopped (code ${code ?? 'none'}); retrying once with a fresh stream link.`,
+      details: { detail: scrub(stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '') },
+      sessionId: rec.id,
+    });
     if (rec.decision.toneMapped && rec.toneMapper === 'libplacebo' && !this.hasSegment(rec, rec.startSegment)) {
       rec.toneMapper = 'opencl';
       this.libplaceboBroken = true;
@@ -336,31 +551,40 @@ export class PlaybackManager {
       // keep the previous link; the retry may still work
     }
     if (rec.stopping) return;
-    this.launch(rec, this.nextMissingSegment(rec));
+    this.launch(rec, this.resumePoint(rec));
   }
 
   private async fail(rec: SessionRecord, code: number | null, stderrTail: string): Promise<void> {
-    const lastLine = stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '';
+    const lastLine = scrub(stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '');
     rec.state = 'error';
     rec.error = {
-      message: redact(`The video encoder stopped unexpectedly (code ${code ?? 'none'}). ${lastLine}`.trim()),
+      message: scrub(`The video encoder stopped unexpectedly (code ${code ?? 'none'}). ${lastLine}`.trim()),
       hint: 'Try another stream. If it keeps happening, check the ffmpeg and GPU tiles on the health dashboard.',
     };
     this.options.logger.error({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed');
+    this.event({
+      level: 'error',
+      source: 'ffmpeg',
+      message: rec.error.message,
+      details: { code, detail: lastLine, hint: rec.error.hint },
+      sessionId: rec.id,
+    });
     finalizePlay(this.options.db, rec.id, {
       endedAt: Date.now(),
       status: 'error',
       errorMessage: rec.error.message,
       ...this.averages(rec),
     });
+    this.options.bus.emit('session.update', toActivitySession(rec));
   }
 
   private hasSegment(rec: SessionRecord, index: number): boolean {
     return existsSync(path.join(rec.dir, segmentFileName(index, rec.format)));
   }
 
-  private nextMissingSegment(rec: SessionRecord): number {
-    let index = rec.startSegment;
+  /** Where a stopped run should continue: just past the segments it already finished. */
+  private resumePoint(rec: SessionRecord): number {
+    let index = Math.max(rec.startSegment, rec.stats.headSegment - 6);
     while (this.hasSegment(rec, index)) index += 1;
     return Math.min(index, segmentCount(rec.probe.durationSec) - 1);
   }
@@ -369,14 +593,23 @@ export class PlaybackManager {
     return rec.state === 'error' || rec.stopping;
   }
 
-  private inWindow(rec: SessionRecord, index: number): boolean {
-    return !!rec.process?.running && index >= rec.startSegment && index <= rec.stats.headSegment + SEEK_WINDOW_SEGMENTS;
+  /** True when the running encoder will produce `index` soon: it is at or ahead of the run's start and not too far behind it. */
+  private encoderWillProduce(rec: SessionRecord, index: number): boolean {
+    if (!rec.process?.running) return false;
+    const head = rec.stats.headSegment;
+    return index >= rec.startSegment && index >= head - 1 && index <= head + SEEK_WINDOW_SEGMENTS;
+  }
+
+  /** A finished segment that is gone from disk (evicted) can only come back through a restart. */
+  private isLost(rec: SessionRecord, index: number): boolean {
+    if (index < rec.startSegment || rec.parked) return true;
+    return !!rec.process?.running && index < rec.stats.headSegment - 1;
   }
 
   private async ensureEncoder(rec: SessionRecord, index: number): Promise<void> {
     if (this.isDead(rec)) return;
     if (rec.restart) await rec.restart;
-    if (this.isDead(rec) || this.inWindow(rec, index)) return;
+    if (this.isDead(rec) || this.encoderWillProduce(rec, index)) return;
     rec.restart = this.restartAt(rec, index).finally(() => {
       rec.restart = null;
     });
@@ -392,10 +625,10 @@ export class PlaybackManager {
     this.launch(rec, index);
   }
 
-  private async waitForFile(rec: SessionRecord, target: string, segment: number): Promise<void> {
+  private async waitForFile(rec: SessionRecord, target: string, segment: number): Promise<WaitOutcome> {
     const deadline = Date.now() + this.segmentWaitMs;
     for (;;) {
-      if (existsSync(target)) return;
+      if (existsSync(target)) return 'ready';
       if (rec.stopping) throw notFound('This session has ended.');
       if (rec.state === 'error') {
         throw new AppError(502, 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
@@ -403,6 +636,7 @@ export class PlaybackManager {
       if (rec.encoderDone && !rec.process?.running) {
         throw notFound(`Segment ${segment} was not produced.`, 'Seek again or restart playback.');
       }
+      if (!rec.restart && this.isLost(rec, segment)) return 'lost';
       if (Date.now() >= deadline) {
         throw new AppError(504, 'segment_timeout', `Segment ${segment} was not ready in time.`, 'The encoder is behind; try again, or check the health dashboard.');
       }
@@ -411,11 +645,52 @@ export class PlaybackManager {
   }
 
   private averages(rec: SessionRecord): { avgBitrateKbps: number | null; avgSpeed: number | null } {
-    const { speedSum, bitrateSum, count } = rec.statSamples;
-    return count === 0 ? { avgBitrateKbps: null, avgSpeed: null } : { avgBitrateKbps: bitrateSum / count, avgSpeed: speedSum / count };
+    const { speedSum, speedCount, bitrateSum, bitrateCount } = rec.statSamples;
+    return {
+      avgBitrateKbps: bitrateCount === 0 ? null : bitrateSum / bitrateCount,
+      avgSpeed: speedCount === 0 ? null : speedSum / speedCount,
+    };
   }
 
-  private async end(rec: SessionRecord): Promise<void> {
+  private async stopIdle(rec: SessionRecord): Promise<void> {
+    this.event({
+      level: 'info',
+      source: 'session',
+      message: `Playback stopped after ${Math.round((Date.now() - rec.lastActivity) / 1000)} s without activity.`,
+      sessionId: rec.id,
+    });
+    await this.end(rec, 'idle');
+  }
+
+  private async stopForDisk(rec: SessionRecord): Promise<void> {
+    this.event({
+      level: 'warn',
+      source: 'session',
+      message: 'An idle playback session was stopped to stay within the transcode disk limit.',
+      sessionId: rec.id,
+    });
+    await this.end(rec, 'disk');
+  }
+
+  private park(rec: SessionRecord): Promise<void> {
+    if (rec.restart || !rec.process?.running) return Promise.resolve();
+    rec.restart = (async () => {
+      rec.parked = true;
+      rec.generation += 1;
+      await rec.process?.stop();
+    })().finally(() => {
+      rec.restart = null;
+    });
+    return rec.restart;
+  }
+
+  private resume(rec: SessionRecord): Promise<void> {
+    if (rec.restart || rec.stopping || rec.process?.running) return Promise.resolve();
+    this.launch(rec, this.resumePoint(rec));
+    return Promise.resolve();
+  }
+
+  private async end(rec: SessionRecord, reason: StopReason): Promise<void> {
     if (rec.stopping) return;
     rec.stopping = true;
     const wasError = rec.state === 'error';
@@ -425,7 +700,8 @@ export class PlaybackManager {
     await rec.process?.stop();
     await this.removeDir(rec.dir);
     if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.averages(rec) });
-    this.options.logger.info({ sessionId: rec.id }, 'Playback session stopped');
+    this.options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');
+    this.options.bus.emit('session.end', { sessionId: rec.id, reason, state: 'stopped' });
   }
 
   private async removeDir(dir: string): Promise<void> {

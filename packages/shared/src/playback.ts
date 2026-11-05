@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MediaTypeSchema } from './catalog.js';
-import { CapabilityProfileSchema } from './schemas.js';
+import { CapabilityProfileSchema, DeviceKindSchema } from './schemas.js';
 
 export const SOURCE_HDR_VALUES = ['dv', 'hdr10', 'hlg', 'sdr'] as const;
 export const SourceHdrSchema = z.enum(SOURCE_HDR_VALUES);
@@ -88,6 +88,35 @@ export type EncoderStats = z.infer<typeof EncoderStatsSchema>;
 export const SESSION_STATES = ['starting', 'ready', 'playing', 'paused', 'stopped', 'error'] as const;
 export const SessionStateSchema = z.enum(SESSION_STATES);
 export type SessionState = z.infer<typeof SessionStateSchema>;
+
+/** One live session as listed by `GET /api/activity` and pushed in `session.start` / `session.update` events. */
+export const ActivitySessionSchema = z.object({
+  sessionId: z.string(),
+  mediaKey: z.string(),
+  mediaType: MediaTypeSchema,
+  tmdbId: z.number().int(),
+  title: z.string(),
+  showTitle: z.string().nullable(),
+  season: z.number().int().nullable(),
+  episode: z.number().int().nullable(),
+  deviceId: z.string(),
+  deviceName: z.string(),
+  deviceKind: DeviceKindSchema,
+  clientIp: z.string().nullable(),
+  streamFilename: z.string(),
+  /** Epoch ms. */
+  startedAt: z.number(),
+  positionSec: z.number().min(0),
+  durationSec: z.number().positive(),
+  state: SessionStateSchema,
+  decision: DecisionSchema,
+  encoder: EncoderStatsSchema,
+  error: z.object({ message: z.string(), hint: z.string().optional() }).nullable(),
+});
+export type ActivitySession = z.infer<typeof ActivitySessionSchema>;
+
+export const ActivityResponseSchema = z.object({ sessions: z.array(ActivitySessionSchema) });
+export type ActivityResponse = z.infer<typeof ActivityResponseSchema>;
 
 export const SessionResponseSchema = z.object({
   sessionId: z.string(),
