@@ -7,10 +7,12 @@ import { AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { GatewayClient } from './gateway/client.js';
 import { createLogger } from './logger.js';
+import { PlaybackManager, type PlaybackManagerOptions } from './playback/manager.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerInfoRoutes } from './routes/info.js';
+import { registerSessionRoutes } from './routes/sessions.js';
 import { registerStatic, shouldServeSpaFallback } from './routes/static.js';
 import { registerStreamRoutes } from './routes/streams.js';
 import { StreamService } from './streams/service.js';
@@ -22,6 +24,8 @@ export interface BuildAppOptions {
   bus?: EventBus;
   tmdb?: TmdbService;
   gateway?: GatewayClient;
+  /** Test seams for the playback pipeline (ffprobe, CDN link resolution, segment wait). */
+  playback?: Pick<PlaybackManagerOptions, 'probe' | 'resolveUrl' | 'segmentWaitMs'>;
   heartbeatMs?: number;
 }
 
@@ -41,7 +45,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   const tmdb = options.tmdb ?? new TmdbService({ config, db, logger });
   const gateway = options.gateway ?? new GatewayClient({ config, db, logger });
   const streams = new StreamService(gateway, db);
-  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams };
+  const playback = new PlaybackManager({ config, db, logger, tmdb, streams, ...options.playback });
+  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -84,9 +89,11 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerDeviceRoutes(app, ctx);
   registerCatalogRoutes(app, ctx);
   registerStreamRoutes(app, ctx);
+  registerSessionRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
+    await playback.stopAll();
     if (!options.gateway) gateway.close();
     if (!options.db) db.close();
     await ownedLogger?.close();
