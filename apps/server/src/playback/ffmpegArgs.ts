@@ -16,7 +16,7 @@ export interface EncodeJob {
   audioIndex: number | null;
   startSegment: number;
   toneMapper: ToneMapper;
-  /** Bitmap subtitle track overlaid onto the picture. Forces software decode so the overlay sees system-memory frames. */
+  /** Bitmap subtitle track overlaid onto the picture. Decodes in software (or NVDEC plus hwdownload for 4K HDR10) so the overlay sees system-memory frames. */
   burn?: { index: number; canvas?: { width: number; height: number } } | null;
 }
 
@@ -39,8 +39,17 @@ export function canHwDecode(video: Pick<VideoInfo, 'codec' | 'pixFmt'>): boolean
   return true;
 }
 
+/**
+ * Only 2160p output that keeps HDR10 gains from NVDEC when burning: the 4K CPU scale and p010 conversion are what keep
+ * the software path below realtime. At 1080p and for tone-mapped output the software path is as fast, so it stays.
+ */
+function burnsOnGpu(job: EncodeJob): boolean {
+  const { dynamicRange, toneMapped, width } = job.decision;
+  return !!job.burn && dynamicRange === 'hdr10' && !toneMapped && width >= 3840 && canHwDecode(job.video);
+}
+
 function decodesOnGpu(job: EncodeJob): boolean {
-  return !job.burn && canHwDecode(job.video);
+  return (!job.burn || burnsOnGpu(job)) && canHwDecode(job.video);
 }
 
 function isHttp(url: string): boolean {
@@ -118,6 +127,14 @@ export function buildBurnFilterGraph(job: EncodeJob): string {
   const { width, height, dynamicRange } = job.decision;
   const hdr = dynamicRange === 'hdr10';
   const dim = hdr ? `,colorchannelmixer=rr=${PQ_REFERENCE_WHITE}:gg=${PQ_REFERENCE_WHITE}:bb=${PQ_REFERENCE_WHITE}` : '';
+  if (burnsOnGpu(job)) {
+    // PGS is authored at 1080p: render it there and upscale the finished bitmap, which is much cheaper than scaling at 4K.
+    return [
+      `[0:${job.video.index}]${buildVideoFilter(job)},hwdownload,format=p010le[v]`,
+      `[0:${job.burn?.index}]scale=1920:1080:flags=bilinear,format=rgba${dim},scale=${width}:${height}:flags=neighbor[s]`,
+      '[v][s]overlay=eof_action=pass:format=auto,format=p010le[vout]',
+    ].join(';');
+  }
   return [
     `[0:${job.video.index}]${buildVideoFilter(job)}[v]`,
     `[0:${job.burn?.index}]scale=${width}:${height}:flags=bilinear,format=rgba${dim}[s]`,

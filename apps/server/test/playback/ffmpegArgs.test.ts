@@ -230,9 +230,48 @@ describe('subtitle burn-in', () => {
   });
 
   it('dims the bitmap to SDR reference white when the output stays HDR10', () => {
-    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: decision({ subtitleBurnIn: true }) })), '-filter_complex');
+    const hdr = decision({ subtitleBurnIn: true, width: 1920, height: 1080 });
+    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: hdr })), '-filter_complex');
     expect(graph).toContain('format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58[s]');
     expect(graph).toContain('format=p010le[vout]');
+  });
+
+  describe('2160p HDR10 kept', () => {
+    const uhd = decision({ subtitleBurnIn: true });
+    const uhdJob = (overrides: Partial<EncodeJob> = {}) =>
+      job({ decision: uhd, video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 }, burn: { index: 4 }, ...overrides });
+
+    it('decodes on NVDEC, downloads p010 frames and renders the bitmap at 1080p before a neighbor upscale', () => {
+      const args = buildFfmpegArgs(uhdJob());
+      expect(valueAfter(args, '-hwaccel')).toBe('cuda');
+      expect(valueAfter(args, '-hwaccel_output_format')).toBe('cuda');
+      expect(valueAfter(args, '-filter_complex')).toBe(
+        '[0:0]scale_cuda=w=3840:h=2160:format=p010le,hwdownload,format=p010le[v];' +
+          '[0:4]scale=1920:1080:flags=bilinear,format=rgba,colorchannelmixer=rr=0.58:gg=0.58:bb=0.58,scale=3840:2160:flags=neighbor[s];' +
+          '[v][s]overlay=eof_action=pass:format=auto,format=p010le[vout]',
+      );
+    });
+
+    it('keeps the 10 s pre-roll and the canvas size', () => {
+      const args = buildFfmpegArgs(uhdJob({ startSegment: 10, burn: { index: 4, canvas: { width: 1920, height: 1080 } } }));
+      expect(args[args.indexOf('-ss') + 1]).toBe('30');
+      expect(valueAfter(args, '-canvas_size')).toBe('1920x1080');
+      expect(valueAfter(args, '-output_ts_offset')).toBe('40');
+    });
+
+    it('falls back to software decode when NVDEC cannot decode the source', () => {
+      const args = buildFfmpegArgs(uhdJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p10le', fps: 24 } }));
+      expect(args).not.toContain('-hwaccel');
+      expect(valueAfter(args, '-filter_complex')).not.toContain('hwdownload');
+    });
+
+    it('is not used for tone-mapped output or below 2160p', () => {
+      const mapped = buildFfmpegArgs(uhdJob({ decision: decision({ dynamicRange: 'sdr', toneMapped: true, width: 3840, height: 2160, subtitleBurnIn: true }) }));
+      expect(mapped).not.toContain('-hwaccel');
+      const hd = buildFfmpegArgs(uhdJob({ decision: decision({ width: 1920, height: 1080, subtitleBurnIn: true }) }));
+      expect(hd).not.toContain('-hwaccel');
+      expect(valueAfter(hd, '-filter_complex')).not.toContain('neighbor');
+    });
   });
 
   it('overlays after tone mapping, which runs in software from the system-memory frames', () => {
