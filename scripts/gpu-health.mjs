@@ -2,6 +2,7 @@
 // GPU health gate (AGENTS.md "GPU safety"). Usage: node scripts/gpu-health.mjs --since <ISO-8601> [--min-free-gb 4]
 // Prints one JSON line. Exit 0 = healthy, 1 = new GPU driver events, temperature above the limit, free RAM below
 // the minimum (low_memory), or the state could not be read (a gate that cannot look fails closed).
+// With --require-idle it also fails (gpu_busy) when the GPU is >= 25% utilised while no ffmpeg runs, so a game or other heavy GPU app blocks the step.
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import os from 'node:os';
@@ -9,6 +10,9 @@ import { pathToFileURL } from 'node:url';
 
 export const MAX_TEMP_C = 83;
 export const DEFAULT_MIN_FREE_GB = 4;
+export const MAX_IDLE_UTIL_PCT = 25;
+export const IDLE_SAMPLES = 3;
+export const IDLE_SAMPLE_GAP_MS = 1500;
 const GIB = 1024 ** 3;
 
 const SMI_FIELDS = ['temperature.gpu', 'utilization.gpu', 'utilization.encoder', 'utilization.decoder', 'memory.used', 'power.draw'];
@@ -30,7 +34,7 @@ export function parseArgs(argv) {
       throw new Error(`--min-free-gb is not a valid number of GB: ${rawMin}`);
     }
   }
-  return { since: new Date(sinceMs).toISOString(), sinceMs, minFreeGb };
+  return { since: new Date(sinceMs).toISOString(), sinceMs, minFreeGb, requireIdle: argv.includes('--require-idle') };
 }
 
 /**
@@ -125,6 +129,36 @@ export function parseSystemInfo(stdout) {
   };
 }
 
+/**
+ * Process names from the plain `nvidia-smi` table (the query interface lists no WDDM graphics apps, and games are "C+G").
+ * nvidia-smi truncates paths ("...cord\app-1.0.9267\Discord.exe"), so only the file name is kept.
+ * @param {string} stdout
+ */
+export function parseGpuProcessNames(stdout) {
+  const names = new Set();
+  for (const line of stdout.split(/\r?\n/)) {
+    const row = /^\|\s+\d+\s+\S+\s+\S+\s+\d+\s+(?:C\+G|C|G)\s+(.+?)\s+(?:N\/A|\d+\s*MiB)\s*\|$/.exec(line.trim());
+    if (!row) continue;
+    const name = row[1].split(/[\\/]/).pop().replace(/^\.+/, '').trim();
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/** True when `tasklist /FO CSV /NH` lists at least one ffmpeg.exe ("INFO: No tasks ..." means none). @param {string} stdout */
+export function parseFfmpegRunning(stdout) {
+  return stdout.split(/\r?\n/).some((line) => /^"ffmpeg\.exe"/i.test(line.trim()));
+}
+
+/**
+ * The busiest sample counts. A missing sample makes the result unknown (null) so the gate fails closed.
+ * @param {Array<number | null>} samples
+ */
+export function summarizeIdle(samples) {
+  const valid = samples.filter((s) => typeof s === 'number' && Number.isFinite(s));
+  return { samples, utilPct: valid.length === samples.length && valid.length > 0 ? Math.max(...valid) : null };
+}
+
 /** PowerShell for the info-only readings; a failure here never fails the gate. */
 export const SYSTEM_INFO_SCRIPT = `
 $ErrorActionPreference = 'SilentlyContinue'
@@ -134,14 +168,24 @@ $q = Get-Counter '\\PhysicalDisk(*)\\Current Disk Queue Length' | Select-Object 
 `;
 
 /**
- * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, errors: string[]}} input
+ * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, idle?: {ffmpegRunning: boolean | null, utilPct: number | null, processes: string[]}, errors: string[]}} input
  */
-export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, errors }) {
+export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, idle, errors }) {
   const reasons = [];
   if (events.length > 0) reasons.push(`${events.length} new GPU driver/TDR event(s)`);
   if (gpu && gpu.tempC !== null && gpu.tempC > MAX_TEMP_C) reasons.push(`temperature ${gpu.tempC} C is above ${MAX_TEMP_C} C`);
   if (!memory || !Number.isFinite(memory.freeGb)) reasons.push('could not check: free RAM is unknown');
   else if (memory.freeGb < minFreeGb) reasons.push(`low_memory: ${memory.freeGb} GB of RAM free, below the ${minFreeGb} GB minimum`);
+  if (idle) {
+    if (idle.ffmpegRunning === null) reasons.push('could not check: ffmpeg process list is unknown');
+    else if (!idle.ffmpegRunning) {
+      if (idle.utilPct === null) reasons.push('could not check: GPU utilization is unknown');
+      else if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
+        const apps = idle.processes.length ? ` (GPU processes: ${idle.processes.join(', ')})` : '';
+        reasons.push(`gpu_busy: GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`);
+      }
+    }
+  }
   for (const error of errors) reasons.push(`could not check: ${error}`);
   return { ok: reasons.length === 0, reasons };
 }
@@ -210,10 +254,44 @@ async function readSystemInfo() {
   return parseSystemInfo(await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 20_000));
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Samples overall GPU utilisation IDLE_SAMPLES times and lists the GPU process names and whether an ffmpeg is running. */
+async function readIdle() {
+  const [ffmpegResult, processResult] = await Promise.allSettled([
+    exec('tasklist', ['/FI', 'IMAGENAME eq ffmpeg.exe', '/FO', 'CSV', '/NH'], 15_000),
+    exec('nvidia-smi', [], 15_000),
+  ]);
+  const samples = [];
+  for (let i = 0; i < IDLE_SAMPLES; i += 1) {
+    if (i > 0) await sleep(IDLE_SAMPLE_GAP_MS);
+    try {
+      samples.push(parseNvidiaSmi(await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000)).utilGpuPct);
+    } catch {
+      samples.push(null);
+    }
+  }
+  return {
+    ffmpegRunning: ffmpegResult.status === 'fulfilled' ? parseFfmpegRunning(ffmpegResult.value) : null,
+    processes: processResult.status === 'fulfilled' ? parseGpuProcessNames(processResult.value) : [],
+    ...summarizeIdle(samples),
+  };
+}
+
 export async function main(argv) {
-  const { since, sinceMs, minFreeGb } = parseArgs(argv);
+  const { since, sinceMs, minFreeGb, requireIdle } = parseArgs(argv);
   const errors = [];
-  const [eventsResult, gpuResult, infoResult] = await Promise.allSettled([readEvents(sinceMs), readGpu(), readSystemInfo()]);
+  const [eventsResult, gpuResult, infoResult, idleResult] = await Promise.allSettled([
+    readEvents(sinceMs),
+    readGpu(),
+    readSystemInfo(),
+    requireIdle ? readIdle() : Promise.resolve(undefined),
+  ]);
+  const idle = requireIdle
+    ? idleResult.status === 'fulfilled'
+      ? idleResult.value
+      : { ffmpegRunning: null, utilPct: null, samples: [], processes: [] }
+    : undefined;
   if (eventsResult.status === 'rejected') errors.push(`event log: ${eventsResult.reason.message}`);
   if (gpuResult.status === 'rejected') errors.push(`nvidia-smi: ${gpuResult.reason.message}`);
   const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
@@ -225,10 +303,10 @@ export async function main(argv) {
     errors.push(`memory: ${error.message}`);
   }
   const system = infoResult.status === 'fulfilled' ? infoResult.value : null;
-  const { ok, reasons } = evaluate({ events, gpu, memory, minFreeGb, errors });
+  const { ok, reasons } = evaluate({ events, gpu, memory, minFreeGb, idle, errors });
   const shown = events.map((e) => ({ ...e, message: e.message.slice(0, 600) }));
   console.log(
-    JSON.stringify({ ok, since, checkedAt: new Date().toISOString(), eventCount: events.length, events: shown, gpu, memory, minFreeGb, system, reasons }),
+    JSON.stringify({ ok, since, checkedAt: new Date().toISOString(), eventCount: events.length, events: shown, gpu, memory, minFreeGb, idle, system, reasons }),
   );
   return ok ? 0 : 1;
 }

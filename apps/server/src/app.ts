@@ -6,6 +6,7 @@ import { openDatabase, type Db } from './db/index.js';
 import { AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { GatewayClient } from './gateway/client.js';
+import { allowEmptyJsonBody } from './http/emptyJsonBody.js';
 import { createLogger } from './logger.js';
 import { PlaybackManager, type PlaybackManagerOptions } from './playback/manager.js';
 import { createFfprobeRunner, type ProbeRunner } from './playback/probe.js';
@@ -73,6 +74,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
+  allowEmptyJsonBody(app);
 
   await app.register(cors, {
     origin: '*',

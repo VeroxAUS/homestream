@@ -9,9 +9,13 @@ import {
   MAX_TEMP_C,
   parseArgs,
   parseEvents,
+  MAX_IDLE_UTIL_PCT,
+  parseFfmpegRunning,
+  parseGpuProcessNames,
   parseNvidiaSmi,
   parseSystemInfo,
   readMemory,
+  summarizeIdle,
   SYSTEM_INFO_SCRIPT,
 } from '../../../../scripts/gpu-health.mjs';
 
@@ -175,6 +179,70 @@ describe('evaluate', () => {
     const result = evaluate({ events: [], gpu: null, memory: roomy, errors: ['nvidia-smi: nvidia-smi failed'] });
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain('could not check');
+  });
+});
+
+describe('--require-idle', () => {
+  const cool = { tempC: 50 };
+  const roomy = { freeGb: 12 };
+  const idleOf = (utilPct: number | null, ffmpegRunning: boolean | null = false, processes: string[] = []) => ({
+    ffmpegRunning,
+    utilPct,
+    processes,
+  });
+
+  it('parses the flag', () => {
+    expect(parseArgs(['--since', '2026-11-05T00:00:00Z']).requireIdle).toBe(false);
+    expect(parseArgs(['--since', '2026-11-05T00:00:00Z', '--require-idle']).requireIdle).toBe(true);
+  });
+
+  it('passes below the limit and fails with gpu_busy at or above it, naming the GPU processes', () => {
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(24), errors: [] })).toEqual({ ok: true, reasons: [] });
+    const busy = evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(MAX_IDLE_UTIL_PCT, false, ['Wow.exe', 'explorer.exe']), errors: [] });
+    expect(busy.ok).toBe(false);
+    expect(busy.reasons).toHaveLength(1);
+    expect(busy.reasons[0]).toMatch(/^gpu_busy: .*25%.*Wow\.exe, explorer\.exe/);
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(99), errors: [] }).reasons[0]).toMatch(/^gpu_busy:/);
+  });
+
+  it('ignores utilization while an ffmpeg is running', () => {
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(90, true), errors: [] }).ok).toBe(true);
+  });
+
+  it('fails closed when utilization or the ffmpeg list is unknown', () => {
+    for (const idle of [idleOf(null), idleOf(5, null)]) {
+      const result = evaluate({ events: [], gpu: cool, memory: roomy, idle, errors: [] });
+      expect(result.ok).toBe(false);
+      expect(result.reasons[0]).toContain('could not check');
+    }
+  });
+
+  it('does not check idleness unless asked', () => {
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, errors: [] }).ok).toBe(true);
+  });
+
+  it('uses the busiest sample and reports unknown when any sample is missing', () => {
+    expect(summarizeIdle([3, 40, 5]).utilPct).toBe(40);
+    expect(summarizeIdle([3, null, 5]).utilPct).toBeNull();
+    expect(summarizeIdle([]).utilPct).toBeNull();
+  });
+
+  it('reads process names from the nvidia-smi table', () => {
+    const table = [
+      '|    0   N/A  N/A           10772    C+G   C:\\Windows\\explorer.exe               N/A      |',
+      '|    0   N/A  N/A           17640    C+G   ...cord\\app-1.0.9267\\Discord.exe      N/A      |',
+      '|    0   N/A  N/A            4242      C   ...ames\\Wow\\_retail_\\Wow.exe      1234MiB |',
+      '|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |',
+      '|    0   N/A  N/A           17641    C+G   ...cord\\app-1.0.9267\\Discord.exe      N/A      |',
+    ].join('\r\n');
+    expect(parseGpuProcessNames(table)).toEqual(['Discord.exe', 'explorer.exe', 'Wow.exe']);
+    expect(parseGpuProcessNames('No running processes found')).toEqual([]);
+  });
+
+  it('detects a running ffmpeg from tasklist output', () => {
+    expect(parseFfmpegRunning('"ffmpeg.exe","1234","Console","1","50,000 K"\r\n')).toBe(true);
+    expect(parseFfmpegRunning('INFO: No tasks are running which match the specified criteria.\r\n')).toBe(false);
+    expect(parseFfmpegRunning('')).toBe(false);
   });
 });
 

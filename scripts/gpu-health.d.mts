@@ -28,8 +28,20 @@ export interface SystemInfo {
 
 export const MAX_TEMP_C: number;
 export const DEFAULT_MIN_FREE_GB: number;
+export const MAX_IDLE_UTIL_PCT: number;
+export const IDLE_SAMPLES: number;
+export const IDLE_SAMPLE_GAP_MS: number;
+
+export interface IdleReading {
+  ffmpegRunning: boolean | null;
+  utilPct: number | null;
+  processes: string[];
+}
 export const SYSTEM_INFO_SCRIPT: string;
-export function parseArgs(argv: string[]): { since: string; sinceMs: number; minFreeGb: number };
+export function parseArgs(argv: string[]): { since: string; sinceMs: number; minFreeGb: number; requireIdle: boolean };
+export function parseGpuProcessNames(stdout: string): string[];
+export function parseFfmpegRunning(stdout: string): boolean;
+export function summarizeIdle(samples: Array<number | null>): { samples: Array<number | null>; utilPct: number | null };
 export function parseEvents(stdout: string): GpuEvent[];
 export function filterNewer(events: GpuEvent[], sinceMs: number): GpuEvent[];
 export function parseNvidiaSmi(stdout: string): GpuReading;
@@ -40,6 +52,7 @@ export function evaluate(input: {
   gpu: Pick<GpuReading, 'tempC'> | null;
   memory?: Pick<MemoryReading, 'freeGb'> | null;
   minFreeGb?: number;
+  idle?: IdleReading;
   errors: string[];
 }): {
   ok: boolean;
