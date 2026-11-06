@@ -1,6 +1,6 @@
 {
   "description": "Factory Agent Readiness criteria (81 IDs) with the inferred level, scope and checker used by scripts/readiness-audit.mjs. Levels are inferred from public readiness reports; see the readiness plan.",
-  "defaultApps": ["server"],
+  "defaultApps": ["server", "web", "desktop"],
   "libraries": ["shared"],
   "criteria": [
     {
@@ -363,9 +363,22 @@
       "scope": "app",
       "appliesTo": ["web", "desktop"],
       "checker": {
-        "type": "appContains",
-        "pattern": "size-limit|rollup-plugin-visualizer|analyze",
-        "pathRegex": "(^|/)package\\.json$"
+        "type": "all",
+        "checks": [
+          {
+            "type": "appContains",
+            "pattern": "size-limit|rollup-plugin-visualizer|analyze",
+            "pathRegex": "(^|/)package\\.json$"
+          },
+          {
+            "type": "appSizeBudget"
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/ci.yml",
+            "pattern": "size-limit|--filter @homestream/\\w+ size"
+          }
+        ]
       }
     },
     {

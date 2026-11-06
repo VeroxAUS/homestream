@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Main process JavaScript (gzip)",
+    "path": "dist/**/*.js",
+    "gzip": true,
+    "limit": "100 kB"
+  }
+]

@@ -62,6 +62,15 @@ Telemetry code lives in `apps/server/src/telemetry`. It is off unless a key is s
 - **PostHog** (`posthog-node`): events come from the typed catalog in `packages/shared/src/analytics.ts` (listed in [PRIVACY.md](PRIVACY.md)), only allowlisted properties are kept, and the queue is flushed on shutdown. The identity is a random install id stored in the `settings` table.
 - **Feature flags**: [experimentation.md](experimentation.md).
 
+### Web UI and desktop shell
+
+Code: `apps/web/src/telemetry` (renderer) and `apps/desktop/src/telemetry` (main process). Both report to the Sentry project `homestream-web` (`SENTRY_DSN_WEB`) and the PostHog project of the server (`POSTHOG_API_KEY`); events are told apart by the tags `app` (`web` / `desktop`) and `process` (`renderer` / `main`).
+
+- The web UI reads its keys when it is built and bakes them into the bundle. Without `SENTRY_DSN_WEB` and `POSTHOG_API_KEY` (or with `HOMESTREAM_TELEMETRY=off` at build time) no telemetry code is requested and nothing is sent. The telemetry chunk is loaded after Home is shown and the browser is idle, so it never delays Home.
+- The renderer uses `@sentry/react` for errors only (release `homestream@<version>`, source maps uploaded by `@sentry/vite-plugin` in release builds and removed from `dist`), `posthog-js` (slim, manual capture, a `before_send` hook that keeps only catalog events) and the shared sanitizer. API calls go through `apiFetch`, which adds `X-Request-ID`; the small `logger` writes Sentry breadcrumbs.
+- The desktop main process uses `@sentry/electron` 8.3 (initialized before `app.ready`, tag `process=main`, same scrubber and DSN) and `posthog-node` for `desktop_started`. The plan and its options are in [apps/desktop/README.md](../apps/desktop/README.md).
+- A web build made with `HOMESTREAM_TELEMETRY_STUB=1` honors `?__telemetry_test=<run id>` and reports one deliberate error. The Playwright suite uses it against local receivers (`pnpm --filter @homestream/web test:e2e`).
+
 ### Required account settings
 
 Sentry and PostHog add the sender's IP address (and, for Sentry, a geo location derived from it) when an event reaches them, even though the payload has none. The shared sanitizer marks every Sentry event with `sdk.settings.infer_ip: "never"` plus an empty `user.geo` (`infer_ip` alone does not stop the geo lookup: Relay looks the location up from the connection address whenever `user.geo` is absent, and skips the lookup when it is present; an empty geo is not stored). PostHog events carry `$geoip_disable`. These two settings must also be on (details in [PRIVACY.md](PRIVACY.md#required-account-settings)):

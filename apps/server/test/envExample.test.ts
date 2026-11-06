@@ -24,8 +24,9 @@ const EXTRA_KEYS = [
   'GITLEAKS_PATH',
 ];
 
-/** Variables the operating system or CI provide; nothing to configure. */
+/** Variables the operating system or CI provide, and Vite's import.meta.env.DEV flag; nothing to configure. */
 const SYSTEM_VARIABLES = new Set([
+  'DEV',
   'APPDATA',
   'CI',
   'GITHUB_OUTPUT',

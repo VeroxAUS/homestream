@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Initial JavaScript (gzip)",
+    "path": "dist/assets/index-*.js",
+    "gzip": true,
+    "limit": "150 kB"
+  },
+  {
+    "name": "Telemetry chunk (gzip)",
+    "path": "dist/assets/telemetry-*.js",
+    "gzip": true,
+    "limit": "100 kB"
+  }
+]

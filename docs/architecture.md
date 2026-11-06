@@ -2,7 +2,7 @@
 
 HomeStream is one Node.js process on a Windows PC (the server) plus thin clients on the local network. The server finds a source stream, re-encodes it with ffmpeg and NVENC, and serves HLS. Clients never talk to TMDB, the gateway or TorBox directly.
 
-This document has five views: [components and deployment](#components-and-deployment), [playback](#playback-sequence), [source proxy and prefetch](#source-proxy-and-prefetch), [data model](#data-model), and [telemetry and CI/CD](#telemetry-and-cicd). The HTTP surface is in [openapi.json](openapi.json) (also served at `/api/docs`), the tables are in [database.md](database.md).
+This document has six views: [components and deployment](#components-and-deployment), [playback](#playback-sequence), [source proxy and prefetch](#source-proxy-and-prefetch), [data model](#data-model), [desktop shell](#desktop-shell-appsdesktop), and [telemetry and CI/CD](#telemetry-and-cicd). The HTTP surface is in [openapi.json](openapi.json) (also served at `/api/docs`), the tables are in [database.md](database.md).
 
 ## Components and deployment
 
@@ -213,6 +213,34 @@ erDiagram
 
 The relations are logical: the schema has no foreign keys, so deleting a device or a progress row never cascades. `tmdb_cache` and `gateway_cache` are standalone key/value caches with an expiry, and `settings` is a standalone key/value table for the server's own state, such as the anonymous install id. The exact columns are in [schema.sql](schema.sql), with a description of every table in [database.md](database.md).
 
+## Desktop shell (apps/desktop)
+
+The Electron shell is a thin window around the web UI. It never talks to TMDB, the gateway or TorBox, and it does not encode anything: it starts (or attaches to) the server, loads `http://127.0.0.1:8600/` and reports its own errors.
+
+```mermaid
+flowchart LR
+  subgraph Shell["Electron app (apps/desktop)"]
+    Main["Main process<br/>window, tray, server start,<br/>@sentry/electron (process=main)"]
+    Renderer["Renderer<br/>the web UI (apps/web)<br/>@sentry/react (process=renderer)"]
+    Main --- Renderer
+  end
+  Server["HomeStream server<br/>:8600"]
+  Sentry["Sentry<br/>homestream-web"]
+  PostHog["PostHog"]
+
+  Renderer -->|"/api, /hls, X-Request-ID"| Server
+  Main -->|"spawn or attach"| Server
+  Main -.->|"errors, scrubbed"| Sentry
+  Renderer -.->|"errors, scrubbed"| Sentry
+  Main -.->|"desktop_started"| PostHog
+  Renderer -.->|"page_viewed"| PostHog
+```
+
+- The renderer is the same build of `apps/web` that browsers get; it detects the shell through `window.homestream.isDesktop` (set by the preload script) and tags its events `device.kind=desktop`.
+- Both processes report to the Sentry project `homestream-web` through the same scrubber from `packages/shared`, tagged `process=main` or `process=renderer`. Without `SENTRY_DSN_WEB` and `POSTHOG_API_KEY`, or with `HOMESTREAM_TELEMETRY=off`, nothing is sent.
+- `apps/web` and `apps/desktop` never import each other (dependency-cruiser enforces it); they share only `@homestream/shared`.
+- The desktop dev workflow, the Electron cache location and the main-process telemetry plan are in [apps/desktop/README.md](../apps/desktop/README.md).
+
 ## Telemetry and CI/CD
 
 ```mermaid
@@ -226,13 +254,15 @@ flowchart LR
     Quality["format, lint, typecheck,<br/>knip, dup, deps, syncpack, techdebt"]
     Tests["test:ci with retries,<br/>coverage thresholds"]
     Docs["openapi:check, db:schema:check,<br/>docs:check, agents:check"]
-    Build["build all apps"]
+    Build["build all apps,<br/>bundle budgets (size-limit)"]
+    E2E["Web e2e (Playwright, Chromium):<br/>built UI + isolated server + stub upstreams"]
     Quality --> Tests --> Build
     Docs --> Build
   end
 
   Push --> Quality
   Push --> Docs
+  Push --> E2E
   Build --> Release["Release artifacts,<br/>source maps to Sentry"]
 
   subgraph Runtime["Running apps"]

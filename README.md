@@ -9,11 +9,12 @@ HomeStream is a home media server. A Windows PC runs the server, finds a stream 
 
 ## Status
 
-| Part                      | State                                                           |
-| ------------------------- | --------------------------------------------------------------- |
-| `apps/server`             | Working: catalog, playback, health checks, downloads, event log |
-| `apps/web`                | Early: build and test setup are in place, the UI is being built |
-| `apps/desktop`, `apps/tv` | Planned                                                         |
+| Part           | State                                                                              |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `apps/server`  | Working: catalog, playback, health checks, downloads, event log                    |
+| `apps/web`     | Early: build, test, telemetry and e2e setup are in place, the UI is being built    |
+| `apps/desktop` | Skeleton: telemetry plan and tests are in place, the Electron shell is being built |
+| `apps/tv`      | Planned                                                                            |
 
 ## Quick start
 
@@ -61,14 +62,15 @@ curl.exe http://localhost:8600/api/health
 
 ## Test
 
-| Command                 | What it runs                                        |
-| ----------------------- | --------------------------------------------------- |
-| `pnpm test:unit`        | Fast tests. No network, no GPU, no keys.            |
-| `pnpm test:integration` | HTTP tests with a stub gateway and fake encoders.   |
-| `pnpm test:ci`          | Unit and integration together (what CI runs).       |
-| `pnpm test:coverage`    | The same with coverage thresholds that only go up.  |
-| `pnpm test:gpu`         | Real ffmpeg/NVENC encodes. NVIDIA GPU machine only. |
-| `pnpm test:live`        | Real TMDB and gateway calls. Needs keys in `.env`.  |
+| Command                                  | What it runs                                                                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test:unit`                         | Fast tests. No network, no GPU, no keys.                                                                                                                       |
+| `pnpm test:integration`                  | HTTP tests with a stub gateway and fake encoders.                                                                                                              |
+| `pnpm test:ci`                           | Unit and integration together (what CI runs).                                                                                                                  |
+| `pnpm test:coverage`                     | The same with coverage thresholds that only go up.                                                                                                             |
+| `pnpm test:gpu`                          | Real ffmpeg/NVENC encodes. NVIDIA GPU machine only.                                                                                                            |
+| `pnpm test:live`                         | Real TMDB and gateway calls. Needs keys in `.env`.                                                                                                             |
+| `pnpm --filter @homestream/web test:e2e` | Browser tests of the web UI against an isolated server with stub upstreams (needs Chromium: `pnpm --filter @homestream/web exec playwright install chromium`). |
 
 Before you commit, run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm knip`, `pnpm test:ci`. The full list of checks is in [AGENTS.md](AGENTS.md#ci-checks).
 
@@ -77,7 +79,8 @@ Before you commit, run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm
 | Path              | Contents                                                    |
 | ----------------- | ----------------------------------------------------------- |
 | `apps/server`     | Fastify 5 + TypeScript server (`node:sqlite`, ffmpeg)       |
-| `apps/web`        | React 19 + Vite web UI                                      |
+| `apps/web`        | React 19 + Vite web UI ([README](apps/web/README.md))       |
+| `apps/desktop`    | Electron desktop shell ([README](apps/desktop/README.md))   |
 | `packages/shared` | zod schemas and types shared by the server and every client |
 | `scripts`         | Repository tooling (bootstrap, checks, reports)             |
 | `docs`            | Architecture, database, API export, privacy, runbooks       |

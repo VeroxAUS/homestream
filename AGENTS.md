@@ -10,6 +10,7 @@ HomeStream is a home media server. A Windows PC runs the server and does all vid
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `apps/server`     | `@homestream/server`: Fastify 5 + TypeScript server on Node 24 (`node:sqlite`, ffmpeg, no native npm dependencies) |
 | `apps/web`        | `@homestream/web`: React 19 + Vite web UI, served by the server at `/`                                             |
+| `apps/desktop`    | `@homestream/desktop`: Electron 45 desktop shell around the web UI (skeleton and telemetry plan so far)            |
 | `packages/shared` | `@homestream/shared`: zod schemas and types shared by every client and the server (the API contract)               |
 | `scripts`         | Repository tooling (bootstrap, checks, reports). Plain Node `.mjs`, no build step                                  |
 | `docs`            | Architecture, database, API export, privacy, runbooks. See [docs/architecture.md](docs/architecture.md)            |
@@ -19,7 +20,7 @@ HomeStream is a home media server. A Windows PC runs the server and does all vid
 | `.devcontainer`   | Dev container (Node 24, ffmpeg, pnpm)                                                                              |
 | `droid-wiki`      | Generated wiki. Never edit by hand ([docs/wiki.md](docs/wiki.md))                                                  |
 
-The Electron desktop shell and the Android TV app are planned as the apps named desktop and tv; the workspace already reserves the desktop folder.
+The Android TV app is planned as the app named tv. Conventions for the web UI and the desktop shell (telemetry, requests, logging, bundle budget, e2e) are in [apps/web/README.md](apps/web/README.md), [apps/desktop/README.md](apps/desktop/README.md) and [Web and desktop apps](#web-and-desktop-apps).
 
 Server source map (`apps/server/src`): `routes/` HTTP handlers (thin), `playback/` sessions, decision engine, ffmpeg arguments, HLS playlists, `sourceproxy/` loopback proxy and prefetch cache for upstream media, `gateway/` and `tmdb/` upstream clients, `streams/` parsing and ranking, `downloads/` TorBox caching queue, `db/` migrations and queries, `health/` checks, `events/` event log and SSE bus, `docs/` OpenAPI generation, `config.ts` settings, `redact.ts` secret scrubbing.
 
@@ -60,6 +61,8 @@ pnpm techdebt                # TODO/FIXME/HACK budget
 pnpm check:large-files       # no file over 1 MB
 pnpm check:secrets           # secret scan of staged changes
 pnpm coverage:ratchet        # print or raise coverage thresholds (they may only go up)
+pnpm --filter @homestream/web size       # web bundle budget (size-limit, run build first); same for @homestream/desktop
+pnpm --filter @homestream/web analyze    # bundle treemap in apps/web/reports/bundle.html
 ```
 
 Generated documentation and doc checks:
@@ -133,21 +136,25 @@ The primary development machine runs Windows PowerShell 5.1; CI and the dev cont
 
 ## Testing
 
-| Tier        | Command                 | Location                          | Needs                         | In CI |
-| ----------- | ----------------------- | --------------------------------- | ----------------------------- | ----- |
-| unit        | `pnpm test:unit`        | `apps/server/test/**` (not below) | nothing                       | yes   |
-| integration | `pnpm test:integration` | `apps/server/test/integration/`   | nothing (stub gateway, fakes) | yes   |
-| gpu         | `pnpm test:gpu`         | `apps/server/test/encode/`        | ffmpeg with NVENC, NVIDIA GPU | no    |
-| live        | `pnpm test:live`        | `apps/server/test/live/`          | `.env` keys, network          | no    |
+| Tier        | Command                                  | Location                          | Needs                                           | In CI                 |
+| ----------- | ---------------------------------------- | --------------------------------- | ----------------------------------------------- | --------------------- |
+| unit        | `pnpm test:unit`                         | `apps/server/test/**` (not below) | nothing                                         | yes                   |
+| integration | `pnpm test:integration`                  | `apps/server/test/integration/`   | nothing (stub gateway, fakes)                   | yes                   |
+| gpu         | `pnpm test:gpu`                          | `apps/server/test/encode/`        | ffmpeg with NVENC, NVIDIA GPU                   | no                    |
+| live        | `pnpm test:live`                         | `apps/server/test/live/`          | `.env` keys, network                            | no                    |
+| web         | `pnpm --filter @homestream/web test`     | `apps/web/src/**/*.test.ts(x)`    | nothing (jsdom, Testing Library)                | yes (`test:coverage`) |
+| desktop     | `pnpm --filter @homestream/desktop test` | `apps/desktop/test/**`            | nothing (Electron is not started)               | yes (`test:coverage`) |
+| e2e         | `pnpm --filter @homestream/web test:e2e` | `apps/web/e2e/*.spec.ts`          | built server, Chromium, stub upstreams, no keys | yes (job `Web e2e`)   |
 
 - Test files are named `*.test.ts` (`*.test.tsx` in the web app) and sit in `test/` (server, shared) or next to the source (web). Tests run in parallel, so they must not share state: use `PORT=0` (a random free port) and a unique temp directory from `makeTempDir()` in `apps/server/test/helpers.ts`, and clean up in `afterAll`. Never hard-code a port.
 - HTTP routes are tested with Fastify `app.inject`. External services (gateway, TorBox, TMDB) are replaced with stubs in unit and integration tests. Real calls belong in `test/live/` only, and use few requests (the gateway allows about 5 requests per 5 seconds).
 - Fixtures must never contain real secrets or real stream URLs. Use `example.test` hosts and invented tokens.
 - GPU tests start real encoders. Run them alone, one file at a time, never while a game or other GPU-heavy program runs, and with every ffmpeg process stopped at the end. Stop sessions gently with `DELETE /api/sessions/:id` (no body, no content-type) before stopping the server.
 - Limit download bandwidth in real-title tests: start the server with `MAX_DOWNLOAD_MBPS=60` or lower (the household shares the connection) and never download whole files for a test.
+- Playwright e2e tests run against the built UI and an isolated server with stub TMDB, gateway, Sentry and PostHog (`apps/web/e2e/support/hub.mjs`). They never use real keys and never start a playback session. Install Chromium with `pnpm --filter @homestream/web exec playwright install chromium` (set `PLAYWRIGHT_BROWSERS_PATH` to keep it off the system drive); only the CI job `Web e2e` installs it.
 - Coverage thresholds live in `coverage-thresholds.json` of each package and may only be raised (`pnpm coverage:ratchet`).
 - CI retries failing tests twice and writes JUnit and JSON reports to `reports/`; see [docs/runbooks/flaky-tests.md](docs/runbooks/flaky-tests.md).
-- Port range for anything you start by hand: 8600-8699 (server 8600, web dev 8601). Do not use other ports.
+- Port range for anything you start by hand: 8600-8699 (server 8600, web dev 8601, Playwright e2e 8602-8607, Electron remote debugging 8622). Do not use other ports.
 
 ## Telemetry rules
 
@@ -159,6 +166,18 @@ Telemetry is Sentry (errors) and PostHog (product analytics). The full descripti
 - Capture is manual only: no autocapture, no session recording, no user identification beyond a random install id.
 - Telemetry code never throws into the caller, never blocks the request or playback path, and does nothing when its key is missing.
 - Feature flags and experiments: [docs/experimentation.md](docs/experimentation.md).
+
+### Web and desktop apps
+
+- **Keys are baked in at build time** for the web UI (`SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST` from the environment or `.env`). A build without them contains no key and makes no telemetry request. `HOMESTREAM_TELEMETRY=off` at build time, or `localStorage['homestream.telemetry']='off'` in one browser, disables it too. Never fetch keys at run time.
+- **Never block Home.** `apps/web/src/telemetry/index.ts` is in the initial bundle and imports no Sentry or PostHog code. The `telemetry-*.js` chunk loads after the `hs:home-content` performance mark (`HOME_CONTENT_MARK`) and browser idle time. The Home screen must set that mark when its rows are rendered.
+- **Requests**: call the server through `apiFetch` / `apiGet` (`apps/web/src/api/client.ts`). It adds `X-Request-ID` and throws `ApiError`. Do not call `fetch` for `/api` directly.
+- **Logging**: use `logger` (`apps/web/src/logger.ts`, `apps/desktop/src/logger.ts` in the shell). Entries become Sentry breadcrumbs. Log no URLs with tokens, stream URLs or user text.
+- **Sentry**: project `homestream-web` for the renderer and the desktop main process, tags `app`, `process` (`renderer` or `main`), `device.kind` and `route`. Every event passes `scrubEvent` (the shared `sanitizeSentryEvent`). The renderer uses `@sentry/react` 11.10, the main process `@sentry/electron` 8.3 (plan in [apps/desktop/README.md](apps/desktop/README.md)).
+- **PostHog**: catalog events only, through `captureEvent`. Page views go through `usePageView(location.pathname)` and send the route template (`/movie/:id`), never the real path. No autocapture, session recording, surveys or flags in the renderer.
+- **Test trigger**: `?__telemetry_test=<run id>` reports one deliberate error, but only in a build made with `HOMESTREAM_TELEMETRY_STUB=1` (the e2e `stub` build).
+- **Bundle budget**: `apps/web/.size-limit.json` (initial JS 150 kB gzip, telemetry chunk 100 kB; add an entry for each new heavy chunk). CI runs `size`, and `pnpm readiness:audit` fails without it. `pnpm --filter @homestream/web analyze` shows what is in the bundle.
+- **Electron**: version 45. The binary is downloaded lazily (there is no install script): keep the cache off the system drive (`ELECTRON_CACHE=E:\HomeStream\cache\electron`) and run `node apps/desktop/node_modules/electron/install.js` once. `apps/web` and `apps/desktop` never import each other.
 - Follow the [homestream-telemetry skill](.factory/skills/homestream-telemetry/SKILL.md) when adding events.
 
 ## Secrets
@@ -205,7 +224,7 @@ CI runs these on every push and pull request (the workflows are in `.github/work
 
 1. `pnpm format:check`, `pnpm lint`, `pnpm typecheck`
 2. `pnpm knip`, `pnpm dup`, `pnpm deps:check`, `pnpm syncpack:lint`, `pnpm techdebt`, `pnpm check:large-files`
-3. `pnpm test:ci` and `pnpm test:coverage`
+3. `pnpm test:ci` and `pnpm test:coverage` (web and desktop included), then the bundle budgets: `pnpm --filter @homestream/web build` and `size`, the same for desktop
 4. `pnpm agents:check` and `pnpm docs:check`
 5. `pnpm openapi:check` and `pnpm db:schema:check` (generated docs must be committed)
 
@@ -218,6 +237,8 @@ gh run view <run-id> --log-failed                        # logs of the failing s
 gh pr checks <number>                                    # checks of a pull request
 gh api repos/VeroxAUS/homestream/branches/main/protection --jq '.required_status_checks.contexts'
 ```
+
+CI also runs the job `Web e2e` (Playwright, Chromium installed only there) in parallel; it is not a required check.
 
 Branch protection on `main` requires the jobs `Linux` and `Windows`; force pushes and deletions are blocked, the owner may push directly. A push to `main` triggers CI, then `release.yml` (tag, GitHub release, Sentry release) when the commits since the last tag include `feat`, `fix` or `perf`.
 

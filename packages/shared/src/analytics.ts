@@ -18,6 +18,24 @@ const ErrorCode = z.string().regex(/^[a-z0-9_]{1,48}$/);
 const Resolution = z.enum(['480p', '720p', '1080p', '1440p', '2160p']);
 const EpisodeNumber = z.number().int().min(0).max(10_000);
 
+/** Route templates of the web UI (react-router paths); a page that matches none is reported as `other`. */
+export const PAGE_ROUTES = [
+  '/',
+  '/search',
+  '/movie/:id',
+  '/tv/:id',
+  '/play/movie/:id',
+  '/play/tv/:id/:season/:episode',
+  '/settings',
+  '/dashboard/health',
+  '/dashboard/activity',
+  '/dashboard/history',
+  '/dashboard/graphs',
+  '/dashboard/stats',
+  'other',
+] as const;
+export type PageRoute = (typeof PAGE_ROUTES)[number];
+
 export const ANALYTICS_EVENTS = {
   server_started: {
     description: 'The server finished starting.',
@@ -65,6 +83,23 @@ export const ANALYTICS_EVENTS = {
       deviceKind: DeviceKind,
       stage: z.enum(['start', 'running']),
       errorCode: ErrorCode,
+    }),
+  },
+  page_viewed: {
+    description:
+      'The web UI (browser or desktop window) showed a page. `route` is the route template, never the real path.',
+    properties: z.object({
+      route: z.enum(PAGE_ROUTES),
+      deviceKind: DeviceKind,
+    }),
+  },
+  desktop_started: {
+    description: 'The desktop shell finished starting.',
+    properties: z.object({
+      version: z.string().regex(/^\d+\.\d+\.\d+[\w.+-]{0,24}$/),
+      os: z.enum(['windows', 'macos', 'linux', 'other']),
+      packaged: z.boolean(),
+      hidden: z.boolean(),
     }),
   },
   prefetch_requested: {

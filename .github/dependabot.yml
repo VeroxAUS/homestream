@@ -1,7 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    # One pnpm workspace: the root lockfile covers every package, and each app manifest is listed so its ranges are bumped too.
+    directories:
+      - /
+      - /apps/*
+      - /packages/*
     schedule:
       interval: weekly
       day: monday

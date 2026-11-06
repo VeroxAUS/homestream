@@ -1,0 +1,27 @@
+{
+  "name": "@homestream/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "pnpm --filter @homestream/shared build && tsc -p tsconfig.build.json",
+    "size": "size-limit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:ci": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@homestream/shared": "workspace:*",
+    "@sentry/electron": "~8.3.0",
+    "posthog-node": "~5.61.2"
+  },
+  "devDependencies": {
+    "@size-limit/file": "~14.3.0",
+    "electron": "~45.2.3",
+    "size-limit": "~14.3.0"
+  }
+}

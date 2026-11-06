@@ -9,6 +9,8 @@ allowBuilds:
   esbuild: true
   electron-winstaller: true
   lefthook: true
+  # Only prints a donation banner.
+  core-js: false
 
 overrides:
   glob@<14.0.2: 14.0.2

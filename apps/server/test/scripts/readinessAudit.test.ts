@@ -52,6 +52,7 @@ describe('readiness-criteria.json', () => {
       'appScripts',
       'appFiles',
       'appContains',
+      'appSizeBudget',
       'appTsconfigStrict',
       'knipWorkspace',
       'skills',
@@ -79,7 +80,7 @@ describe('readiness-criteria.json', () => {
     ]) {
       expect(ids).toContain(id);
     }
-    expect(defaultApps).toContain('server');
+    expect(defaultApps).toEqual(expect.arrayContaining(['server', 'web', 'desktop']));
   });
 });
 
@@ -111,6 +112,25 @@ describe('checkers', () => {
     expect(
       runChecker({ type: 'appFiles', pathRegex: '\\.test\\.ts$' }, context, { dir: 'apps/two', name: 'two' }).status,
     ).toBe('FAIL');
+  });
+
+  it('appSizeBudget needs a size script and a bounded entry in .size-limit.json', () => {
+    const dir = tree({
+      'apps/ok/package.json': JSON.stringify({ scripts: { size: 'size-limit' } }),
+      'apps/ok/.size-limit.json': JSON.stringify([{ path: 'dist/*.js', limit: '10 kB' }]),
+      'apps/noscript/package.json': '{}',
+      'apps/noscript/.size-limit.json': JSON.stringify([{ path: 'dist/*.js', limit: '10 kB' }]),
+      'apps/nolimit/package.json': JSON.stringify({ scripts: { size: 'size-limit' } }),
+      'apps/nolimit/.size-limit.json': JSON.stringify([{ path: 'dist/*.js' }]),
+      'apps/empty/package.json': JSON.stringify({ scripts: { size: 'size-limit' } }),
+    });
+    const context = createContext(dir, { run: noGh, repo: null });
+    const check = (name: string) =>
+      runChecker({ type: 'appSizeBudget' }, context, { dir: `apps/${name}`, name }).status;
+    expect(check('ok')).toBe('PASS');
+    expect(check('noscript')).toBe('FAIL');
+    expect(check('nolimit')).toBe('FAIL');
+    expect(check('empty')).toBe('FAIL');
   });
 
   it('GitHub checks are skipped, not failed, when gh is unavailable', () => {

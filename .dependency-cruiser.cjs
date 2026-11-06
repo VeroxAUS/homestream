@@ -23,6 +23,21 @@ module.exports = {
       to: { path: '^apps/server/' },
     },
     {
+      name: 'web-and-desktop-never-import-each-other',
+      severity: 'error',
+      comment:
+        'The desktop shell loads the web UI over HTTP; neither app imports the other, shared code lives in packages/shared.',
+      from: { path: '^apps/web/' },
+      to: { path: '^apps/desktop/' },
+    },
+    {
+      name: 'desktop-never-imports-web',
+      severity: 'error',
+      comment: 'See web-and-desktop-never-import-each-other.',
+      from: { path: '^apps/desktop/' },
+      to: { path: '^apps/web/' },
+    },
+    {
       name: 'server-never-imports-clients',
       severity: 'error',
       comment: 'The server must not depend on a client app.',

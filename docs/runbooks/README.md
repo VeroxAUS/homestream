@@ -13,6 +13,7 @@ Step-by-step procedures for the problems you are most likely to meet. Every runb
 | [flaky-tests](flaky-tests.md)                 | A test passes on retry or fails only sometimes                       |
 | [rollback](rollback.md)                       | A change broke the server and you need the last good version back    |
 | [profiling](profiling.md)                     | Something is slow and you need numbers before changing code          |
+| [web-bundle-budget](web-bundle-budget.md)     | CI fails because the web bundle grew past its size budget            |
 
 ## First minute for any server problem
 

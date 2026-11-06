@@ -179,6 +179,19 @@ const CHECKERS = {
     return verdict(Boolean(hit), `${scope.dir}/${hit}`, `nothing in ${scope.dir} matches /${checker.pattern}/`);
   },
 
+  appSizeBudget(_checker, context, scope) {
+    const scripts = readJson(context.root, `${scope.dir}/package.json`)?.scripts ?? {};
+    if (!('size' in scripts)) return fail(`${scope.dir} lacks a size script`);
+    const budget = readJson(context.root, `${scope.dir}/.size-limit.json`);
+    const entries = Array.isArray(budget) ? budget : [];
+    const unbounded = entries.filter((entry) => !entry?.path || !entry?.limit);
+    return verdict(
+      entries.length > 0 && unbounded.length === 0,
+      `${scope.dir}/.size-limit.json has ${entries.length} budget(s), run by the size script`,
+      `${scope.dir}/.size-limit.json needs at least one entry, each with a path and a limit`,
+    );
+  },
+
   appTsconfigStrict(_checker, context, scope) {
     const tsconfig = readText(context.root, `${scope.dir}/tsconfig.json`);
     if (tsconfig === null) return fail(`${scope.dir}/tsconfig.json is missing`);

@@ -25,6 +25,10 @@ Telemetry aside, HomeStream needs these services to work. They receive the reque
 
 When a DSN is set, unhandled errors in the server, the web UI or desktop shell, and the TV app are reported. A report holds the error type and message, the stack trace, the app version and release, the operating system family and the environment name. Before sending, URLs, tokens, IP addresses and file paths are removed from messages, stack frames and breadcrumbs: registered secrets and authorization fields are replaced, gateway and CDN URLs and query strings are cut, private network addresses are masked and Windows user folders become `<home>`. No request bodies, cookies, headers, user, IP address or server name are attached. Server reports carry the release (`homestream@<version>`), the environment and the tags `request_id`, `device.kind` and `media.type` when known. At most 5 % of requests are sampled for performance traces, and never `/hls/*`, `/metrics`, `/healthz`, `/readyz` or `/api/events`.
 
+### Web UI and desktop shell
+
+The web UI (in a browser or inside the desktop shell) and the desktop shell's main process report to the Sentry project `homestream-web`; the TV app has its own project. The keys are not read at run time: they are baked into the web UI when it is built (`SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST`), and a build made without them contains no key and sends nothing. Web reports carry the release (`homestream@<version>`), the environment and the tags `app` (`web`), `process` (`renderer` in the UI, `main` in the desktop shell's main process), `device.kind` (`web` or `desktop`) and `route` (a route template such as `/movie/:id`). Script locations in stack traces are reduced to a path (`app:///assets/index-1.js`) without the address of your server, and request URLs are reduced to a path without query string. The web UI sends one product event, `page_viewed`, with a route template; it does not use autocapture, session recording, surveys or feature flags.
+
 ## Product events (PostHog)
 
 When a key is set, the typed events in the catalog below can be captured. This table is maintained by hand and must list exactly the events of the typed event catalog in `packages/shared`.
@@ -37,9 +41,11 @@ When a key is set, the typed events in the catalog below can be captured. This t
 | `playback_started`   | A playback session produced its first segment.                     | `mediaType`, `tmdbId`, `title`, `season`?, `episode`?, `deviceKind`, `videoCodec`, `hdr`, `toneMapped`?, `resolution`, `startupMs` |
 | `playback_ended`     | A playback session ended.                                          | `mediaType`, `tmdbId`, `title`, `deviceKind`, `reason`, `watchedSec`, `avgSpeed`?                                                  |
 | `playback_failed`    | A playback session could not start, or its encoder failed playing. | `mediaType`, `tmdbId`, `title`?, `deviceKind`, `stage`, `errorCode`                                                                |
+| `page_viewed`        | The web UI (browser or desktop window) showed a page.              | `route` (a route template such as `/movie/:id`, never the real path), `deviceKind`                                                 |
+| `desktop_started`    | The desktop shell finished starting.                               | `version`, `os`, `packaged`, `hidden`                                                                                              |
 | `prefetch_requested` | A client asked the server to warm up the stream for a title.       | `mediaType`, `tmdbId`, `deviceKind`, `flagEnabled`                                                                                 |
 
-A trailing `?` marks a property that is only sent when it applies. Every event also carries `app` (`server`), `appVersion` and the random install id as its identity, with person profiles and GeoIP lookups switched off.
+A trailing `?` marks a property that is only sent when it applies. Every event also carries `app` (`server`, `web` or `desktop`), `appVersion` and the random install id as its identity, with person profiles and GeoIP lookups switched off.
 
 Allowed property values are small enums, booleans and bounded numbers. The only free text is the media **title** (a movie or show name from TMDB, never something you typed). A title that contains a URL, key, address or path is scrubbed like any other text. Any property that is not in the catalog is dropped before sending, and so is any value that does not match its declared type.
 
@@ -75,6 +81,8 @@ Delete these files to erase local history. Nothing in them is uploaded.
 
 1. Set `HOMESTREAM_TELEMETRY=off` in `.env` (or `%APPDATA%\HomeStream\config.env` for the packaged app), or leave all telemetry keys empty. See [.env.example](../.env.example).
 2. Restart the server.
+
+The web UI decides at build time: build it with `HOMESTREAM_TELEMETRY=off` or without keys. A single browser can also opt out of a build that has keys: run `localStorage.setItem('homestream.telemetry', 'off')` in its developer console and reload.
 
 ## Questions and reports
 

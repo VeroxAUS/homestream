@@ -16,8 +16,12 @@
     },
     "apps/web": {
       "project": ["src/**/*.{ts,tsx}"],
-      // Web screens import the shared schemas; the alias and tsconfig paths are already wired, no screen uses it yet.
-      "ignoreDependencies": ["@homestream/shared"],
+    },
+    "apps/desktop": {
+      "entry": ["src/index.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      // The Electron runtime is launched by the shell's start script, which does not exist yet; nothing imports it.
+      "ignoreDependencies": ["electron"],
     },
     "packages/shared": {
       "entry": ["test/**/*.test.ts"],

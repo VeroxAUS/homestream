@@ -25,6 +25,8 @@ describe('analytics catalog', () => {
       'playback_started',
       'playback_ended',
       'playback_failed',
+      'page_viewed',
+      'desktop_started',
       'prefetch_requested',
     ]);
     for (const name of ANALYTICS_EVENT_NAMES) expect(ANALYTICS_EVENTS[name].description.length).toBeGreaterThan(10);
@@ -94,6 +96,25 @@ describe('sanitizeEventProperties', () => {
       text.replace('secret-title', 'X'),
     );
     expect(out).toEqual({ title: 'My X', stage: 'start' });
+  });
+
+  it('keeps page_viewed to a route template and drops a real path', () => {
+    expect(sanitizeEventProperties('page_viewed', { route: '/movie/:id', deviceKind: 'web', title: 'X' })).toEqual({
+      route: '/movie/:id',
+      deviceKind: 'web',
+    });
+    expect(sanitizeEventProperties('page_viewed', { route: '/movie/603', deviceKind: 'desktop' })).toEqual({
+      deviceKind: 'desktop',
+    });
+  });
+
+  it('accepts desktop_started and rejects a malformed version', () => {
+    expect(
+      sanitizeEventProperties('desktop_started', { version: '0.1.0', os: 'windows', packaged: true, hidden: false }),
+    ).toEqual({ version: '0.1.0', os: 'windows', packaged: true, hidden: false });
+    expect(sanitizeEventProperties('desktop_started', { version: 'C:\\Users\\x', os: 'windows' })).toEqual({
+      os: 'windows',
+    });
   });
 
   it('accepts every event with its documented properties', () => {
