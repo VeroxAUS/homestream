@@ -1,32 +1,69 @@
-# Shared contracts
+# Shared
+
 Active contributors: VeroxAUS
 
-`@homestream/shared` centralizes Zod runtime schemas and their `z.infer` TypeScript types. It contains no network client, database access, player implementation or encoder.
+## Purpose
 
-## Contract families
+`@homestream/shared` is the cross-runtime contract and privacy layer. It exports Zod runtime schemas with inferred TypeScript types, plus pure sanitization, analytics and feature-flag helpers (`packages/shared/src/index.ts`).
 
-| Family | Source | Important abstractions |
-| --- | --- | --- |
-| Export surface | `packages/shared/src/index.ts` | Re-exports all four schema modules |
-| Devices and common envelopes | `packages/shared/src/schemas.ts` | CapabilityProfile, Device, ErrorResponse, ServerInfo, event enums |
-| Catalog | `packages/shared/src/catalog.ts` | MediaSummary, MovieDetails, ShowDetails, Season, Episode, HomeResponse, search |
-| Streams | `packages/shared/src/streams.ts` | StreamOption, StreamsResponse, StreamsQuery and quality enums |
-| Playback and warming | `packages/shared/src/playback.ts` | SessionStart/Patch, PrefetchRequest/Response, Decision, tracks, ActivitySession, SessionResponse |
+## Contract layout
 
-## Validation boundaries
+| Module                             | Boundary                                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `packages/shared/src/schemas.ts`   | Devices, capability profiles, server info, event enums and error/attempt envelopes |
+| `packages/shared/src/catalog.ts`   | Movie/show/season/episode metadata, featured banner and continue-watching shapes   |
+| `packages/shared/src/streams.ts`   | URL-free discovery options and recommendations                                     |
+| `packages/shared/src/playback.ts`  | Session start/patch/response, decisions, tracks, activity and prefetch             |
+| `packages/shared/src/downloads.ts` | Download tracking, 202 response, details extensions and SSE payloads               |
+| `packages/shared/src/progress.ts`  | Progress, resume/completion constants, history and statistics                      |
+| `packages/shared/src/network.ts`   | Network snapshots and checks                                                       |
+| `packages/shared/src/health.ts`    | Dependency health and check results                                                |
+| `packages/shared/src/ops.ts`       | Liveness/readiness response shapes                                                 |
 
-`CapabilityProfile` includes device identity/name/kind, display limits, H.264/HEVC/Main10/HDR10 support and 1–8 audio channels. Display dimensions are positive integers capped at 16384; identity/name strings are trimmed and bounded. The `tv`, `desktop` and `web` enum values are accepted device categories, not evidence of shipped apps.
+`packages/shared/src/schemas.ts` bounds device identity/name, dimensions and audio channels. Device kinds describe capabilities, not authentication or shipped apps. Stream IDs are 16 lowercase hexadecimal characters; public stream metadata has no raw upstream URL (`packages/shared/src/streams.ts`).
 
-Catalog shapes distinguish movies from TV and make unavailable images, dates, runtime and IMDb identifiers nullable where defined. Search input is trimmed, nonempty and limited to 200 characters. `ContinueWatchingItem` exists as a shape, but `apps/server/src/routes/catalog.ts` currently returns an empty `continueWatching` array.
+TV start/prefetch bodies need season and episode. For subtitles, an omitted start selection applies the server default, `null` means Off, and an omitted patch selection means unchanged. A patch must change audio or subtitle selection (`packages/shared/src/playback.ts`). Session-start parsing accepts a bounded string ID, including `auto`; the client product rule is always to send `auto`, not to expose a manual picker.
 
-Stream IDs are 16 lowercase hexadecimal characters. `StreamOption` exposes parsed metadata and a display label, not a raw upstream URL. `StreamsResponse` supports an optional reason; the current stream service uses `no_streams`, while gateway failures use HTTP error envelopes rather than returning `gateway_error`.
+Catalog and tracking contracts are implemented, not placeholders: Home contains persisted continue watching and featured items, details can include pending downloads, and session creation returns either a session or a distinct downloading envelope. See [catalog](../features/catalog.md), [downloads](../features/downloads.md) and [viewing progress](../features/viewing-progress.md).
 
-Session and prefetch requests require a positive TMDB ID and a full capability profile; TV additionally requires season and episode. Session starts support an optional position, audio index and nullable subtitle selection. In a session patch, absent subtitle means unchanged, `null` clears it, and at least audio or subtitle must be supplied. Subtitle delivery distinguishes text/bitmap tracks and sidecar/burn selection; these shapes describe the [playback system](../systems/playback/index.md).
+## Privacy and analytics
 
-## Integration and changes
+`packages/shared/src/sanitize.ts` has no Node dependency. `sanitizeText` removes URL/token/address patterns and personal home prefixes, with a caller-supplied secret scrubber applied first. `sanitizeValue` deep-copies values, drops denied fields and stops cycles/deep recursion at depth 12. Sentry helpers remove request/user data, trim identifying contexts and make known-root stack paths relative. Scrubbing is a boundary, not authorization.
 
-Routes explicitly call `safeParse` for selected request schemas; exporting a response schema does not imply every response is runtime-validated. Update schema, inferred consumers and tests together. Do not confuse source HDR enum values with the broader stream-discovery HDR labels.
+`packages/shared/src/analytics.ts` defines five product events: `server_started`, `playback_started`, `playback_ended`, `playback_failed` and `prefetch_requested`. `sanitizeEventProperties` drops unknown events/properties and invalid values. Strings must survive scrubbing unchanged, except media titles may retain scrubbed text. This catalog does not itself transmit events or initialize SDKs; those belong to [telemetry](../systems/telemetry.md).
 
-`packages/shared/package.json` exports ESM and declarations from `dist`; `tsconfig.build.json` drives compilation. Server builds shared first; Vite/Vitest can use the shared source alias. Tests are `packages/shared/test/schemas.test.ts`, `packages/shared/test/catalog.test.ts`, and `packages/shared/test/playback.test.ts`.
+## Feature flags
 
-Measured `packages/shared` scope: **5 production source files**, **3 test files**, **1 unique committer**. Counts use tracked `.ts` files under `src/` and `*.test.ts` under `test/`, excluding configuration/output. Committers are distinct `%cn <%ce>` identities from scoped Git history. See [API](../api/index.md) for routes consuming these shapes.
+`packages/shared/src/flags.ts` is intentionally import-free because repository scripts load it directly. Its typed registry, key guard, default lookup and value coercion keep invalid/missing remote values on a local default:
+
+| Flag                       | Status                                         | Default |
+| -------------------------- | ---------------------------------------------- | ------- |
+| `prefetch-on-details`      | Active server gate for speculative warming     | `true`  |
+| `banner-rotation-interval` | Planned client experiment, variants `9s`/`12s` | `9s`    |
+
+Do not describe the planned banner flag as a working UI experiment. Flag evaluation and SDK behavior are covered in [telemetry](../systems/telemetry.md).
+
+## Integration and modification
+
+`packages/shared/package.json` exports ESM and declarations from `dist`; server builds shared first, while Vite/Vitest can alias its source. Routes explicitly validate selected inputs; exporting a response schema does not automatically runtime-validate every response (`apps/server/src/routes/sessions.ts`, `apps/server/src/routes/catalog.ts`).
+
+Change schemas and consumers together, export additions through `packages/shared/src/index.ts`, and extend tests. Analytics changes must also update `docs/PRIVACY.md`; flag changes must pass the registry checks. Keep media/network/SQLite side effects in the apps. See [API](../api/index.md) for consumers.
+
+## Key source files
+
+| File                                     | Purpose                                           |
+| ---------------------------------------- | ------------------------------------------------- |
+| `packages/shared/src/index.ts`           | Exports all twelve implementation modules         |
+| `packages/shared/src/schemas.ts`         | Common runtime validation and error envelopes     |
+| `packages/shared/src/playback.ts`        | Session/prefetch contract and selection semantics |
+| `packages/shared/src/sanitize.ts`        | Browser-safe string, object and Sentry scrubbing  |
+| `packages/shared/src/analytics.ts`       | Typed allowlisted product-event catalog           |
+| `packages/shared/src/flags.ts`           | Flag definitions, defaults and coercion           |
+| `packages/shared/package.json`           | Compiled export boundary                          |
+| `packages/shared/test/sanitize.test.ts`  | Scrubbing regression tests                        |
+| `packages/shared/test/analytics.test.ts` | Property allowlist tests                          |
+| `packages/shared/test/flags.test.ts`     | Registry/coercion tests                           |
+
+## Measured scope
+
+**13 tracked source files** in `packages/shared/src/`, **8 tracked test files** in `packages/shared/test/`, **0.62 test-to-code file ratio**. Configs/outputs are excluded. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots. File counts are not coverage percentages.

@@ -1,22 +1,39 @@
-# Applications
+# Apps
+
 Active contributors: VeroxAUS
 
-HomeStream has an implemented server and a placeholder browser app. The workspace entry for desktop is not an implementation: `apps/desktop` does not exist.
+## Purpose
 
-## Runtime map
+HomeStream has an implemented [server](server.md) and a [placeholder web app](web.md). The server owns metadata, upstream access, persistence and encoding; clients use the [shared contracts](../packages/shared.md) rather than calling upstream services directly (`apps/server/src/app.ts`, `apps/web/src/App.tsx`).
 
-| Application | Key abstraction and source | Status |
-| --- | --- | --- |
-| [Server](server.md) | Composition root, `apps/server/src/app.ts`; process entry, `apps/server/src/index.ts` | Fastify API, metadata, discovery, source proxy and playback |
-| [Web](web.md) | React root, `apps/web/src/main.tsx`; placeholder, `apps/web/src/App.tsx` | Displays a heading and coming-soon text |
-| Desktop | Workspace declaration, `pnpm-workspace.yaml` | Directory absent; no runtime or tests |
+## Runtime boundaries
 
-## Measured scope
+| Runtime              | Status and responsibility                                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@homestream/server` | Fastify API, HLS, SQLite, background services and optional built web assets; `apps/server/src/app.ts`                            |
+| `@homestream/web`    | React 19/Vite scaffold showing a heading and coming-soon text; `apps/web/src/App.tsx`                                            |
+| Desktop              | Planned Electron shell; `pnpm-workspace.yaml` reserves `apps/desktop`, but that directory has no implementation in this checkout |
+| Google TV            | Planned Android TV client in `README.md`; no TV application workspace or implementation exists                                   |
 
-Across `apps/`: **64 production TypeScript/TSX source files**, **38 test files**, **1 unique committer**. Server contributes 62 source / 37 tests; web contributes 2 source / 1 test. Counts use tracked files under `src/`, excluding `*.test.ts(x)`, and test files named `*.test.ts(x)` under each application; configuration, fixtures and helpers are excluded. Committers are distinct `git log --format="%cn <%ce>" -- apps` identities, not co-author trailers.
+The `tv`, `desktop` and `web` device kinds in `packages/shared/src/schemas.ts` are contract values, not proof of shipped clients. Devices record capabilities and activity, not user accounts or authentication.
 
 ## Integration and modification
 
-The server owns external-service access and media processing. Vite forwards `/api` and `/hls` during development; production server startup locates built web assets. No browser catalog, session controls, capability detection, or player is implemented yet. Extend server wiring in `apps/server/src/app.ts`, browser rendering in `apps/web/src/App.tsx`, and cross-boundary types in [shared contracts](../packages/shared.md).
+`apps/server/src/index.ts` starts the source proxy and public listener, then health checks, download polling and discovery. Vite proxies `/api` and `/hls` during development; the server serves built assets in production (`apps/web/vite.config.ts`, `apps/server/src/routes/static.ts`). No browser catalog, player or session controls are wired up yet.
 
-See [architecture](../overview/architecture.md) for the runtime graph and [getting started](../overview/getting-started.md) for commands.
+Start server composition changes in `apps/server/src/app.ts`, UI work in `apps/web/src/App.tsx`, and cross-runtime changes in `packages/shared/src/index.ts`. See [architecture](../overview/architecture.md) and [API](../api/index.md).
+
+## Key source files
+
+| File                           | Purpose                                           |
+| ------------------------------ | ------------------------------------------------- |
+| `pnpm-workspace.yaml`          | Implemented workspaces and reserved desktop entry |
+| `apps/server/src/index.ts`     | Server process entry and shutdown                 |
+| `apps/server/src/app.ts`       | Service construction and HTTP composition         |
+| `apps/web/src/main.tsx`        | Browser mount                                     |
+| `apps/web/src/App.tsx`         | Current placeholder UI                            |
+| `packages/shared/src/index.ts` | Shared public exports                             |
+
+## Measured scope
+
+At this snapshot, `apps/` contains **132 production TypeScript/TSX source files** and **110 test files**, a **0.83 test-to-code file ratio**. Server contributes 130/109; web contributes 2/1. Source counts use tracked files under application `src/`, excluding `*.test.ts(x)`; test counts include tracked `*.test.ts(x)` throughout each app, including opt-in tiers and script tests. Helpers, fixtures, configs and build outputs are excluded. Default-branch history has **1 unique human author**, VeroxAUS; bots are excluded. File ratios are not coverage measurements.

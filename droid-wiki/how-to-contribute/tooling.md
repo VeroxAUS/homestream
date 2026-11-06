@@ -1,25 +1,89 @@
 # Tooling
 
-HomeStream uses pnpm workspaces, TypeScript ESM, ESLint, Vitest, tsx, and Vite. [Development workflow](development-workflow.md) explains their normal use; [dependencies](../reference/dependencies.md) lists direct declarations.
+pnpm workspaces and Turbo coordinate TypeScript builds and offline checks. Root configuration adds formatting, complexity, dependency, privacy and generated-document gates rather than leaving quality checks to editor defaults (`package.json`).
 
-## Runtime and package management
+## Setup and task graph
 
-Node 24.20.0 and pnpm 12.16.1 were observed in the documentation environment. These are observations, not repository pins: `package.json` declares neither `engines` nor `packageManager`. The server requires modern Node APIs including `node:sqlite` and `node:util.parseEnv`.
+`package.json` requires Node `>=24 <25` and pnpm `^12.16.0` through `devEngines`; `.nvmrc` supplies the Node major. Do not add a `packageManager` field. `pnpm-workspace.yaml` includes server, web, shared and the reserved desktop path; the implemented workspaces are server, web and shared.
 
-`pnpm-workspace.yaml` lists `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared`. Only server, web, and shared exist. Its build allowlist mentions Electron-related packages and esbuild; this does not establish an implemented desktop application or installer.
+`scripts/bootstrap.mjs` is a built-ins-only setup entry point. It checks tools, installs frozen dependencies/hooks, copies `.env.example` only when `.env` is absent and builds shared contracts. Root `prepare` runs `scripts/install-hooks.mjs`, skipping hooks in CI and trees without `.git`.
 
-`pnpm-lock.yaml` records dependency resolution. Root scripts in `package.json` recursively invoke `typecheck`, `lint`, `test`, and `build`.
+`turbo.json` gives `build` a dependency on upstream `^build` and caches `dist/**`. Shared compiler/lint/test config and the lockfile invalidate tasks. `test` is uncached; `test:ci` is a distinct task. Root coverage deliberately bypasses parallel Turbo execution and runs workspaces one at a time.
 
-## Compilation and development
+| Command               | Implementation                             | Use                               |
+| --------------------- | ------------------------------------------ | --------------------------------- |
+| `pnpm build`          | `turbo.json`, workspace build scripts      | Shared output before dependents   |
+| `pnpm build:summary`  | Turbo `--summarize`                        | Per-package build timing          |
+| `pnpm typecheck`      | `tsconfig.base.json` and workspace configs | Strict no-emit checks             |
+| Server development    | `apps/server/package.json`                 | tsx watch                         |
+| Web development/build | `apps/web/vite.config.ts`                  | React/Vite, API/HLS proxy         |
+| Server build          | `apps/server/tsconfig.build.json`          | ESM JavaScript and source maps    |
+| Shared build          | `packages/shared/tsconfig.build.json`      | JavaScript, declarations and maps |
 
-`tsconfig.base.json` uses ES2023, NodeNext module resolution, strict checks, unchecked-index checks, isolated modules, and explicit override checks. Server builds compile source to `apps/server/dist` with source maps. Shared builds emit JavaScript, declarations, and source maps to `packages/shared/dist`.
+Strict TypeScript uses NodeNext and unchecked-index checks. Web overrides module resolution for bundling. Prefer `pnpm exec`, never `npx` (`AGENTS.md`).
 
-The web config overrides module resolution to Bundler and enables React JSX and DOM types (`apps/web/tsconfig.json`). Its build runs no-emit typechecking followed by Vite. Server development uses tsx watch; production uses Node on compiled output.
+## Static gates
 
-## Static checks and tests
+| Command                  | Configuration/source                               | Enforced boundary                                           |
+| ------------------------ | -------------------------------------------------- | ----------------------------------------------------------- |
+| `pnpm format:check`      | `.prettierrc`, `.prettierignore`                   | Prettier formatting; generated outputs/wiki excluded        |
+| `pnpm lint`              | `eslint.config.mjs`                                | Workspace lint plus root scripts/config lint                |
+| `pnpm knip`              | `knip.jsonc`                                       | Unused files, exports and dependencies                      |
+| `pnpm dup`               | `.jscpd.json`                                      | At most 0.5% duplication in scanned production/tooling code |
+| `pnpm deps:check`        | `.dependency-cruiser.cjs`                          | No cycles, unresolved imports or cross-layer leaks          |
+| `pnpm syncpack:lint`     | `.syncpackrc.json`                                 | Consistent dependency ranges                                |
+| `pnpm techdebt`          | `scripts/techdebt.mjs`, `techdebt.config.json`     | Zero TODO/FIXME/HACK marker budget                          |
+| `pnpm check:large-files` | `scripts/check-large-files.mjs`                    | 1 MiB limit; lockfile allowlisted                           |
+| `pnpm check:secrets`     | `scripts/pre-commit-secrets.mjs`, `.gitleaks.toml` | Staged secret/path scan                                     |
 
-`eslint.config.mjs` combines recommended JavaScript/TypeScript rules, enforces type-only imports, and permits underscore-prefixed unused names. It ignores generated dist/release/coverage trees and supplies browser globals for web code. There are no custom lint plugins in this checkout.
+`eslint.config.mjs` enforces naming, type-only imports, cyclomatic/cognitive ceilings of 20 and nesting depth 4. Legacy per-file exceptions have measured ceilings; new code must be split instead of adding exceptions. See [cleanup opportunities](../cleanup-opportunities.md).
 
-`vitest.shared.ts` supplies shared aliases and timeouts. The server include pattern does not exclude live tests; read [testing](testing.md) before invoking the recursive script.
+Dependency-cruiser prevents shared importing apps, web/desktop importing server, server importing web/desktop, production source importing test helpers, unresolved imports and cycles. Knip has an explicit temporary exception for shared in the placeholder web app and ignores script declaration files resolved by TypeScript. Do not treat these configured exceptions as undiscovered dead code.
 
-No checked-in CI workflow or QA configuration orchestrates these tools. Running a build is a local compilation step, not evidence of a release or deployment pipeline.
+jscpd scans apps/packages/scripts, excluding tests, declarations, generated outputs and TV. `lefthook.yml` checks staged formatting/lint/secrets/size and relevant Markdown/agent validation; it never runs tests.
+
+## Generated documentation and instruction checks
+
+| Command                                      | Source of truth                                                      | Output/check                                                      |
+| -------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `pnpm openapi:export` / `pnpm openapi:check` | Registered routes + shared Zod + `apps/server/src/docs/routeDocs.ts` | `docs/openapi.json`                                               |
+| `pnpm db:schema` / `pnpm db:schema:check`    | `apps/server/src/db/migrations.ts`                                   | `docs/schema.sql`, table sections in `docs/database.md`           |
+| `pnpm docs:check`                            | `scripts/check-docs.mjs`                                             | Relative links/anchors; maintained architecture diagram checks    |
+| `pnpm agents:check`                          | `scripts/validate-agents-md.mjs`                                     | Real commands, paths, endpoints and required instruction sections |
+
+`apps/server/src/docs/export.ts` constructs an in-memory app with temporary data and no configuration/network dependence. `apps/server/src/docs/generated.ts` renders deterministic OpenAPI/schema files; do not hand-edit the exports.
+
+`docs:check` excludes `droid-wiki/` and its diagram checks are structural, not full Mermaid rendering. Wiki generation therefore also needs its own page-tree, link and source-path audit. `.github/workflows/docs.yml` regenerates the maintained exports and fails if they differ from committed files.
+
+## Reports and automation
+
+[Testing](testing.md) covers `test:ci`, sequential coverage, retry reports and threshold ratcheting. Repository automation is explicit about side effects:
+
+| Command/workflow                       | Behavior                                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm readiness:audit`                 | `scripts/readiness-audit.mjs` evaluates `scripts/readiness-criteria.json`; supports `--all`, `--apps`, `--strict`, `--json`; some checks inspect GitHub state |
+| `pnpm release:next`                    | `scripts/next-version.mjs` dry-runs the Conventional Commit release plan                                                                                      |
+| `pnpm labels:sync`                     | `scripts/sync-labels.mjs` creates/updates GitHub labels from `.github/labels.yml`; add `--dry-run` to inspect first                                           |
+| `pnpm flags:check` / `pnpm flags:sync` | `scripts/flags.mjs` validates registry usage or creates missing PostHog flags; sync needs a personal key and supports dry run                                 |
+| `pnpm sentry:issues`                   | `scripts/sentry-issues.mjs` dry-run; scheduled workflow performs issue creation                                                                               |
+| `pnpm sentry:alerts --dry-run`         | `scripts/sentry-alerts.mjs` plans rules from `monitoring/sentry/alert-rules.json`; `--apply` writes remotely                                                  |
+| `pnpm telemetry:smoke`                 | Server smoke CLI deliberately sends configured test telemetry                                                                                                 |
+| `pnpm profile:server`                  | `scripts/profile-server.mjs` profiles a throwaway server                                                                                                      |
+
+Do not run sync/apply/smoke commands as routine offline validation.
+
+`.github/workflows/ci.yml` implements Linux + Windows checks. CodeQL, full-history Gitleaks and Dependabot have their own workflows/configuration. `.github/workflows/devcontainer.yml` builds the development image and runs unit tests. `.github/workflows/droid-wiki-refresh.yml` runs daily or manually, restores the rolling wiki branch, separates read-only generation from write-enabled publishing, and excludes images/video from git.
+
+## Key source files
+
+| File                                             | Purpose                                 |
+| ------------------------------------------------ | --------------------------------------- |
+| `package.json`                                   | Root command catalog and tool versions  |
+| `turbo.json`                                     | Task dependencies and caching           |
+| `eslint.config.mjs`                              | Naming, complexity and legacy ceilings  |
+| `.dependency-cruiser.cjs`                        | Module boundaries                       |
+| `vitest.shared.ts`                               | Common workers, timeouts and CI reports |
+| `.factory/skills/homestream-run-checks/SKILL.md` | Scope-based gates                       |
+| `.github/workflows/droid-wiki-refresh.yml`       | Scheduled generated wiki lifecycle      |
+
+See [development workflow](development-workflow.md), [deployment](../deployment.md), and [dependencies](../reference/dependencies.md).

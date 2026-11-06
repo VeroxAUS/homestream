@@ -1,117 +1,127 @@
 # Source proxy
 
-Active contributors: VeroxAUS (origin/main sole human)
+Active contributors: VeroxAUS
 
-The source proxy is an internal loopback HTTP server that shields FFmpeg/ffprobe from expiring upstream URLs and shares source bytes and successful probe results across prefetches, sessions, and encoder restarts. It is separate from the public Fastify HLS API.
+The source proxy hides expiring upstream media links behind stable loopback URLs and shares source bytes and successful probes across prefetch, sessions and encoder restarts. It is a separate HTTP server from the public Fastify HLS routes (`apps/server/src/sourceproxy/proxy.ts`).
 
 ## Layout and key abstractions
 
-| Module | Responsibility |
-| --- | --- |
-| `apps/server/src/sourceproxy/proxy.ts` | Listener, acquisition deduplication, handles, keys, owners, prefetch expiry |
-| `apps/server/src/sourceproxy/sourceEntry.ts` | Current resolved link, size, pinned head/tail, refresh generation, playback hints |
-| `apps/server/src/sourceproxy/serve.ts` | HTTP ranges, memory/local/upstream pumping, extractor throttle |
-| `apps/server/src/sourceproxy/blockCache.ts` | Shared bounded rolling block cache |
-| `apps/server/src/sourceproxy/upstream.ts` | Keep-alive ranged HTTP client and typed failures |
+| Module                                       | Responsibility                                                         |
+| -------------------------------------------- | ---------------------------------------------------------------------- |
+| `apps/server/src/sourceproxy/proxy.ts`       | Listener, acquire coalescing, opaque keys, owners and prefetch expiry  |
+| `apps/server/src/sourceproxy/sourceEntry.ts` | Resolved link, warm regions, refresh, reader fronts and playback hints |
+| `apps/server/src/sourceproxy/serve.ts`       | Range responses, memory/local/upstream pumping and sharing waits       |
+| `apps/server/src/sourceproxy/blockCache.ts`  | Shared rolling blocks and playhead-aware LRU                           |
+| `apps/server/src/sourceproxy/pacer.ts`       | Per-response subtitle pacing                                           |
+| `apps/server/src/sourceproxy/upstream.ts`    | Keep-alive ranged HTTP transport and typed failures                    |
 
-`SourceEntry` is keyed by the **exact raw source URL**, not content hash or final CDN URL. Its `refs` is a set of owner strings (session UUID or `prefetch`), not a per-handle reference counter. `SourceHandle.release()` is idempotent, but callers must not treat repeated acquisitions under the same owner string as independently counted leases.
+A `SourceEntry` is keyed by the **exact raw gateway URL**, not a content hash or final media URL. `SourceHandle` exposes main/extractor URLs, probe, refresh, lead/hold hints and idempotent release. All consumers of an entry share the underlying bytes.
 
 ## Acquire-to-read flow
 
 ```mermaid
 sequenceDiagram
-    participant Owner as Prefetch or session
-    participant Proxy as SourceProxy
-    participant Entry as SourceEntry
-    participant CDN as Upstream
-    participant Worker as ffprobe or FFmpeg
-    Owner->>Proxy: acquire(rawUrl, owner)
-    Proxy->>Proxy: join pending/existing exact URL
-    Proxy->>CDN: resolve raw link
-    Proxy->>Entry: warm head and tail in parallel
-    Entry->>CDN: ranged reads
-    Entry-->>Proxy: size known (warming continues)
-    Proxy-->>Owner: main and extractor loopback handles
-    Worker->>Proxy: GET /src/opaque-key with Range
-    Proxy->>Entry: cached bytes or ranged upstream read
-    Entry-->>Worker: requested bytes
+    participant O as Session or prefetch
+    participant P as SourceProxy
+    participant E as SourceEntry
+    participant U as Upstream
+    participant W as ffprobe or FFmpeg
+    O->>P: acquire(rawUrl, owner)
+    P->>P: Join existing or pending exact URL
+    P->>U: Resolve gateway redirect
+    P->>E: Warm head and tail in parallel
+    E->>U: Ranged reads through shared budget
+    E-->>P: Size known, filling continues
+    P-->>O: Stable main and extractor handles
+    W->>P: Range GET on opaque loopback URL
+    P->>E: Memory hit or shared/ranged read
+    E-->>W: Requested bytes
 ```
 
-Listener binding is **127.0.0.1 only**, lazily started once; port zero chooses a free port. If a requested nonzero port is occupied, it logs a warning and falls back to an ephemeral port. Main and extractor keys each use 12 random bytes encoded base64url. Only GET/HEAD are allowed; unknown paths/keys return 404, writes 405.
+The listener binds **127.0.0.1 only**. Default configuration is public port +50, normally **8650**; port zero chooses a free port. An occupied configured nonzero port falls back to an ephemeral port with a warning. Main/extractor keys each contain 12 random bytes encoded base64url. GET/HEAD are accepted; unknown paths/keys return 404, writes 405 (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/config.ts`).
 
-New acquisitions coalesce in a pending map so simultaneous prefetch/playback uses one source creation. The resolver follows the gateway link with a one-byte ranged GET; acquisition then resolves as soon as warm-up learns total size, not when all warm bytes arrive.
+Concurrent acquisitions coalesce in a pending map. Gateway resolution uses a one-byte ranged GET and manually follows redirects, rejecting gateway placeholder clips before downloading them. Acquisition returns once warming knows resource size; it need not wait for the 16 MiB head or 8 MiB tail to finish. `headReady` settles on fill completion **or failure**, not a guarantee that every head byte is present (`apps/server/src/playback/resolveUrl.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
 
-`probe()` memoizes one successful/in-flight probe promise through the main loopback URL. A rejected probe clears that promise so a later attempt can retry. “Once” means once successfully per retained entry, not forever across eviction or failures.
+`probe()` shares one in-flight/successful ffprobe promise on the main loopback URL. Failure clears it, allowing a later attempt. A retained [prefetch](../features/prefetch.md) can therefore remove resolution/probe work from [playback startup](playback/index.md) (`apps/server/src/sourceproxy/proxy.ts`).
 
-## Shared ownership and lifetime
+## Ownership and lifetime
 
-All owners share opaque main/extractor URLs, probe, buffers, rolling blocks, refresh state, and **one playhead byte estimate and starved flag**. Playback hints are entry-level last-writer values, not per-session aggregates; concurrent viewers of the same raw URL do not get independently coordinated cache-priority/throttle decisions.
+Owner references are a **set of strings**: normally a session UUID or `prefetch`. Repeated acquisitions with the same owner are not independent counted leases. Releasing the last owner drops key/map entries, rolling blocks and pinned regions; future reads of those URLs return 404 (`apps/server/src/sourceproxy/proxy.ts`).
 
-Releasing the last distinct owner drops map/key entries, rolling blocks, and pinned regions; old URLs then return 404. An active session keeps an entry alive even after a prefetch lease expires. [Prefetch](../features/prefetch.md) owns its scheduling policy; proxy retention defaults are:
+Prefetch-only retention defaults to **3 entries**, with oldest-used entries dropped when necessary. The `prefetch` owner expires after **10 minutes idle**, checked every **30 seconds**. A live session owner keeps the entry after prefetch expiry. Closing refuses new acquisitions, releases the download gate, drops sources, destroys upstream agents and closes HTTP connections.
 
-- At most **3 prefetch-only entries**, dropping oldest-used entries when acquiring another.
-- A **10-minute idle TTL** for the `prefetch` owner, checked every **30 seconds**.
-- Activity updates last-used time; TTL is not a fixed ten minutes from creation.
+Shared state needs care:
 
-Dropping the entry invalidates future key lookups and releases cached regions; it is not described here as an immediate cancellation barrier for every already-open read. `close()` drops entries, destroys upstream agents, closes HTTP connections, and refuses new acquisitions with `shutting_down`.
+- Encoder leads are recorded **per owner**, and the **smallest** lead controls shared encoder priority/read-ahead. One viewer needing data keeps the shared main URL reading (`apps/server/src/sourceproxy/sourceEntry.ts`).
+- Cache playhead byte estimate and extractor pacing limit remain **entry-wide last-writer values**. They are not independent per-viewer cache policies (`apps/server/src/sourceproxy/proxy.ts`).
+- Extractor holds are keyed by run ID on that entry. Handles do not add a session namespace to run IDs.
+- Entry release invalidates future lookup; do not treat it as a universal immediate cancellation barrier for every already-open read.
 
-## Cache layout and memory limits
+## Cache layout
 
-| Region | Default | Behavior |
-| --- | --- | --- |
-| Head | Up to **16 MiB** per remote source | Filled progressively from byte zero |
-| Tail | Up to **8 MiB** per remote source | Suffix request; useful for container indexes |
-| Rolling cache | **1 MiB** complete aligned blocks | Populated by main-consumer upstream reads only |
-| Global rolling cap | **1.5 GiB** | Across all sources |
-| Per-source rolling cap | **768 MiB** | Prevents one source consuming the whole rolling cache |
-| Behind-playhead preference | **96 MiB** | Prefer eviction of blocks ending this far behind the estimated player byte position |
+| Region                     |                 Default | Behavior                                              |
+| -------------------------- | ----------------------: | ----------------------------------------------------- |
+| Pinned head                | Up to **16 MiB/source** | Progressive fill from byte zero                       |
+| Pinned tail                |  Up to **8 MiB/source** | Suffix read for container indexes                     |
+| Rolling block              |               **1 MiB** | Whole aligned blocks from either encoder or extractor |
+| Global rolling cap         |             **512 MiB** | Across entries                                        |
+| Per-source rolling cap     |             **384 MiB** | Prevent one entry taking the whole pool               |
+| Behind-playhead preference |              **96 MiB** | Evict blocks ending at least this far behind first    |
 
-The rolling cap **does not include pinned head/tail buffers**, in-flight responses, cue stores, or other process memory. Head and tail may overlap on small sources. Cache statistics expose rolling bytes/blocks/evictions, not total RSS.
+Defaults are in `apps/server/src/sourceproxy/sourceEntry.ts` and `apps/server/src/sourceproxy/blockCache.ts`. Rolling limits exclude pinned regions, in-flight chunks, subtitle cues and the rest of Node's memory; they are not total RSS limits.
 
-Serving first uses valid filled head/tail bytes, then rolling blocks, then upstream. Requests can consume the beginning of a region before the rest fills. Partial warm data survives download failure; missing remainder can be fetched on demand. Without suffix-range support, tail warming is abandoned and later reads fetch on demand.
+Serving checks filled head, filled tail, rolling blocks, then upstream. A partially filled region can serve its current prefix; a warm failure preserves received bytes and demand reads fetch missing remainder. Without suffix-range support, tail warming is abandoned. Local resolved paths stream directly from disk without remote cache or download/read-ahead gating (`apps/server/src/sourceproxy/serve.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
 
-The rolling cache uses global recency order: evict the least-recent candidate sufficiently behind its source playhead, otherwise ordinary LRU. Per-source enforcement restricts victims to that source. Playhead fraction is clamped to [0,1] and multiplied by file size—an approximation, not a time-to-byte index.
+The block cache uses global recency order. Evict the least-recent block sufficiently behind its owner's approximate playhead, otherwise ordinary LRU; per-source pressure restricts victims to that source. Playhead is `clamp(position/duration) × fileSize`, not a container time-to-byte index (`apps/server/src/sourceproxy/blockCache.ts`, `apps/server/src/playback/manager.ts`).
 
-Only whole aligned blocks are retained; a read beginning mid-block skips collection until the next boundary, and trailing partial blocks are not cached. Upstream reads stop before cached blocks or tail and scan at most 1,024 block indexes ahead. Repeated completed reads can reuse bytes; there is no in-flight miss coalescer guaranteeing concurrent readers never download the same range.
+Only complete aligned blocks are collected. A mid-block start skips to the next boundary and trailing partial blocks are not retained. Upstream reads stop before cached blocks/tail and scan at most **256** block indexes ahead (`apps/server/src/sourceproxy/serve.ts`).
 
-## Range transport, priority, and recovery
+### Sharing active reads
 
-Single explicit, open-ended, and suffix ranges receive 206 with Content-Range; ordinary GET gets 200. Unsatisfiable starts/zero suffixes receive 416. Malformed/multi-range headers fall back to the whole resource rather than multipart support. HEAD returns headers without a body. Local resolved file paths use the same loopback/range contract but stream directly from disk, without remote caching.
+**Extractors populate the same rolling cache as encoders.** Either reader can pay for a range first; the later one can use memory. A reader can wait for another active upstream front that is within **8 MiB** or is finishing the same block. It polls every **20 ms**, for at most **1.5 seconds**, before fetching for itself (`apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/sourceproxy/serve.ts`).
 
-Remote on-demand reads require the upstream to honor the requested start. A server that only returns whole-body 200 can warm the head/learn size but cannot satisfy arbitrary nonzero seeks. Backpressure is respected; disconnecting the loopback reader aborts its upstream request. Once headers are sent, a failure destroys the response rather than attempting a new JSON error body.
+This is bounded duplicate avoidance, not a guarantee of exactly one request per range: unaligned partials, eviction, distant fronts or a timed-out sharing wait can still cause refetches. Regression tests cover sequential reuse in both directions and a trailing reader (`apps/server/test/sourceproxy/sharing.test.ts`).
 
-The keep-alive client permits 32 sockets per HTTP/HTTPS agent, a **30-second socket idle timeout**, and up to **3 redirects**. Opening a range allows **4 attempts**:
+## Range transport and recovery
 
-- 401/403/404/410 trigger one fresh gateway resolution.
-- Network failures or status ≥429 are transient; delays increase by 250 ms per attempt, with refresh after repeated trouble.
-- Generation checks and a shared refresh promise coalesce readers failing on the same expired link.
-- A body that fails after delivering bytes resumes from its last position. Three consecutive no-progress reads fail the pump.
+Single explicit, open-ended and suffix ranges produce 206/Content-Range; ordinary GET produces 200. Unsatisfiable starts/zero suffixes give 416. Malformed/multiple ranges fall back to whole-resource behavior rather than multipart output. HEAD sends headers only (`apps/server/src/sourceproxy/serve.ts`).
 
-Refreshing changes the upstream link but preserves existing cache/probe state, assuming the raw URL still identifies the same resource. Explicit video recovery can also request refresh; see [playback lifecycle](playback/lifecycle.md).
+Remote demand reads require the upstream to honor their start; a whole-body-only upstream can warm byte zero but cannot fulfill arbitrary nonzero seeks. Responses honor downstream backpressure; disconnect aborts upstream. Once headers are sent, errors tear down the response rather than return a second JSON body.
 
-Extractors read existing memory but do not populate rolling blocks. Their **upstream** reads slow to **2 MiB/s** while the shared source is encoder-starved; main reads and memory reads are exempt. This limits a full subtitle scan from displacing playback's useful cache. Playback supplies starvation hints based on lead/speed and temporary initial bursts; see [subtitles](playback/subtitles.md).
+The keep-alive client allows **32 sockets per HTTP/HTTPS agent**, **30-second socket idle timeout**, and up to **3 redirects**. `SourceEntry.open()` permits **4 attempts** (`apps/server/src/sourceproxy/upstream.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`):
 
-## Integrations and modification entry points
+- 401/403/404/410 request fresh gateway resolution once.
+- Network errors or statuses ≥429 are transient; increasing 250 ms delays and refresh after repeated trouble are used.
+- Generation checks plus one shared refresh promise coalesce readers failing on the same expired link.
+- A body failure after progress resumes at the next unread byte; three consecutive no-progress demand reads fail the pump.
 
-The [playback manager](playback/index.md) and [prefetch service](../features/prefetch.md) acquire/release handles; ffprobe, video FFmpeg, and subtitle FFmpeg read those URLs. Raw/CDN locations are kept off their command lines; typed upstream errors omit URLs, and refresh logs contain no raw link.
+Refresh changes the location but retains probe/cache state, assuming the raw link still names the same resource. Refresh failures produce a redacted warning/error event at most once per **30 seconds** across the proxy. [Encoder recovery](playback/lifecycle.md) can also request refresh explicitly (`apps/server/src/sourceproxy/proxy.ts`).
 
-Change lifetime/owner semantics in `apps/server/src/sourceproxy/proxy.ts`; warm-up/retry policy in `apps/server/src/sourceproxy/sourceEntry.ts`; read boundaries and throttle in `apps/server/src/sourceproxy/serve.ts`; memory budget/eviction in `apps/server/src/sourceproxy/blockCache.ts`. Do not bypass the handle by independently resolving CDN URLs in an encoder. See [security](../security.md) for the public/internal trust boundaries rather than interpreting opaque keys as general user authentication.
+## Download and read-ahead integration
 
-## Measured scope and test evidence
+Head/tail warming and demand upstream bytes pass through one [global download gate](network.md). Cached and local-file reads do not spend its tokens. The initial gateway redirect resolver itself is outside that media-body gate (`apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/playback/resolveUrl.ts`).
 
-Recursive working-tree enumeration finds **5 source `.ts` files**, **2 `*.test.ts` files**, and **1 helper `.ts` file** in `apps/server/src/sourceproxy` and `apps/server/test/sourceproxy`. Scope excludes playback resolver/probe, callers, and routes. Scoped `git log origin/main --format="%cn <%ce>" -- apps/server/src/sourceproxy apps/server/test/sourceproxy` has **1 unique committer**, VeroxAUS.
+Remote loopback pumps wait at the read-ahead boundary before even serving cached bytes. An upstream response is cut at the hold so buffered network data does not keep streaming; the loopback reader stays connected until released. Extractors use run-specific URLs for independent holds and per-response local pacing. Both remain subject to the aggregate cap; [subtitles](playback/subtitles.md) explains heavy-source/warmup limits.
 
-Read tests assert progressive warm reads, byte-exact ranges, cache reuse, extractor nonpollution/throttle, disconnect aborts, refresh after expiry, transient 503 retry, shared probe/owners, TTL/entry limit, local files, and cache eviction preferences. Tests were **not executed** for this documentation, and counters are not a claim of an external metrics backend. `upstreamRequests`/`upstreamBytes` count demand-pump activity, not every resolver or background warm request.
+## Modification and test pointers
+
+Preserve opaque handle ownership rather than resolving CDN URLs inside encoders. Change lifetime in the proxy, warming/refresh/front coordination in the entry, range boundaries in serving and budgets in the block cache. [Security](../security.md) describes the LAN/internal trust boundary; opaque keys are not user authentication.
+
+Measured scope: **6 source `.ts` / 7 `*.test.ts` / 2 helper files**, test/code ratio **1.17**, under `apps/server/src/sourceproxy` and `apps/server/test/sourceproxy`. Scoped `origin/main` history has **1 unique human author, VeroxAUS**. Tests were inspected, not executed.
+
+Counters distinguish served/cache bytes from demand upstream bytes. `upstreamRequests`/`upstreamBytes` omit resolver and warm traffic; the network gate's meter includes warm media bodies. Do not equate rolling-cache statistics with process RSS or sum shared-source per-session rates as independent traffic (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/sourceproxy/serve.ts`).
 
 ## Key source files
 
-| Repository-root path | Role |
-| --- | --- |
-| `apps/server/src/sourceproxy/proxy.ts` | Handles, owners, listener, and retention |
-| `apps/server/src/sourceproxy/sourceEntry.ts` | Warm regions and link refresh |
-| `apps/server/src/sourceproxy/serve.ts` | Range response and byte pump |
-| `apps/server/src/sourceproxy/blockCache.ts` | LRU and playhead-aware memory policy |
-| `apps/server/src/sourceproxy/upstream.ts` | Ranged transport and failure types |
-| `apps/server/src/playback/resolveUrl.ts` | Initial gateway-to-CDN resolution |
-| `apps/server/test/sourceproxy/proxy.test.ts` | Proxy behavior expectations |
-| `apps/server/test/sourceproxy/blockCache.test.ts` | Cache limit and eviction expectations |
+| Repository-root path                                   | Role                                              |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| `apps/server/src/sourceproxy/proxy.ts`                 | Listener, handles, retention and network snapshot |
+| `apps/server/src/sourceproxy/sourceEntry.ts`           | Warm regions, shared leads/fronts and refresh     |
+| `apps/server/src/sourceproxy/serve.ts`                 | Range parser and byte pump                        |
+| `apps/server/src/sourceproxy/blockCache.ts`            | Global/per-source cache policy                    |
+| `apps/server/src/sourceproxy/upstream.ts`              | Typed ranged transport                            |
+| `apps/server/src/sourceproxy/pacer.ts`                 | Extractor response pacing                         |
+| `apps/server/src/playback/resolveUrl.ts`               | Initial gateway redirect/placeholder resolution   |
+| `apps/server/test/sourceproxy/proxy.test.ts`           | Ranges, cache, ownership, expiry and refresh      |
+| `apps/server/test/sourceproxy/sharing.test.ts`         | Encoder/extractor reuse and trailing readers      |
+| `apps/server/test/sourceproxy/readAheadWindow.test.ts` | Holds and smallest-owner lead behavior            |

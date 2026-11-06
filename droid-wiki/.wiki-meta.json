@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-11-05T07:07:06.910Z",
-  "commitHash": "b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf",
+  "generatedAt": "2026-11-06T11:30:03.976Z",
+  "commitHash": "bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406",
   "branch": "main",
-  "pageCount": 36,
+  "pageCount": 46,
   "topLevelSections": [
     "overview",
     "by-the-numbers",
@@ -16,6 +16,7 @@
     "deployment",
     "security",
     "how-to-monitor",
+    "cleanup-opportunities",
     "reference"
   ],
   "pageOrder": [
@@ -40,37 +41,44 @@
     "systems/playback/lifecycle.md",
     "systems/playback/subtitles.md",
     "systems/source-proxy.md",
+    "systems/network.md",
     "systems/gateway.md",
+    "systems/health.md",
+    "systems/telemetry.md",
     "features/index.md",
     "features/catalog.md",
     "features/stream-selection.md",
     "features/prefetch.md",
+    "features/downloads.md",
+    "features/viewing-progress.md",
     "packages/index.md",
     "packages/shared.md",
     "api/index.md",
     "deployment.md",
     "security.md",
-    "how-to-monitor.md",
+    "how-to-monitor/index.md",
+    "how-to-monitor/logging.md",
+    "how-to-monitor/metrics.md",
+    "how-to-monitor/tracing.md",
+    "how-to-monitor/alerting.md",
+    "cleanup-opportunities.md",
     "reference/index.md",
     "reference/configuration.md",
     "reference/data-models.md",
     "reference/dependencies.md"
   ],
   "sourceSnapshot": {
-    "includesUncommittedChanges": true,
-    "paths": [
-      "apps/server/src/playback/ffmpegArgs.ts",
-      "apps/server/test/playback/ffmpegArgs.test.ts"
-    ]
+    "includesUncommittedSourceChanges": false
   },
   "videoOverview": {
-    "status": "skipped",
-    "warnings": ["User declined video overview generation"]
+    "status": "failed",
+    "warnings": [
+      "HyperFrames doctor reported missing FFmpeg and FFprobe. Video rendering was skipped; the documentation upload is unaffected."
+    ]
   },
   "warnings": [
-    "Factory upload preflight unavailable: droid CLI is not on PATH.",
-    "Remote wiki-read failed: droid command not found. Full local generation used.",
-    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa before requesting screenshots.",
-    "Upload not attempted because the droid CLI is unavailable."
+    "git diff from the previous wiki commit failed: fatal: bad object b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf. Full wiki regeneration used.",
+    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa to enable screenshot capture.",
+    "HyperFrames doctor reported missing FFmpeg and FFprobe. Video rendering was skipped; the documentation upload is unaffected."
   ]
 }

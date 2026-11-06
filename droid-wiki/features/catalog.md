@@ -1,41 +1,74 @@
-# Catalog metadata
+# Catalog
+
 Active contributors: VeroxAUS
 
-The catalog adapts TMDB responses into HomeStream's shared movie, show and episode shapes. It provides metadata, not stream URLs or a browser catalog UI.
+## Purpose
 
-## Key abstractions
+The catalog converts TMDB metadata into shared movie, show and episode shapes, then combines it with local viewing/download state. Home includes trending/popular rows, persisted continue watching and a featured banner (`apps/server/src/tmdb/service.ts`, `apps/server/src/home/service.ts`, `apps/server/src/routes/catalog.ts`).
 
-| Abstraction | Source | Role |
-| --- | --- | --- |
-| TmdbService | `apps/server/src/tmdb/service.ts` | Home, search, movie, show, season; requests and in-flight sharing |
-| TmdbCache | `apps/server/src/tmdb/cache.ts` | SQLite JSON caching and expiry |
-| Normalizers | `apps/server/src/tmdb/normalize.ts` | Stable shapes, images, dates, rating and external IDs |
-| HTTP adapter | `apps/server/src/routes/catalog.ts` | Validates queries/IDs; returns catalog responses |
-| Contracts | `packages/shared/src/catalog.ts` | Request/response schemas and inferred types |
+## Metadata and route flow
 
-## Request flow
+`TmdbService` in `apps/server/src/tmdb/service.ts` fetches image configuration and normalizes upstream responses through `apps/server/src/tmdb/normalize.ts`. Home requests weekly trending movies/shows and popular movies/shows in parallel. Search uses the first page of multi-search, disables adult results and drops people/non-media results. Requests use `language=en-US`.
 
-The service fetches TMDB image configuration, then metadata. Home loads weekly trending movies/shows and popular movies/shows in parallel. The route adds `continueWatching: []`; persisted watch progress is not surfaced by this endpoint yet. Search uses `/search/multi`, page 1, adult results disabled, and drops people and any non-movie/non-TV result. Requests use `language=en-US`.
+Movie/show details append external IDs. A valid IMDb ID bridges into [stream discovery](stream-selection.md); metadata does not expose playable media URLs. Normalization supplies nullable images/dates/runtimes, one-decimal ratings and original language for subtitle defaults. Show summaries omit season zero from watch order; the explicit season route still accepts zero. Episodes are sorted numerically.
 
-Movie/show details append external IDs; a valid `tt`-prefixed IMDb ID bridges into [stream discovery](stream-selection.md). Show seasons exclude season zero (“Specials”) and sort numerically; the season route still accepts explicit season zero. Episodes are sorted numerically. Missing images become null, title/name fallbacks preserve useful labels, ratings round to one decimal, and positive runtimes round to integer minutes.
+Image references use configured secure image hosting with a fallback base, at sizes `w342` for posters, `w1280` for backdrops and `w300` for stills. HomeStream returns these references rather than downloading images locally (`apps/server/src/tmdb/normalize.ts`).
 
-Image URLs use configuration's secure base or the default image base, with poster `w342`, backdrop `w1280`, and still `w300`. These are image references, not local image downloads.
+The route layer delegates `/api/home` to `HomeService`. Movie details add `download` only while tracking is pending; show details add pending episode `downloads` only when nonempty (`apps/server/src/routes/catalog.ts`). See [downloads](downloads.md) for their lifecycle.
+
+## Featured banner and recommendations
+
+`HomeService` in `apps/server/src/home/service.ts` reads locally watched titles, starts recommendation work alongside metadata/continue-watching reads, and calls the pure `buildFeatured` rule in `apps/server/src/home/featured.ts`.
+
+Banner slots take the first usable candidate in this order:
+
+1. Trending movie.
+2. “Because you watched” recommendation, when available.
+3. Trending show.
+4. Popular movie.
+5. Popular show.
+
+Every chosen item needs a backdrop and nonblank overview, and titles are deduplicated by media type/TMDB ID. Continuing titles are excluded initially. The recommendation slot also excludes the base title and every title with enough watched time. Backfill tries to reach **3 items**, first excluding continuing titles and then permitting them; it never exceeds **5**. Sparse upstream lists can still produce fewer than 3. `logoUrl` is omitted.
+
+The recommendation base is the most recent play by start time with **at least 60 seconds of credited watched time**, not merely a seeked position. TV bases use the show title (`apps/server/src/db/history.ts`). Recommendation failures, not-found results or the default **1500 ms** budget remove only that slot; they do not fail Home. The budget begins alongside the other reads, does not cancel the underlying request and does not cap total Home latency. Other metadata failures can still fail Home.
+
+The planned banner-rotation flag is a client-side registry entry, not an implemented carousel (`packages/shared/src/flags.ts`, `apps/web/src/App.tsx`).
 
 ## Cache and upstream policy
 
-| Data | TTL |
-| --- | --- |
-| Home lists | 1 hour |
-| Movie/show/season details | 24 hours |
-| Image configuration | 24 hours |
-| Search | 10 minutes |
+`TmdbCache` in `apps/server/src/tmdb/cache.ts` stores raw JSON in SQLite:
 
-`tmdb_cache` stores raw JSON by logical key. Expired or corrupt entries are deleted when read; the cache also exposes explicit expiry purging. Search cache keys collapse whitespace and lowercase the normalized query. Identical concurrent misses share one promise per key; only successful responses are cached, and there is no stale fallback.
+| Data                                  | TTL        |
+| ------------------------------------- | ---------- |
+| Trending/popular lists                | 1 hour     |
+| Details, seasons, image configuration | 24 hours   |
+| Recommendations                       | 24 hours   |
+| Search                                | 10 minutes |
 
-A token is required even before serving a cache hit; missing configuration produces 503 `config_missing`. Each network attempt has a 10-second timeout. The service makes at most two attempts with a 300 ms retry delay: network/JSON failures and 429/5xx can retry. TMDB 400/404/422 become not-found; 401 becomes 502 `tmdb_auth_failed`; other failures become 502 `tmdb_unavailable`.
+Expired/corrupt rows are deleted on read. Search cache keys collapse whitespace and lowercase the query. Identical concurrent misses share a promise; successful responses are cached, failures are not, and there is no stale fallback.
 
-## Change and test entrypoints
+A configured token is required even to serve a cached response. Missing configuration yields 503 `config_missing`. Each network attempt has a **10-second** timeout, with at most **two attempts** and a **300 ms** retry delay. Network/JSON errors and 429/5xx retry; 400/404/422 become not-found, 401 becomes 502 `tmdb_auth_failed`, and other exhausted failures become 502 `tmdb_unavailable` (`apps/server/src/tmdb/service.ts`).
 
-Adjust upstream operations/retries in `apps/server/src/tmdb/service.ts`, TTLs/storage in `apps/server/src/tmdb/cache.ts`, normalization in `apps/server/src/tmdb/normalize.ts`, and exposed routes in `apps/server/src/routes/catalog.ts`. Keep [shared contracts](../packages/shared.md) aligned.
+## Modification entry points
 
-Measured subsystem: **3 source files** under `apps/server/src/tmdb/`, **2 dedicated test files** under `apps/server/test/tmdb/`, **1 unique committer** in the scoped source history (`%cn <%ce>`). Counts use tracked `.ts` and `*.test.ts`, excluding `fixtures.ts`, route/shared files and the additional `apps/server/test/live/tmdb.live.test.ts`. Dedicated tests cover normalization, routes, cache persistence/expiry, concurrent sharing and errors. Tests were read, not executed for this documentation.
+Change normalization in `apps/server/src/tmdb/normalize.ts`, transport/cache operations in `apps/server/src/tmdb/service.ts`, Home orchestration in `apps/server/src/home/service.ts`, and slot rules in `apps/server/src/home/featured.ts`. Keep [shared catalog contracts](../packages/shared.md) and [viewing progress](viewing-progress.md) aligned.
+
+## Key source files
+
+| File                                                   | Purpose                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| `apps/server/src/tmdb/service.ts`                      | Upstream metadata, retries and in-flight sharing         |
+| `apps/server/src/tmdb/cache.ts`                        | Persistent cache and TTLs                                |
+| `apps/server/src/tmdb/normalize.ts`                    | Stable metadata shapes                                   |
+| `apps/server/src/home/service.ts`                      | Home and bounded recommendation orchestration            |
+| `apps/server/src/home/featured.ts`                     | Pure banner selection                                    |
+| `apps/server/src/db/history.ts`                        | Watched-title recommendation bases                       |
+| `apps/server/src/routes/catalog.ts`                    | Catalog HTTP adapters and download extensions            |
+| `packages/shared/src/catalog.ts`                       | Metadata, featured and Home contracts                    |
+| `apps/server/test/home/featured.test.ts`               | Banner rules                                             |
+| `apps/server/test/integration/catalog-routes.test.ts`  | Metadata routes, cache and upstream failures             |
+| `apps/server/test/integration/progress-routes.test.ts` | Home with history, recommendations and continue watching |
+
+## Measured scope
+
+`apps/server/src/tmdb/` plus `apps/server/src/home/`: **5 source files**. Matching unit-test directories: **2 test files**, **0.40 test-to-code file ratio**. Route/integration/live tests, fixtures and DB/shared files are excluded from that count. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots.
