@@ -331,6 +331,31 @@ describe('expired links', () => {
     expect(resolves).toHaveLength(1);
   }, 30_000);
 
+  it('reports a link that cannot be re-resolved as one error event, without any URL', async () => {
+    const events: { level: string; message: string }[] = [];
+    let failResolve = false;
+    const { proxy } = rig({
+      resolveUrl: async () => {
+        if (failResolve) throw new Error(`gateway down ${cdn.url}`);
+        return `${cdn.url}?gen=1`;
+      },
+      onEvent: (event) => events.push(event),
+    });
+    const handle = await proxy.acquire('gw://refresh-fails', 'session-1');
+    await settleHead(handle);
+    failResolve = true;
+    cdn.expireLinksBefore(2);
+    try {
+      await read(handle.url, `bytes=${41 * MB}-${42 * MB - 1}`).catch(() => undefined);
+      await read(handle.url, `bytes=${45 * MB}-${46 * MB - 1}`).catch(() => undefined);
+    } finally {
+      cdn.expireLinksBefore(0);
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ level: 'error', message: expect.stringContaining('could not be refreshed') });
+    expect(events[0]?.message).not.toMatch(/127\.0\.0\.1|http/);
+  }, 60_000);
+
   it('fails the acquire with a redacted stream_unavailable error when the source cannot be opened', async () => {
     const dead = await startStubCdn({ size: 1 * MB });
     await dead.close();

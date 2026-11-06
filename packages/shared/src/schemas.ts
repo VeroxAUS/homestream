@@ -71,6 +71,7 @@ export const EVENT_SOURCES = [
   'session',
   'health',
   'server',
+  'prefetch',
 ] as const;
 export const EventSourceSchema = z.enum(EVENT_SOURCES);
 export type EventSource = z.infer<typeof EventSourceSchema>;

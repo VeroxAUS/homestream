@@ -126,6 +126,12 @@ export class TmdbService {
     return season;
   }
 
+  /** Health probe: fetches /configuration straight from TMDB, bypassing the cache, so token and network problems show up. */
+  async ping(): Promise<void> {
+    this.requireToken();
+    await this.request('/configuration', {});
+  }
+
   private async images(): Promise<ImageConfig> {
     const raw = await this.cached('configuration', TTL_MS.config, '/configuration');
     return { baseUrl: normalizeImageBase(raw) };

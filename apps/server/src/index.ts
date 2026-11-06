@@ -48,6 +48,8 @@ async function main(): Promise<void> {
     `HomeStream server ${SERVER_VERSION} listening`,
   );
 
+  app.ctx.health.start();
+
   const discovery = startDiscovery({
     name: config.serverName,
     version: SERVER_VERSION,

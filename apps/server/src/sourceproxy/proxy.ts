@@ -37,6 +37,8 @@ export interface SourceProxyOptions {
   /** Seconds of media an encoder may read ahead of the player, and the lead below which it reads again. */
   readAheadSec?: number;
   readAheadResumeSec?: number;
+  /** Receives problems worth a log-view entry (a stream link that could not be refreshed). */
+  onEvent?: (event: { level: 'warn' | 'error'; message: string }) => void;
 }
 
 /** What a session or prefetch holds on to: loopback URLs for ffprobe/ffmpeg plus the cached probe and playback hints. */
@@ -100,6 +102,7 @@ export class SourceProxy {
   private listening: Promise<number> | null = null;
   private sweeper: NodeJS.Timeout | null = null;
   private closed = false;
+  private lastRefreshFailureAt = 0;
 
   constructor(private readonly options: SourceProxyOptions) {
     this.cache = new BlockCache(options.globalCapBytes ?? GLOBAL_CAP_BYTES, options.perSourceCapBytes ?? PER_SOURCE_CAP_BYTES);
@@ -192,6 +195,16 @@ export class SourceProxy {
     });
   }
 
+  /** At most one entry per 30 s, however many readers hit the same dead link. */
+  private reportRefreshFailure(): void {
+    const now = Date.now();
+    if (now - this.lastRefreshFailureAt < 30_000) return;
+    this.lastRefreshFailureAt = now;
+    const message = 'The stream link stopped working and could not be refreshed from the gateway.';
+    this.options.logger.warn(message);
+    this.options.onEvent?.({ level: 'error', message });
+  }
+
   private async create(rawUrl: string, owner: string): Promise<SourceEntry> {
     const resolved = await this.options.resolveUrl(rawUrl);
     const entry = new SourceEntry(rawUrl, resolved, { main: newKey(), extractor: newKey() }, {
@@ -201,6 +214,7 @@ export class SourceProxy {
         this.counters.linkRefreshes += 1;
         this.options.logger.info('Stream link refreshed after it stopped working');
       },
+      onRefreshFailed: () => this.reportRefreshFailure(),
       gate: this.gate,
       readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
       resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,

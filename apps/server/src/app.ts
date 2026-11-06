@@ -5,7 +5,11 @@ import type { AppContext } from './context.js';
 import { openDatabase, type Db } from './db/index.js';
 import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
+import { logEvent } from './events/record.js';
 import { GatewayClient } from './gateway/client.js';
+import type { HealthFetch } from './health/checks/gateway.js';
+import type { CommandRunner, DiskProbe } from './health/exec.js';
+import { HealthService } from './health/service.js';
 import { HomeService } from './home/service.js';
 import { allowEmptyJsonBody } from './http/emptyJsonBody.js';
 import { createLogger } from './logger.js';
@@ -18,6 +22,7 @@ import { SourceProxy, type SourceProxyOptions } from './sourceproxy/proxy.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
+import { registerHealthRoutes } from './routes/health.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerInfoRoutes } from './routes/info.js';
 import { registerPrefetchRoutes } from './routes/prefetch.js';
@@ -52,6 +57,8 @@ export interface BuildAppOptions {
     | 'readAheadResumeSec'
   >;
   prefetch?: Pick<PrefetchServiceOptions, 'streamIdBudgetMs'>;
+  /** Test seams for the health checks: network, child processes, disk space and timing. */
+  health?: { fetch?: HealthFetch; run?: CommandRunner; diskProbe?: DiskProbe; now?: () => number; intervalMs?: number; liveIntervalMs?: number };
   heartbeatMs?: number;
 }
 
@@ -80,13 +87,15 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     maxDownloadMbps: config.maxDownloadMbps,
     readAheadSec: config.readAheadSec,
     readAheadResumeSec: config.readAheadResumeSec,
+    onEvent: (event) => logEvent({ db, bus }, { ...event, source: 'session' }),
     ...options.sourceProxy,
   });
   const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, proxy: sourceProxy, ...playbackOptions });
   const prefetch = new PrefetchService({ tmdb, streams, proxy: sourceProxy, db, bus, logger, ...options.prefetch });
   const continueWatching = new ContinueWatchingService({ db, tmdb, logger });
   const home = new HomeService({ db, tmdb, continueWatching, logger });
-  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, sourceProxy, prefetch, continueWatching, home };
+  const health = new HealthService({ config, db, bus, logger, gateway, tmdb, playback, sourceProxy, ...options.health });
+  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, sourceProxy, prefetch, continueWatching, home, health };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -136,9 +145,11 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerProgressRoutes(app, ctx);
   registerHistoryRoutes(app, ctx);
   registerPrefetchRoutes(app, ctx);
+  registerHealthRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
+    health.stop();
     await playback.close();
     await sourceProxy.close();
     if (!options.gateway) gateway.close();

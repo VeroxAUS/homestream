@@ -54,7 +54,26 @@ describe('redact', () => {
 
   it('hides TorBox CDN URLs', () => {
     const out = redact('resolved https://store-012.wnam.tb-cdn.io/dl/abc/def.mkv?x=1 ok');
-    expect(out).toBe('resolved https://store-012.wnam.tb-cdn.io/<redacted> ok');
+    expect(out).toBe('resolved <redacted> ok');
+  });
+
+  it('hides bare TorBox CDN hosts, e.g. from DNS errors', () => {
+    expect(redact('getaddrinfo ENOTFOUND store-012.wnam.tb-cdn.io')).toBe('getaddrinfo ENOTFOUND <redacted>');
+    expect(redact('connect ECONNREFUSED https://store-012.tb-cdn.io:443')).not.toContain('tb-cdn');
+  });
+
+  it('hides the gateway host, path and id from any message that mentions them', () => {
+    registerSecretUrl(GATEWAY);
+    const out = redact(
+      'getaddrinfo ENOTFOUND gw.example.test; GET https://gw.example.test/stremio/aaaa1111-uuid/ZZsecretBlob987654/stream/movie/tt1.json',
+    );
+    for (const needle of ['gw.example.test', 'aaaa1111-uuid', 'ZZsecretBlob987654']) expect(out).not.toContain(needle);
+  });
+
+  it('keeps loopback addresses readable when the gateway itself is a local stub', () => {
+    registerSecretUrl('http://127.0.0.1:9000/stremio/stubuser1/stubtoken22/manifest.json');
+    expect(redact('proxy at http://127.0.0.1:8650/src/key')).toBe('proxy at http://127.0.0.1:8650/src/key');
+    expect(redact('http://127.0.0.1:9000/stremio/stubuser1/stubtoken22/stream/movie/tt1.json')).not.toContain('stubtoken22');
   });
 
   it('leaves ordinary text alone', () => {
@@ -83,8 +102,11 @@ describe('redactDeep', () => {
 });
 
 describe('displayGatewayUrl', () => {
-  it('shows only the host', () => {
-    expect(displayGatewayUrl(GATEWAY)).toBe('https://gw.example.test/stremio/<redacted>/manifest.json');
+  it('shows only a redacted host class, never host, path or id', () => {
+    const label = displayGatewayUrl(GATEWAY);
+    expect(label).toBe('aiostreams (redacted)');
+    for (const needle of ['gw.example.test', 'stremio', 'aaaa1111', 'ZZsecretBlob987654', 'manifest.json']) expect(label).not.toContain(needle);
     expect(displayGatewayUrl(null)).toBeNull();
+    expect(displayGatewayUrl('  ')).toBeNull();
   });
 });

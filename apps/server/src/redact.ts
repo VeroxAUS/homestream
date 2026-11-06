@@ -10,7 +10,12 @@ const SECRET_PARAM =
   /([?&;\s"'])(token|apikey|api_key|api-key|key|access_token|auth|authorization|password|secret|sig|signature)=([^&\s"'\\]+)/gi;
 const BEARER = /\b(Bearer)\s+[A-Za-z0-9._~+/=-]{6,}/gi;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}/g;
-const CDN_URL = /(https?:\/\/[^\s/"'\\]*tb-cdn\.io)\/[^\s"'\\]*/gi;
+const CDN_URL = /https?:\/\/[^\s/"'\\]*tb-cdn\.io(?:[/?#][^\s"'\\]*)?/gi;
+const CDN_HOST = /\b(?:[a-z0-9-]+\.)*tb-cdn\.io\b/gi;
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || /^[\d.]+$/.test(hostname) || hostname.includes(':');
+}
 
 export function registerSecret(value: string | null | undefined): void {
   const trimmed = value?.trim();
@@ -24,6 +29,8 @@ export function registerSecretUrl(url: string | null | undefined): void {
   registerSecret(trimmed);
   try {
     const parsed = new URL(trimmed);
+    // The host identifies the user's AIOStreams instance, so it is hidden too (not loopback/IP hosts, which are ordinary).
+    if (!isLocalHost(parsed.hostname)) registerSecret(parsed.hostname);
     for (const segment of parsed.pathname.split('/')) {
       if (!segment || /^(stremio|manifest\.json)$/i.test(segment)) continue;
       registerSecret(segment);
@@ -52,7 +59,8 @@ export function redact(input: string): string {
     if (encoded !== secret) out = out.split(encoded).join(REDACTED);
   }
   out = out.replace(ADDON_PATH, `$1${REDACTED}/`);
-  out = out.replace(CDN_URL, `$1/${REDACTED}`);
+  out = out.replace(CDN_URL, REDACTED);
+  out = out.replace(CDN_HOST, REDACTED);
   out = out.replace(SECRET_PARAM, `$1$2=${REDACTED}`);
   out = out.replace(BEARER, `$1 ${REDACTED}`);
   out = out.replace(JWT, REDACTED);
@@ -77,12 +85,9 @@ function walk(value: unknown, seen: WeakSet<object>): unknown {
   return result;
 }
 
-/** The only form in which the gateway URL may be shown to a user. */
+export const GATEWAY_LABEL = 'aiostreams (redacted)';
+
+/** The only form in which the gateway may be shown (logs, events, health, errors): a host class, never host, path or id. */
 export function displayGatewayUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    return `https://${new URL(url).host}/stremio/${REDACTED}/manifest.json`;
-  } catch {
-    return `https://${REDACTED}/stremio/${REDACTED}/manifest.json`;
-  }
+  return url?.trim() ? GATEWAY_LABEL : null;
 }

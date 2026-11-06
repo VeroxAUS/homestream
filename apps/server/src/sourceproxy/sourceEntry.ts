@@ -39,6 +39,8 @@ export interface SourceEntryDeps {
   upstream: UpstreamClient;
   resolve: UrlResolver;
   onRefresh: () => void;
+  /** Called when re-resolving the gateway link failed (the readers then fail with the original error). */
+  onRefreshFailed?: (error: unknown) => void;
   /** The shared cap on upstream bytes. */
   gate: DownloadGate;
   readAheadSec: number;
@@ -400,6 +402,10 @@ export class SourceEntry implements BlockOwner {
         this.cdnUrl = url;
         this.generation += 1;
         this.deps.onRefresh();
+      })
+      .catch((error: unknown) => {
+        this.deps.onRefreshFailed?.(error);
+        throw error;
       })
       .finally(() => {
         this.refreshing = null;

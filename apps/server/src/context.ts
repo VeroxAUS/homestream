@@ -2,6 +2,7 @@ import type { Config } from './config.js';
 import type { Db } from './db/index.js';
 import type { EventBus } from './events/bus.js';
 import type { GatewayClient } from './gateway/client.js';
+import type { HealthService } from './health/service.js';
 import type { HomeService } from './home/service.js';
 import type { PlaybackManager } from './playback/manager.js';
 import type { PrefetchService } from './prefetch/service.js';
@@ -24,4 +25,5 @@ export interface AppContext {
   prefetch: PrefetchService;
   continueWatching: ContinueWatchingService;
   home: HomeService;
+  health: HealthService;
 }

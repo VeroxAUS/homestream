@@ -27,6 +27,7 @@ const KNOWN_KEYS = [
   'READ_AHEAD_SEC',
   'READ_AHEAD_RESUME_SEC',
   'HOMESTREAM_WEB_DIR',
+  'HEALTH_NVENC_TEST',
 ] as const;
 
 export const DEFAULT_PORT = 8600;
@@ -60,6 +61,8 @@ export interface Config {
   readAheadSec: number;
   /** Reading resumes once the lead is below this many seconds. */
   readAheadResumeSec: number;
+  /** Whether the ffmpeg health check runs its 1 s NVENC test encode. Off: only versions and encoder names are checked. */
+  healthNvencTest: boolean;
   serverName: string;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
@@ -178,6 +181,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     maxDownloadMbps: limits.maxDownloadMbps,
     readAheadSec: limits.readAheadSec,
     readAheadResumeSec: limits.readAheadResumeSec,
+    healthNvencTest: !/^(0|false|off|no)$/i.test(values.HEALTH_NVENC_TEST ?? ''),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,
