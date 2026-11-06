@@ -1,0 +1,77 @@
+{
+  "organization": "<your-sentry-org>",
+  "detectors": [
+    {
+      "name": "Error Monitor",
+      "project": "homestream-server",
+      "enabled": true
+    }
+  ],
+  "workflows": [
+    {
+      "name": "HomeStream server: new or returning issue",
+      "project": "homestream-server",
+      "detectors": ["Issue Stream"],
+      "enabled": true,
+      "environment": null,
+      "config": { "frequency": 60 },
+      "triggers": {
+        "logicType": "any-short",
+        "conditions": [
+          { "type": "first_seen_event", "comparison": true, "conditionResult": true },
+          { "type": "regression_event", "comparison": true, "conditionResult": true },
+          { "type": "reappeared_event", "comparison": true, "conditionResult": true }
+        ]
+      },
+      "actionFilters": [
+        {
+          "logicType": "any-short",
+          "conditions": [],
+          "actions": [
+            {
+              "type": "email",
+              "integrationId": null,
+              "data": { "fallthroughType": "ActiveMembers" },
+              "config": { "targetType": "issue_owners", "targetIdentifier": null }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "HomeStream server: issue repeating",
+      "project": "homestream-server",
+      "detectors": ["Issue Stream"],
+      "enabled": true,
+      "environment": null,
+      "config": { "frequency": 360 },
+      "triggers": {
+        "logicType": "any-short",
+        "conditions": [
+          { "type": "new_high_priority_issue", "comparison": true, "conditionResult": true },
+          { "type": "existing_high_priority_issue", "comparison": true, "conditionResult": true }
+        ]
+      },
+      "actionFilters": [
+        {
+          "logicType": "all",
+          "conditions": [
+            {
+              "type": "event_frequency_count",
+              "comparison": { "value": 20, "interval": "1h" },
+              "conditionResult": true
+            }
+          ],
+          "actions": [
+            {
+              "type": "email",
+              "integrationId": null,
+              "data": { "fallthroughType": "ActiveMembers" },
+              "config": { "targetType": "issue_owners", "targetIdentifier": null }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

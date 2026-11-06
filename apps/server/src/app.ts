@@ -8,13 +8,16 @@ import { DownloadService, type DownloadServiceOptions } from './downloads/servic
 import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { logEvent } from './events/record.js';
+import { ServerMetrics } from './metrics/serverMetrics.js';
 import { GatewayClient } from './gateway/client.js';
 import type { HealthFetch } from './health/checks/gateway.js';
 import type { CommandRunner, DiskProbe } from './health/exec.js';
 import { HealthService } from './health/service.js';
 import { HomeService } from './home/service.js';
 import { allowEmptyJsonBody } from './http/emptyJsonBody.js';
+import { CORS_ALLOWED_HEADERS, registerRequestObservability } from './http/observability.js';
 import { createLogger } from './logger.js';
+import { generateRequestId } from './requestContext.js';
 import { PlaybackManager, type PlaybackManagerOptions } from './playback/manager.js';
 import { createFfprobeRunner, type ProbeRunner } from './playback/probe.js';
 import { createUrlResolver, type UrlResolver } from './playback/resolveUrl.js';
@@ -28,13 +31,17 @@ import { registerEventRoutes } from './routes/events.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerInfoRoutes } from './routes/info.js';
+import { registerOpsRoutes } from './routes/ops.js';
 import { registerPrefetchRoutes } from './routes/prefetch.js';
 import { registerProgressRoutes } from './routes/progress.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerStatic, shouldServeSpaFallback } from './routes/static.js';
 import { registerStreamRoutes } from './routes/streams.js';
 import { StreamService } from './streams/service.js';
+import { createPlaybackObserver } from './telemetry/playbackObserver.js';
+import { createTelemetry, type Telemetry } from './telemetry/index.js';
 import { TmdbService } from './tmdb/service.js';
+import { SERVER_VERSION } from './version.js';
 
 export interface BuildAppOptions {
   logger?: FastifyBaseLogger;
@@ -81,6 +88,8 @@ export interface BuildAppOptions {
     liveIntervalMs?: number;
   };
   heartbeatMs?: number;
+  /** Replaces the telemetry built from `config.telemetry`; tests and the smoke command use it. */
+  telemetry?: Telemetry;
 }
 
 declare module 'fastify' {
@@ -96,6 +105,19 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   const logger: FastifyBaseLogger = options.logger ?? (ownedLogger as NonNullable<typeof ownedLogger>).logger;
   const db = options.db ?? openDatabase(config.dataDir);
   const bus = options.bus ?? new EventBus();
+  const telemetry =
+    options.telemetry ??
+    createTelemetry({
+      config: config.telemetry,
+      db,
+      logger: {
+        info: (message) => logger.info(message),
+        warn: (message) => logger.warn(message),
+        debug: (fields, message) => logger.debug(fields, message),
+      },
+      version: SERVER_VERSION,
+    });
+  const metrics = new ServerMetrics();
   const tmdb = options.tmdb ?? new TmdbService({ config, db, logger });
   const gateway = options.gateway ?? new GatewayClient({ config, db, logger });
   const streams = new StreamService(gateway, db);
@@ -121,9 +143,31 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     streams,
     downloads,
     proxy: sourceProxy,
+    observer: createPlaybackObserver(metrics, telemetry),
     ...playbackOptions,
   });
-  const prefetch = new PrefetchService({ tmdb, streams, proxy: sourceProxy, db, bus, logger, ...options.prefetch });
+  const prefetch = new PrefetchService({
+    tmdb,
+    streams,
+    proxy: sourceProxy,
+    db,
+    bus,
+    logger,
+    telemetry,
+    ...options.prefetch,
+  });
+  metrics.attach({
+    activeSessions: () => playback.activity().length,
+    encoderSpeeds: () => playback.activity().map((session) => session.encoder.speed),
+    gateway: () => ({
+      requests: gateway.stats.requests,
+      errors: gateway.stats.errors,
+      cacheHits: gateway.cacheStats.hits,
+      cacheMisses: gateway.cacheStats.misses,
+    }),
+    tmdb: () => tmdb.stats,
+    proxyCache: () => sourceProxy.stats().cache,
+  });
   const continueWatching = new ContinueWatchingService({ db, tmdb, logger });
   const home = new HomeService({ db, tmdb, continueWatching, logger });
   const health = new HealthService({
@@ -152,16 +196,26 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     continueWatching,
     home,
     health,
+    telemetry,
+    metrics,
   };
 
-  const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
+  // The header is sanitized in genReqId (Fastify would otherwise take any client value as is).
+  const app = Fastify({
+    loggerInstance: logger,
+    logController: new LogController({ disableRequestLogging: true }),
+    requestIdHeader: false,
+    genReqId: generateRequestId,
+  });
   app.decorate('ctx', ctx);
   allowEmptyJsonBody(app);
+  registerRequestObservability(app, ctx);
 
   await app.register(cors, {
     origin: '*',
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    exposedHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges'],
+    allowedHeaders: CORS_ALLOWED_HEADERS,
+    exposedHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges', 'X-Request-ID'],
     maxAge: 600,
   });
 
@@ -193,6 +247,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
     if (status >= 500) {
       request.log.error({ err: error }, 'Unhandled error');
+      telemetry.captureError(error, { requestId: request.id });
       return reply
         .code(500)
         .send(errorBody('internal_error', 'Something went wrong on the server.', 'Check the server log for details.'));
@@ -210,6 +265,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerHistoryRoutes(app, ctx);
   registerPrefetchRoutes(app, ctx);
   registerHealthRoutes(app, ctx);
+  registerOpsRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
@@ -217,6 +273,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     downloads.close();
     await playback.close();
     await sourceProxy.close();
+    if (!options.telemetry) await telemetry.shutdown();
     if (!options.gateway) gateway.close();
     if (!options.db) db.close();
     await ownedLogger?.close();

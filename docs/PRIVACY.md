@@ -23,7 +23,7 @@ Telemetry aside, HomeStream needs these services to work. They receive the reque
 
 ## Error reports (Sentry)
 
-When a DSN is set, unhandled errors in the server, the web UI or desktop shell, and the TV app are reported. A report holds the error type and message, the stack trace, the app version and release, the operating system family and the environment name. Before sending, URLs, tokens, IP addresses and file paths are removed from messages, stack frames and breadcrumbs. No request bodies, cookies or headers are attached.
+When a DSN is set, unhandled errors in the server, the web UI or desktop shell, and the TV app are reported. A report holds the error type and message, the stack trace, the app version and release, the operating system family and the environment name. Before sending, URLs, tokens, IP addresses and file paths are removed from messages, stack frames and breadcrumbs: registered secrets and authorization fields are replaced, gateway and CDN URLs and query strings are cut, private network addresses are masked and Windows user folders become `<home>`. No request bodies, cookies, headers, user, IP address or server name are attached. Server reports carry the release (`homestream@<version>`), the environment and the tags `request_id`, `device.kind` and `media.type` when known. At most 5 % of requests are sampled for performance traces, and never `/hls/*`, `/metrics`, `/healthz`, `/readyz` or `/api/events`.
 
 ## Product events (PostHog)
 
@@ -31,15 +31,27 @@ When a key is set, the typed events in the catalog below can be captured. This t
 
 ### Event catalog
 
-| Event                                                                        | Sent when | Properties |
-| ---------------------------------------------------------------------------- | --------- | ---------- |
-| _To be filled in with the typed event catalog when product analytics ships._ |           |            |
+| Event                | Sent when                                                          | Properties                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `server_started`     | The server finished starting.                                      | `version`, `os`, `packaged`, `nodeMajor`                                                                                           |
+| `playback_started`   | A playback session produced its first segment.                     | `mediaType`, `tmdbId`, `title`, `season`?, `episode`?, `deviceKind`, `videoCodec`, `hdr`, `toneMapped`?, `resolution`, `startupMs` |
+| `playback_ended`     | A playback session ended.                                          | `mediaType`, `tmdbId`, `title`, `deviceKind`, `reason`, `watchedSec`, `avgSpeed`?                                                  |
+| `playback_failed`    | A playback session could not start, or its encoder failed playing. | `mediaType`, `tmdbId`, `title`?, `deviceKind`, `stage`, `errorCode`                                                                |
+| `prefetch_requested` | A client asked the server to warm up the stream for a title.       | `mediaType`, `tmdbId`, `deviceKind`, `flagEnabled`                                                                                 |
 
-Allowed property values are small enums, booleans and bounded numbers. Any property that is not in the catalog is dropped before sending.
+A trailing `?` marks a property that is only sent when it applies. Every event also carries `app` (`server`), `appVersion` and the random install id as its identity, with person profiles and GeoIP lookups switched off.
+
+Allowed property values are small enums, booleans and bounded numbers. The only free text is the media **title** (a movie or show name from TMDB, never something you typed). A title that contains a URL, key, address or path is scrubbed like any other text. Any property that is not in the catalog is dropped before sending, and so is any value that does not match its declared type.
+
+The catalog is `ANALYTICS_EVENTS` in `packages/shared/src/analytics.ts`; a test fails when this table and the catalog disagree.
+
+### Install id
+
+The server creates a random UUID the first time telemetry starts and keeps it in the `settings` table of `homestream.db` (key `install_id`). It is the only identity an event has. It is not derived from your host name, user name, hardware or network, and deleting the database creates a new one.
 
 ### Feature flags
 
-Flags are read from PostHog when a key is set. They only choose between behaviours that already exist in the app and default to the current behaviour when PostHog cannot be reached. See [experimentation.md](experimentation.md).
+Flags are read from PostHog when a key is set; the server sends only its install id to ask for them. They only choose between behaviours that already exist in the app and default to the current behaviour when PostHog cannot be reached. See [experimentation.md](experimentation.md).
 
 ## Where data is stored locally
 

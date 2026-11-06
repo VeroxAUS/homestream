@@ -5,6 +5,8 @@ import type { EventBus } from './events/bus.js';
 import type { GatewayClient } from './gateway/client.js';
 import type { HealthService } from './health/service.js';
 import type { HomeService } from './home/service.js';
+import type { ServerMetrics } from './metrics/serverMetrics.js';
+import type { Telemetry } from './telemetry/types.js';
 import type { PlaybackManager } from './playback/manager.js';
 import type { PrefetchService } from './prefetch/service.js';
 import type { ContinueWatchingService } from './progress/service.js';
@@ -28,4 +30,6 @@ export interface AppContext {
   continueWatching: ContinueWatchingService;
   home: HomeService;
   health: HealthService;
+  telemetry: Telemetry;
+  metrics: ServerMetrics;
 }

@@ -17,6 +17,7 @@ export default defineConfig({
   test: {
     ...baseTestConfig,
     ...ciTestConfig('server'),
+    setupFiles: ['test/telemetryEnv.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
@@ -49,7 +50,7 @@ export default defineConfig({
           maxWorkers: 1,
           testTimeout: GPU_TEST_TIMEOUT_MS,
           hookTimeout: GPU_HOOK_TIMEOUT_MS,
-          setupFiles: ['test/gpuSetup.ts'],
+          setupFiles: ['test/telemetryEnv.ts', 'test/gpuSetup.ts'],
         },
       },
       {

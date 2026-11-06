@@ -9,6 +9,7 @@ import { redact } from '../redact.js';
 import { PREFETCH_OWNER, type SourceProxy } from '../sourceproxy/proxy.js';
 import type { StreamService } from '../streams/service.js';
 import { deviceMaxRank } from '../streams/rank.js';
+import type { Telemetry } from '../telemetry/types.js';
 import type { StreamQuery } from '../gateway/types.js';
 import type { TmdbService } from '../tmdb/service.js';
 
@@ -25,6 +26,7 @@ export interface PrefetchServiceOptions {
   bus: EventBus;
   logger: FastifyBaseLogger;
   streamIdBudgetMs?: number;
+  telemetry?: Pick<Telemetry, 'flag' | 'capture'>;
 }
 
 interface Run {
@@ -55,6 +57,17 @@ export class PrefetchService {
     const { db } = this.options;
     const device = upsertDevice(db, body.device, clientIp).capabilities;
     const mediaKey = mediaKeyFor(body.mediaType, body.tmdbId, body.season, body.episode);
+    const enabled = await this.enabled();
+    this.options.telemetry?.capture('prefetch_requested', {
+      mediaType: body.mediaType,
+      tmdbId: body.tmdbId,
+      deviceKind: device.kind,
+      flagEnabled: enabled,
+    });
+    if (!enabled) {
+      this.skipped(mediaKey, device, 'the prefetch-on-details flag is off');
+      return { streamId: null };
+    }
     // Streams are ranked per resolution tier, so devices of one tier get the same stream and share the warm-up.
     const key = `${mediaKey}|${deviceMaxRank(device)}`;
 
@@ -81,6 +94,15 @@ export class PrefetchService {
       timer.unref();
     });
     return { streamId: await Promise.race([run.streamId, budget]) };
+  }
+
+  /** The flag never fails a request: any problem reading it leaves prefetching on, its default. */
+  private async enabled(): Promise<boolean> {
+    try {
+      return (await this.options.telemetry?.flag('prefetch-on-details')) ?? true;
+    } catch {
+      return true;
+    }
   }
 
   /** Resolves when every running warm-up has finished (tests and shutdown). */

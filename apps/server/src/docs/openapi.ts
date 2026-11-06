@@ -6,6 +6,7 @@ import { toJsonSchema, type JsonSchema } from './jsonSchema.js';
 import { ROUTE_DOCS, TAG_DESCRIPTIONS, type ResponseDoc, type RouteDoc } from './routeDocs.js';
 
 const DOCS_PREFIX = '/api/docs';
+const OPS_ROUTES = new Set(['/healthz', '/readyz', '/metrics']);
 /** Version of the HTTP API contract; bump on breaking changes. Deliberately not the app version, so releases do not change docs/openapi.json. */
 const API_VERSION = '1.0.0';
 
@@ -84,7 +85,7 @@ function schemaFor(doc: RouteDoc, url: string): FastifySchema {
 /** Routes that exist on every server but are not part of the API (CORS preflight catch-all, static files). */
 function isInfrastructureRoute(method: string, url: string): boolean {
   if (method === 'OPTIONS' || url === '/*' || url === '/' || url.startsWith(DOCS_PREFIX)) return true;
-  return !(url.startsWith('/api') || url.startsWith('/hls'));
+  return !(url.startsWith('/api') || url.startsWith('/hls') || OPS_ROUTES.has(url));
 }
 
 function transformRoute({ schema, url, route }: { schema: FastifySchema; url: string; route: RouteOptions }) {

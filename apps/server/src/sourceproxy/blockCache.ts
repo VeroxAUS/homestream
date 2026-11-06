@@ -21,6 +21,8 @@ export interface BlockCacheStats {
   bytes: number;
   blocks: number;
   evictions: number;
+  hits: number;
+  misses: number;
 }
 
 /**
@@ -31,6 +33,8 @@ export class BlockCache {
   private readonly lru = new Map<Block, true>();
   private totalBytes = 0;
   private evictions = 0;
+  private hits = 0;
+  private misses = 0;
 
   constructor(
     private readonly capBytes = GLOBAL_CAP_BYTES,
@@ -39,7 +43,11 @@ export class BlockCache {
 
   get(owner: BlockOwner, index: number): Buffer | undefined {
     const block = owner.blocks.get(index);
-    if (!block) return undefined;
+    if (!block) {
+      this.misses += 1;
+      return undefined;
+    }
+    this.hits += 1;
     this.lru.delete(block);
     this.lru.set(block, true);
     return block.data;
@@ -70,7 +78,13 @@ export class BlockCache {
   }
 
   stats(): BlockCacheStats {
-    return { bytes: this.totalBytes, blocks: this.lru.size, evictions: this.evictions };
+    return {
+      bytes: this.totalBytes,
+      blocks: this.lru.size,
+      evictions: this.evictions,
+      hits: this.hits,
+      misses: this.misses,
+    };
   }
 
   private evictOne(only: BlockOwner | null): void {

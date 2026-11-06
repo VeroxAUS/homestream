@@ -16,6 +16,13 @@ Telemetry is Sentry (errors) and PostHog (product analytics and feature flags). 
 5. **Identity** is a random install id. No names, emails or account ids.
 6. **Never on the hot path.** Capturing is asynchronous, batched, sampled where needed and wrapped so it can never throw into the caller or delay startup, Home render, remote focus, playback start or HLS segment serving. If the SDK is missing or the network is down, the call does nothing.
 
+## Where things live
+
+- Event catalog: `ANALYTICS_EVENTS` in `packages/shared/src/analytics.ts`. Flag registry: `packages/shared/src/flags.ts`. Sanitizer: `packages/shared/src/sanitize.ts`.
+- Server: `apps/server/src/telemetry` (`createTelemetry` returns the `Telemetry` front: `capture`, `captureError`, `breadcrumb`, `flag`, `shutdown`; `app.ctx.telemetry` in routes and services). Playback events come from `telemetry/playbackObserver.ts`.
+- Tests run with every telemetry variable removed (`apps/server/test/telemetryEnv.ts`). Use the loopback stub in `apps/server/test/telemetry/stubServer.ts` to look at what would be sent; never call the real services from a test.
+- Real check: `pnpm telemetry:smoke --sentry` / `--posthog`. Flags: `pnpm flags:check`, `pnpm flags:sync`. Overview: [docs/observability.md](../../../docs/observability.md).
+
 ## Add an event
 
 1. Add the event to the shared catalog (name in `snake_case`, past tense, properties as a zod object of small enums, booleans and bounded numbers; buckets instead of exact values when exact values are identifying, for example a resolution class and not a file name).

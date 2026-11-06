@@ -42,3 +42,7 @@ Cache of parsed gateway stream lists per title and device query, with an expiry 
 ### `pending_downloads`
 
 The TorBox caching queue. Playing a title that has no cached stream asks TorBox to cache it and adds a row here. A poller updates `state`, `progress` and `eta_sec` until the download is `ready` or `failed`, then a "ready to watch" notification is sent once (`notified_at`). A partial unique index allows only one pending row per `media_key`. The playback link is never stored; it is looked up again with `query_key` when the title is played.
+
+### `settings`
+
+Small key/value store for the server's own state (`key`, `value`, `updated_at`). It holds `install_id`, the random anonymous id used for product analytics when PostHog is configured. The id is generated once with `crypto.randomUUID()`; it is not derived from the host name, user name or network, and it is never sent when `HOMESTREAM_TELEMETRY=off` or no PostHog key is set. See [PRIVACY.md](PRIVACY.md).

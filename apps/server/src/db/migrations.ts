@@ -162,4 +162,15 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_pending_downloads_created ON pending_downloads (created_at DESC);
     `,
   },
+  {
+    // Small key/value store for server-owned state, for example the random install id used by product analytics.
+    version: 4,
+    sql: `
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];

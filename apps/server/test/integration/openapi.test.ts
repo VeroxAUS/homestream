@@ -21,7 +21,10 @@ const registered = new Set<string>();
 function collectRoutes({ fastify }: { fastify: FastifyInstance }): void {
   fastify.addHook('onRoute', (route) => {
     const methods = Array.isArray(route.method) ? route.method : [route.method];
-    const isApi = route.url.startsWith('/api') || route.url.startsWith('/hls');
+    const isApi =
+      route.url.startsWith('/api') ||
+      route.url.startsWith('/hls') ||
+      ['/healthz', '/readyz', '/metrics'].includes(route.url);
     if (!isApi || route.url.startsWith('/api/docs')) return;
     for (const method of methods)
       if (method !== 'HEAD' && method !== 'OPTIONS') registered.add(`${method} ${route.url}`);

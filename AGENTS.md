@@ -73,6 +73,16 @@ pnpm docs:check              # relative links, anchors and mermaid diagrams in t
 pnpm agents:check            # this file, the skills and the runbooks only mention real commands, paths and endpoints
 ```
 
+Telemetry, flags and profiling (details in [docs/observability.md](docs/observability.md)):
+
+```powershell
+pnpm flags:check            # fails for dead flags and for flags the code evaluates but the registry lacks
+pnpm flags:sync             # creates missing flags in PostHog (needs POSTHOG_PERSONAL_API_KEY, otherwise skips)
+pnpm telemetry:smoke --sentry   # sends one deliberate test error; add --posthog or use neither flag for both
+pnpm sentry:alerts --dry-run    # plan for monitoring/sentry/alert-rules.json; --apply makes Sentry match it
+pnpm profile:server         # CPU profile of a throw-away server into reports/profiles
+```
+
 Run the server (port 8600) and the web dev server (port 8601, proxies `/api` and `/hls`):
 
 ```powershell
@@ -81,7 +91,7 @@ pnpm --filter @homestream/server start
 pnpm --filter @homestream/web dev
 ```
 
-API reference while the server runs: `http://localhost:8600/api/docs` (Swagger UI) and `/api/docs/json`.
+API reference while the server runs: `http://localhost:8600/api/docs` (Swagger UI) and `/api/docs/json`. Operations endpoints (no external calls, not logged per scrape): `/healthz` (liveness), `/readyz` (database and data directory usable, else 503) and `/metrics` (Prometheus text). Every response carries `X-Request-ID`, which is the `reqId` field in `server.log`. See [docs/observability.md](docs/observability.md).
 
 ## PowerShell 5.1 and POSIX notes
 

@@ -121,6 +121,8 @@ export class GatewayClient {
   readonly cache: GatewayCache;
   readonly limiter: RateLimiter;
   readonly stats: GatewayStats = { requests: 0, errors: 0, lastLatencyMs: null, lastLookupAt: null, lastError: null };
+  /** Lookup totals for the metrics endpoint (the request and error totals are in `stats`). */
+  readonly cacheStats = { hits: 0, misses: 0 };
   private readonly fetchImpl: GatewayFetch;
   private readonly now: () => number;
   private readonly timeoutMs: number;
@@ -151,8 +153,12 @@ export class GatewayClient {
 
     if (!options.fresh) {
       const cached = this.cache.getFresh(key);
-      if (cached) return cached.streams;
+      if (cached) {
+        this.cacheStats.hits += 1;
+        return cached.streams;
+      }
     }
+    this.cacheStats.misses += 1;
 
     const flightKey = options.fresh ? `fresh:${key}` : key;
     const pending = this.inflight.get(flightKey);

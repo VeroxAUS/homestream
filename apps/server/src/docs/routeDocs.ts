@@ -8,6 +8,7 @@ import {
   DownloadStartedResponseSchema,
   DownloadsResponseSchema,
   HealthResponseSchema,
+  HealthzResponseSchema,
   HistoryQuerySchema,
   HistoryResponseSchema,
   HomeResponseSchema,
@@ -18,6 +19,7 @@ import {
   PrefetchResponseSchema,
   ProgressPingRequestSchema,
   ProgressResponseSchema,
+  ReadyzResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
   SeasonSchema,
@@ -256,6 +258,34 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
     { 200: { description: 'Open event stream.', contentType: 'text/event-stream', schema: z.string() } },
   ),
 
+  'GET /healthz': doc(
+    {
+      summary: 'Liveness probe',
+      description: 'Answers 200 while the process serves requests. Makes no external calls.',
+      tag: 'ops',
+    },
+    ok(HealthzResponseSchema, 'The process is alive.'),
+  ),
+  'GET /readyz': doc(
+    {
+      summary: 'Readiness probe',
+      description:
+        'Checks the database and that the data directory is writable. Makes no external calls (TMDB, gateway, TorBox).',
+      tag: 'ops',
+      errors: [503],
+    },
+    ok(ReadyzResponseSchema, 'Database and data directory are usable.'),
+  ),
+  'GET /metrics': doc(
+    {
+      summary: 'Prometheus metrics',
+      description:
+        'Text exposition format. Label values are route templates, status codes and short fixed codes; never ids, secrets or hosts.',
+      tag: 'ops',
+    },
+    { 200: { description: 'Prometheus text format.', contentType: 'text/plain', schema: z.string() } },
+  ),
+
   'GET /hls/:id/:file': doc(
     {
       summary: 'HLS playlist, init segment or media segment',
@@ -304,4 +334,5 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   history: 'Playback history and statistics.',
   health: 'Health checks, events and logs.',
   hls: 'HLS playlists and segments of a session.',
+  ops: 'Probes and metrics for monitoring. Served at the root, outside /api.',
 };

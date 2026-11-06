@@ -9,19 +9,20 @@ Sentry receives scrubbed error reports from the server, the web UI and the deskt
 
 ## Diagnosis
 
-1. Open the issue and note the **project** (server, web, tv), the **release**, the **environment** and how many events and distinct installs it affects. Reports never contain user names, IP addresses, file paths, gateway URLs or stream URLs. If you see one, treat it as a privacy bug (step 4).
+1. Open the issue and note the **project** (server, web, tv), the **release**, the **environment** and how many events and distinct installs it affects. Reports never contain user names, IP addresses, file paths, gateway URLs or stream URLs. If you see one, treat it as a privacy bug (step 5).
 2. Decide the severity:
    - **Fix now:** the server crashes or cannot start, playback fails for everyone, or a regression appeared in the newest release.
    - **Fix soon:** one title or one device fails, or an upstream (gateway, TMDB, TorBox) is down. Upstream outages are already visible in the event log and health checks.
    - **Ignore or merge:** an old release, a one-off, or noise from a client extension.
-3. Find the same failure on the machine. The server writes its own event log, which carries the same message in more detail:
+3. Server reports carry the tag `request_id`. Search `server.log` in `DATA_DIR` for that value (field `reqId`) to see the lines for the failing request. Alert rules and who gets them are described in [alerting](../alerting.md).
+4. Find the same failure on the machine. The server writes its own event log, which carries the same message in more detail:
 
    ```powershell
    curl.exe "http://localhost:8600/api/logs?level=error&limit=100"
    curl.exe http://localhost:8600/api/health
    ```
 
-4. If a report contains something it should not (a URL, a path, a key): stop. Remove the event in Sentry, rotate the exposed secret, and fix the scrubber (`apps/server/src/redact.ts` for the server) with a regression test before anything else. Record what leaked in the pull request without repeating the value.
+5. If a report contains something it should not (a URL, a path, a key): stop. Remove the event in Sentry, rotate the exposed secret, and fix the scrubber (`apps/server/src/redact.ts` for the server) with a regression test before anything else. Record what leaked in the pull request without repeating the value.
 
 ## Fix
 

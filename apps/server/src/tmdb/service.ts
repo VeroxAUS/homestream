@@ -42,6 +42,8 @@ function isNotFoundStatus(status: number): boolean {
 }
 
 export class TmdbService {
+  /** Running totals for the metrics endpoint. */
+  readonly stats = { requests: 0, errors: 0, cacheHits: 0, cacheMisses: 0 };
   private readonly cache: TmdbCache;
   private readonly fetchImpl: FetchLike;
   private readonly inflight = new Map<string, Promise<unknown>>();
@@ -171,7 +173,11 @@ export class TmdbService {
   ): Promise<unknown> {
     this.requireToken();
     const hit = this.cache.get(key);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) {
+      this.stats.cacheHits += 1;
+      return hit;
+    }
+    this.stats.cacheMisses += 1;
 
     const pending = this.inflight.get(key);
     if (pending) return pending;
@@ -200,6 +206,16 @@ export class TmdbService {
   }
 
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
+    this.stats.requests += 1;
+    try {
+      return await this.fetchJson(path, params);
+    } catch (error) {
+      if (!(error instanceof TmdbNotFound)) this.stats.errors += 1;
+      throw error;
+    }
+  }
+
+  private async fetchJson(path: string, params: Record<string, string>): Promise<unknown> {
     const token = this.requireToken();
     const url = `${API_BASE}${path}?${new URLSearchParams({ language: 'en-US', ...params }).toString()}`;
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };

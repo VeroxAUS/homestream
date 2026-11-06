@@ -5786,6 +5786,103 @@
         }
       }
     },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "tags": [
+          "ops"
+        ],
+        "description": "Answers 200 while the process serves requests. Makes no external calls.",
+        "responses": {
+          "200": {
+            "description": "The process is alive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readiness probe",
+        "tags": [
+          "ops"
+        ],
+        "description": "Checks the database and that the data directory is writable. Makes no external calls (TMDB, gateway, TorBox).",
+        "responses": {
+          "200": {
+            "description": "Database and data directory are usable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The server or an upstream service is not available right now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "tags": [
+          "ops"
+        ],
+        "description": "Text exposition format. Label values are route templates, status codes and short fixed codes; never ids, secrets or hosts.",
+        "responses": {
+          "200": {
+            "description": "Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/events": {
       "get": {
         "summary": "Server-sent events stream",
@@ -5854,6 +5951,10 @@
     {
       "name": "hls",
       "description": "HLS playlists and segments of a session."
+    },
+    {
+      "name": "ops",
+      "description": "Probes and metrics for monitoring. Served at the root, outside /api."
     }
   ]
 }

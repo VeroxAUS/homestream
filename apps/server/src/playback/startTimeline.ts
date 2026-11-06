@@ -26,6 +26,11 @@ export class StartTimeline {
     return new StartTimeline(this.logger, this.requestAt);
   }
 
+  /** Milliseconds since the start request arrived. */
+  elapsedMs(): number {
+    return Date.now() - this.requestAt;
+  }
+
   /** Logs the step; a step already logged for this attempt (an encoder or extractor retry) is skipped. */
   mark(step: StartStep, sessionId?: string): void {
     if (this.logged.has(step)) return;

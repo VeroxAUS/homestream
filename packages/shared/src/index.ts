@@ -6,3 +6,7 @@ export * from './playback.js';
 export * from './progress.js';
 export * from './network.js';
 export * from './health.js';
+export * from './ops.js';
+export * from './sanitize.js';
+export * from './analytics.js';
+export * from './flags.js';

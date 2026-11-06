@@ -6,6 +6,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type {
   ActivitySession,
   CapabilityProfile,
+  Decision,
   DownloadStartedResponse,
   MovieDetails,
   NetworkSession,
@@ -47,6 +48,7 @@ import { FallingBehindWatch } from './fallingBehind.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
 import { MemoryWatchdog, imageNameOf, createWorkingSetSampler, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SessionMonitor } from './monitor.js';
+import type { PlaybackObserver, SessionSubject } from './observer.js';
 import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
 import {
   SEGMENT_SECONDS,
@@ -119,6 +121,8 @@ export interface PlaybackManagerOptions {
   idleTimeoutMs?: number;
   /** Housekeeping interval; 0 disables the timer (tests call `monitorTick()` themselves). */
   monitorTickMs?: number;
+  /** Receives session start, end, failure and restart notifications for metrics and analytics. */
+  observer?: PlaybackObserver;
 }
 
 export interface PingUpdate {
@@ -158,6 +162,18 @@ function isStreamFault(error: unknown): boolean {
 /** ffmpeg echoes the input URL (with its token) in many errors; none of that may reach users or logs. */
 function scrub(text: string): string {
   return redact(text).replace(/\b(?:https?|ftp):\/\/\S+/gi, '<url>');
+}
+
+function subjectOf(rec: SessionRecord): SessionSubject {
+  const { meta } = rec;
+  return {
+    mediaType: meta.mediaType,
+    tmdbId: meta.tmdbId,
+    title: meta.showTitle ?? meta.title,
+    season: meta.season,
+    episode: meta.episode,
+    deviceKind: rec.device.kind,
+  };
 }
 
 export class PlaybackManager {
@@ -226,9 +242,29 @@ export class PlaybackManager {
     this.reserveSlot();
     try {
       return await this.startSession(body, clientIp, timeline);
+    } catch (error) {
+      this.reportStartFailure(body, error);
+      throw error;
     } finally {
       this.starting -= 1;
     }
+  }
+
+  /** A shutdown is not a failed start (a refused slot throws before this runs); everything else is reported with its error code. */
+  private reportStartFailure(body: SessionStartRequest, error: unknown): void {
+    const code = error instanceof AppError ? error.code : 'start_failed';
+    if (code === 'shutting_down') return;
+    this.options.observer?.failed(
+      {
+        mediaType: body.mediaType,
+        tmdbId: body.tmdbId,
+        title: null,
+        season: body.season ?? null,
+        episode: body.episode ?? null,
+        deviceKind: body.device.kind,
+      },
+      { stage: 'start', code },
+    );
   }
 
   private reserveSlot(): void {
@@ -505,7 +541,12 @@ export class PlaybackManager {
       sessionId: id,
     });
     this.options.bus.emit('session.start', toActivitySession(rec));
+    this.notifyStarted(rec, context.timeline.elapsedMs(), decision);
     return toSessionResponse(rec);
+  }
+
+  private notifyStarted(rec: SessionRecord, startupMs: number, decision: Decision): void {
+    this.options.observer?.started(subjectOf(rec), { startupMs, decision });
   }
 
   /**
@@ -716,6 +757,7 @@ export class PlaybackManager {
   private async reconfigure(rec: SessionRecord, segment: number): Promise<void> {
     const previous = rec.process;
     rec.generation += 1;
+    this.options.observer?.restarted('tracks');
     await previous?.stop();
     if (rec.stopping) return;
     for (const name of await readdir(rec.dir).catch(() => [] as string[])) {
@@ -1225,6 +1267,7 @@ export class PlaybackManager {
       return;
     }
     rec.retried = true;
+    this.options.observer?.restarted('retry');
     this.event({
       level: 'warn',
       source: 'ffmpeg',
@@ -1265,6 +1308,7 @@ export class PlaybackManager {
       });
       return;
     }
+    this.options.observer?.failed(subjectOf(rec), { stage: 'running', code: rec.errorCode ?? 'encoder_failed' });
     this.options.logger.error({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed');
     this.event({
       level: 'error',
@@ -1297,6 +1341,7 @@ export class PlaybackManager {
       hint: 'Playback ended. Try again, or switch subtitles off. If it keeps happening, check the ffmpeg tile on the health dashboard.',
     };
     rec.generation += 1;
+    if (!rec.opening) this.options.observer?.failed(subjectOf(rec), { stage: 'running', code: 'encoder_memory_limit' });
     rec.source.setExtractorLimit(null);
     this.options.logger.error(
       { sessionId: rec.id, pid: hit.pid, usedMb, limitMb },
@@ -1360,6 +1405,7 @@ export class PlaybackManager {
   private async restartAt(rec: SessionRecord, index: number): Promise<void> {
     const previous = rec.process;
     rec.generation += 1;
+    this.options.observer?.restarted('seek');
     await previous?.stop();
     if (rec.stopping) return;
     rec.retried = false;
@@ -1448,6 +1494,7 @@ export class PlaybackManager {
 
   private resume(rec: SessionRecord): Promise<void> {
     if (rec.restart || rec.stopping || rec.process?.running) return Promise.resolve();
+    this.options.observer?.restarted('resume');
     this.launch(rec, this.resumePoint(rec));
     return Promise.resolve();
   }
@@ -1465,6 +1512,11 @@ export class PlaybackManager {
     await this.removeDir(rec.dir);
     if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.endStats(rec) });
     this.options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');
+    this.options.observer?.ended(subjectOf(rec), {
+      reason,
+      watchedSec: rec.watchedSec,
+      avgSpeed: this.endStats(rec).avgSpeed,
+    });
     this.options.bus.emit('session.end', { sessionId: rec.id, reason, state: 'stopped' });
   }
 

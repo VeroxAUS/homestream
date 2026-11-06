@@ -9,6 +9,12 @@ import { displayGatewayUrl } from './redact.js';
 import { createShutdown } from './shutdown.js';
 import { SERVER_VERSION, serverRoot } from './version.js';
 
+const OS_NAMES: Partial<Record<NodeJS.Platform, 'windows' | 'macos' | 'linux'>> = {
+  win32: 'windows',
+  darwin: 'macos',
+  linux: 'linux',
+};
+
 function findRepoRoot(): string | null {
   if (process.env.HOMESTREAM_PACKAGED === '1') return null;
   let dir = serverRoot;
@@ -56,6 +62,12 @@ async function main(): Promise<void> {
 
   app.ctx.health.start();
   app.ctx.downloads.start();
+  app.ctx.telemetry.capture('server_started', {
+    version: SERVER_VERSION,
+    os: OS_NAMES[process.platform] ?? 'other',
+    packaged: process.env.HOMESTREAM_PACKAGED === '1',
+    nodeMajor: Number(process.versions.node.split('.')[0]),
+  });
 
   const discovery = startDiscovery({
     name: config.serverName,

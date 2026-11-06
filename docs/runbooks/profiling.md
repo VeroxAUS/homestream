@@ -21,19 +21,25 @@ Measure before you change anything. HomeStream has a performance-first rule: not
 
 2. **Look at a running session.** `GET /api/activity` lists every live session with its `encoder` stats (`fps`, `speed`, `bitrateKbps`, `headSegment`). A `speed` below 1.0 (1.0 is real time) means the encoder cannot keep up; a speed near 1.0 with a slow start points at the download instead. `GET /api/health` shows `gpu` load and `disk` space.
 
-3. **Profile the Node process** when the CPU is busy in the server itself. Build first, then start with the V8 profiler and reproduce the slow action for 30 seconds:
+3. **Read the metrics.** `GET /metrics` is Prometheus text: request counts and durations per route, live sessions, encoder speed and restarts, gateway, TMDB and source proxy cache counters, plus process CPU, memory and event loop lag. Two scrapes a minute apart show rates:
 
    ```powershell
-   pnpm build
-   cd apps/server
-   node --cpu-prof --cpu-prof-dir=prof dist/index.js
+   curl.exe http://localhost:8600/metrics
    ```
 
-   Stop the server with Ctrl+C so the profile is written. Open the `.cpuprofile` file in Chrome DevTools (Performance tab, Load profile). For memory use `--heap-prof` the same way. Delete the `prof` folder when you are done; do not commit profiles, they can contain file paths.
+   `GET /healthz` (process is up) and `GET /readyz` (database and data directory usable) are cheap probes. Every response carries an `X-Request-ID`; the same id is the `reqId` field of its lines in `server.log`.
 
-4. **Profile a test or the build.** `pnpm test:timing` lists the slowest tests from the last `pnpm test:report`. `pnpm build:summary` writes a turbo summary with the time per package.
+4. **Profile the Node process** when the CPU is busy in the server itself. This starts a throw-away server on port 8602 with the V8 profiler, sends light traffic for eight seconds, stops it cleanly and writes the profile to `reports/profiles`:
 
-5. **Download pacing.** Upstream downloads are capped by `MAX_DOWNLOAD_MBPS` and the encoder only reads `READ_AHEAD_SEC` ahead of the player (see [.env.example](../../.env.example)). A session that is slow to start with the cap set very low is behaving as designed.
+   ```powershell
+   pnpm profile:server
+   ```
+
+   Options: `--seconds=30` for longer traffic, `--port=8610` for another port (8600 to 8649). To profile your own server and workload, start it with `node --cpu-prof --cpu-prof-dir=reports/profiles dist/index.js` and stop it with Ctrl+C so the profile is written. Open the `.cpuprofile` file in Chrome DevTools (Performance tab, Load profile). For memory use `--heap-prof` the same way. Profiles can contain file paths; `reports/` is ignored by git, never commit them.
+
+5. **Profile a test or the build.** `pnpm test:timing` lists the slowest tests from the last `pnpm test:report`. `pnpm build:summary` writes a turbo summary with the time per package.
+
+6. **Download pacing.** Upstream downloads are capped by `MAX_DOWNLOAD_MBPS` and the encoder only reads `READ_AHEAD_SEC` ahead of the player (see [.env.example](../../.env.example)). A session that is slow to start with the cap set very low is behaving as designed.
 
 ## Fix
 

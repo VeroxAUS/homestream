@@ -1,0 +1,104 @@
+# Prometheus alert rules for the HomeStream server. Every metric name here is exposed by GET /metrics
+# (apps/server/test/integration/observability.test.ts checks that). Thresholds and routing: docs/alerting.md.
+groups:
+  - name: homestream-availability
+    rules:
+      - alert: HomeStreamDown
+        expr: up{job="homestream"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The HomeStream server is not answering scrapes.
+          runbook: docs/runbooks/README.md
+
+      - alert: HomeStreamHigh5xxRate
+        expr: |
+          sum(rate(homestream_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(homestream_http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5 % of API requests fail with a server error.
+
+      - alert: HomeStreamSlowRequests
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(homestream_http_request_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The 95th percentile API response time is above 2 seconds.
+
+      - alert: HomeStreamEventLoopLag
+        expr: nodejs_eventloop_lag_p99_seconds > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The Node.js event loop is blocked for more than 0.5 seconds at the 99th percentile.
+
+      - alert: HomeStreamMemoryHigh
+        expr: process_resident_memory_bytes > 1.5e9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The server process uses more than 1.5 GB of memory.
+
+  - name: homestream-playback
+    rules:
+      - alert: HomeStreamPlaybackFailures
+        expr: sum(increase(homestream_sessions_failed_total[15m])) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 3 playback sessions failed in 15 minutes.
+
+      - alert: HomeStreamEncoderTooSlow
+        expr: homestream_sessions_active > 0 and homestream_encoder_speed_min < 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: A live session encodes slower than real time, so the player will stall.
+
+      - alert: HomeStreamEncoderRestartLoop
+        expr: sum(increase(homestream_encoder_restarts_total{reason="retry"}[10m])) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: The encoder restarted more than 5 times to recover from errors in 10 minutes.
+
+  - name: homestream-upstream
+    rules:
+      - alert: HomeStreamGatewayErrors
+        expr: |
+          rate(homestream_gateway_errors_total[10m])
+            / clamp_min(rate(homestream_gateway_requests_total[10m]), 0.001) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Over half of the stream lookups to the gateway fail.
+
+      - alert: HomeStreamTmdbErrors
+        expr: |
+          rate(homestream_tmdb_errors_total[10m])
+            / clamp_min(rate(homestream_tmdb_requests_total[10m]), 0.001) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Over half of the TMDB requests fail.
+
+      - alert: HomeStreamSourceProxyCacheCold
+        expr: |
+          rate(homestream_sourceproxy_cache_misses_total[15m])
+            / clamp_min(rate(homestream_sourceproxy_cache_hits_total[15m]) + rate(homestream_sourceproxy_cache_misses_total[15m]), 0.001) > 0.95
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: Almost every source proxy read goes to the CDN, so the block cache is not helping.

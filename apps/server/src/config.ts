@@ -31,10 +31,26 @@ export const KNOWN_KEYS = [
   'HOMESTREAM_WEB_DIR',
   'HEALTH_NVENC_TEST',
   'LOG_LEVEL',
+  'HOMESTREAM_TELEMETRY',
+  'SENTRY_DSN_SERVER',
+  'SENTRY_ENVIRONMENT',
+  'POSTHOG_API_KEY',
+  'POSTHOG_HOST',
 ] as const;
 
 const DEFAULT_PORT = 8600;
+const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const SOURCE_PROXY_PORT_OFFSET = 50;
+
+/** What may leave this machine. Both keys are null while the master switch is off or the key is missing. */
+export interface TelemetryConfig {
+  /** HOMESTREAM_TELEMETRY=off: nothing is sent, whatever keys are set. */
+  disabled: boolean;
+  sentryDsn: string | null;
+  posthogKey: string | null;
+  posthogHost: string;
+  environment: string;
+}
 
 interface ConfigFileInfo {
   path: string;
@@ -69,6 +85,7 @@ export interface Config {
   /** Console and server.log verbosity; `debug` adds the playback start timing lines. */
   logLevel: LogLevel;
   serverName: string;
+  telemetry: TelemetryConfig;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
   torboxApiKey: string | null;
@@ -164,6 +181,27 @@ function httpOrigin(raw: string | undefined, fallback: string, name: string, war
   return fallback;
 }
 
+function telemetryFrom(
+  values: Partial<Record<(typeof KNOWN_KEYS)[number], string>>,
+  env: NodeJS.ProcessEnv,
+  warnings: string[],
+): TelemetryConfig {
+  const disabled = /^(off|0|false|no|disabled)$/i.test(values.HOMESTREAM_TELEMETRY ?? '');
+  let sentryDsn = values.SENTRY_DSN_SERVER ?? null;
+  if (sentryDsn && !URL.canParse(sentryDsn)) {
+    warnings.push('SENTRY_DSN_SERVER is not a valid DSN; error reporting stays off.');
+    sentryDsn = null;
+  }
+  const packaged = env.HOMESTREAM_PACKAGED === '1';
+  return {
+    disabled,
+    sentryDsn: disabled ? null : sentryDsn,
+    posthogKey: disabled ? null : (values.POSTHOG_API_KEY ?? null),
+    posthogHost: httpOrigin(values.POSTHOG_HOST, DEFAULT_POSTHOG_HOST, 'POSTHOG_HOST', warnings),
+    environment: values.SENTRY_ENVIRONMENT ?? (packaged ? 'production' : 'development'),
+  };
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): Config {
   const env = options.env ?? process.env;
   const warnings: string[] = [];
@@ -216,6 +254,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     healthNvencTest: !/^(0|false|off|no)$/i.test(values.HEALTH_NVENC_TEST ?? ''),
     logLevel: logLevelFrom(values.LOG_LEVEL, warnings),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
+    telemetry: telemetryFrom(values, env, warnings),
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,
     torboxApiKey: values.TORBOX_API_KEY ?? null,
@@ -234,4 +273,8 @@ export function registerConfigSecrets(config: Config): void {
   registerSecretUrl(config.gatewayManifestUrl);
   registerSecret(config.tmdbReadToken);
   registerSecret(config.torboxApiKey);
+  const dsn = config.telemetry.sentryDsn;
+  registerSecretUrl(dsn);
+  if (dsn) registerSecret(new URL(dsn).username);
+  registerSecret(config.telemetry.posthogKey);
 }
