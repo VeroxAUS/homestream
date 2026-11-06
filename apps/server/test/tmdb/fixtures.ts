@@ -25,6 +25,7 @@ const tvRow = (id: number) => ({
 export const MOVIE_DETAILS = {
   ...movieRow(278),
   runtime: 142,
+  original_language: 'en',
   genres: [{ id: 18, name: 'Drama' }, { id: 80, name: 'Crime' }],
   external_ids: { imdb_id: 'tt0111161' },
 };
@@ -32,6 +33,7 @@ export const MOVIE_DETAILS = {
 export const SHOW_DETAILS = {
   ...tvRow(1396),
   genres: [{ id: 18, name: 'Drama' }],
+  original_language: 'en',
   external_ids: { imdb_id: 'tt0903747' },
   seasons: [
     { season_number: 2, name: 'Season 2', episode_count: 13, poster_path: '/s2.jpg' },

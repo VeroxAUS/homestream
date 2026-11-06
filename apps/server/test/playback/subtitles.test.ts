@@ -192,6 +192,26 @@ describe('master and rendition playlists', () => {
     expect(text).toMatch(/#EXT-X-STREAM-INF:[^\n]*SUBTITLES="subs"[^\n]*\nvideo\.m3u8\n/);
   });
 
+  it('marks only the default rendition DEFAULT=YES,AUTOSELECT=YES, with FORCED=YES when forced', () => {
+    const tracks = [track(3, 'English'), track(4, 'English Forced', 'eng', true), track(5, '', 'por')];
+    const media = (defaultTrack: { index: number; forced: boolean } | null) =>
+      generateMasterPlaylist({ decision, fps: 24, tracks, defaultTrack }).split('\n').filter((line) => line.startsWith('#EXT-X-MEDIA:'));
+
+    const forced = media({ index: 4, forced: true });
+    expect(forced.filter((line) => line.includes('DEFAULT=YES'))).toHaveLength(1);
+    expect(forced[1]).toContain('DEFAULT=YES,AUTOSELECT=YES,FORCED=YES');
+    expect(forced[0]).toContain('DEFAULT=NO,AUTOSELECT=NO,FORCED=NO');
+    expect(forced[2]).toContain('DEFAULT=NO,AUTOSELECT=NO,FORCED=NO');
+
+    const full = media({ index: 3, forced: false });
+    expect(full[0]).toContain('DEFAULT=YES,AUTOSELECT=YES,FORCED=NO');
+    expect(full.filter((line) => line.includes('AUTOSELECT=YES'))).toHaveLength(1);
+
+    for (const none of [null, undefined, { index: 99, forced: true }]) {
+      expect(media(none as never).filter((line) => /DEFAULT=YES|AUTOSELECT=YES/.test(line))).toEqual([]);
+    }
+  });
+
   it('has the variant only, without a subtitles group, when there are no text tracks', () => {
     const text = generateMasterPlaylist({ decision, fps: 24, tracks: [] });
     expect(text).not.toContain('EXT-X-MEDIA');
@@ -245,6 +265,16 @@ describe('selectTextTracks', () => {
     const chosen = selectTextTracks({ subtitles: tracks }).map((track) => track.index);
     expect(chosen).toHaveLength(MAX_TEXT_SUBTITLES);
     expect(chosen).toEqual([0, 1, 2, 3, 4, 5, 20, 21, 22, 23]);
+  });
+
+  it('always keeps the requested track, replacing the last pick', () => {
+    const tracks = Array.from({ length: 12 }, (_, i) => info(i + 1, 'eng'));
+    const chosen = selectTextTracks({ subtitles: tracks }, 12).map((track) => track.index);
+    expect(chosen).toHaveLength(MAX_TEXT_SUBTITLES);
+    expect(chosen).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 12]);
+    expect(selectTextTracks({ subtitles: tracks }, 3).map((track) => track.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(selectTextTracks({ subtitles: tracks }, 99)).toHaveLength(MAX_TEXT_SUBTITLES);
+    expect(selectTextTracks({ subtitles: tracks.slice(0, 4) }, 2)).toHaveLength(4);
   });
 });
 

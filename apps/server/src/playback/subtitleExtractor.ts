@@ -27,13 +27,19 @@ export interface TextTrack {
   forced: boolean;
 }
 
-/** The text tracks that get a rendition: English first when there are more than the maximum, original order kept. */
-export function selectTextTracks(probe: Pick<ProbeResult, 'subtitles'>): TextTrack[] {
+/**
+ * The text tracks that get a rendition: English first when there are more than the maximum, original order kept.
+ * The `keep` track (the session's selected text subtitle) always gets one, at the expense of the last pick.
+ */
+export function selectTextTracks(probe: Pick<ProbeResult, 'subtitles'>, keep?: number | null): TextTrack[] {
   const text = probe.subtitles.filter((track) => track.kind === 'text');
   if (text.length <= MAX_TEXT_SUBTITLES) return text;
   const english = text.filter((track) => ENGLISH.test(track.language));
   const others = text.filter((track) => !ENGLISH.test(track.language));
-  const chosen = new Set([...english, ...others].slice(0, MAX_TEXT_SUBTITLES).map((track) => track.index));
+  const picked = [...english, ...others].slice(0, MAX_TEXT_SUBTITLES);
+  const kept = keep === undefined || keep === null ? undefined : text.find((track) => track.index === keep);
+  if (kept && !picked.includes(kept)) picked[MAX_TEXT_SUBTITLES - 1] = kept;
+  const chosen = new Set(picked.map((track) => track.index));
   return text.filter((track) => chosen.has(track.index));
 }
 

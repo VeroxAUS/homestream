@@ -48,6 +48,8 @@ export interface RenditionTrack {
 
 const SDH = /\bsdh\b|hearing[- ]impaired|\bhoh\b|\bcc\b|closed caption/i;
 
+export const isSdhTitle = (title: string): boolean => SDH.test(title);
+
 function attributeText(text: string): string {
   return text.replace(/[\r\n]+/g, ' ').replace(/"/g, "'").trim();
 }
@@ -67,11 +69,14 @@ export interface MasterInput {
   fps: number;
   /** Text tracks that get a rendition, already limited to the maximum. */
   tracks: readonly RenditionTrack[];
+  /** The rendition the server selected for the session; the only one marked DEFAULT/AUTOSELECT. Absent: all stay off. */
+  defaultTrack?: { index: number; forced: boolean } | null;
 }
 
 /**
  * Master playlist: one video variant plus one WebVTT rendition per text track. Subtitles stay off until the user picks
- * one (DEFAULT=NO, AUTOSELECT=NO); a session without text tracks gets the same shape without the SUBTITLES group.
+ * one (DEFAULT=NO, AUTOSELECT=NO), except for the server's default track (DEFAULT=YES, AUTOSELECT=YES, FORCED=YES when
+ * forced); a session without text tracks gets the same shape without the SUBTITLES group.
  */
 export function generateMasterPlaylist(input: MasterInput): string {
   const { decision } = input;
@@ -79,7 +84,9 @@ export function generateMasterPlaylist(input: MasterInput): string {
   for (const track of input.tracks) {
     const attributes = ['TYPE=SUBTITLES', `GROUP-ID="${SUBTITLE_GROUP}"`, `NAME="${renditionName(track)}"`];
     if (track.language && track.language !== 'und') attributes.push(`LANGUAGE="${attributeText(track.language)}"`);
-    attributes.push('DEFAULT=NO', 'AUTOSELECT=NO', `FORCED=${track.forced ? 'YES' : 'NO'}`);
+    const isDefault = input.defaultTrack?.index === track.index;
+    const forced = track.forced || (isDefault && input.defaultTrack?.forced === true);
+    attributes.push(isDefault ? 'DEFAULT=YES' : 'DEFAULT=NO', isDefault ? 'AUTOSELECT=YES' : 'AUTOSELECT=NO', `FORCED=${forced ? 'YES' : 'NO'}`);
     if (SDH.test(track.title)) attributes.push('CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog"');
     attributes.push(`URI="${subtitlePlaylistPath(track.index)}"`);
     lines.push(`#EXT-X-MEDIA:${attributes.join(',')}`);

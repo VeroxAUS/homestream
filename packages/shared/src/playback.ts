@@ -15,6 +15,12 @@ export const SubtitleSelectionSchema = z.object({
 });
 export type SubtitleSelection = z.infer<typeof SubtitleSelectionSchema>;
 
+/** Why a subtitle was selected without the client asking: a forced English track, or a full English track for non-English audio. */
+export const SUBTITLE_DEFAULTS = ['forced-english', 'english'] as const;
+export const SubtitleDefaultSchema = z.enum(SUBTITLE_DEFAULTS);
+export type SubtitleDefault = z.infer<typeof SubtitleDefaultSchema>;
+
+/** A start body without `subtitle` applies the default-subtitle rule; `subtitle: null` is an explicit Off. */
 export const SessionStartRequestSchema = z
   .object({
     mediaType: MediaTypeSchema,
@@ -150,6 +156,8 @@ export const ActivitySessionSchema = z.object({
   durationSec: z.number().positive(),
   state: SessionStateSchema,
   decision: DecisionSchema,
+  /** Null once the client chose a subtitle (or Off) itself, or when no default matched. */
+  subtitleDefault: SubtitleDefaultSchema.nullable(),
   encoder: EncoderStatsSchema,
   error: z.object({ message: z.string(), hint: z.string().optional() }).nullable(),
 });
@@ -172,6 +180,8 @@ export const SessionResponseSchema = z.object({
   subtitleTracks: z.array(SubtitleTrackSchema),
   selectedAudioIndex: z.number().int().nullable(),
   selectedSubtitle: SubtitleSelectionSchema.nullable(),
+  /** Set while `selectedSubtitle` is the server's automatic choice; null after any client subtitle PATCH. */
+  subtitleDefault: SubtitleDefaultSchema.nullable(),
   /** The stream that plays (for `streamId: "auto"` the one picked after any fallback). */
   streamId: z.string(),
   /** Streams an automatic start tried before this one; empty when the first worked or the stream id was explicit. */

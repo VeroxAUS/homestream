@@ -20,6 +20,8 @@ export const MovieDetailsSchema = MediaSummarySchema.extend({
   runtime: z.number().int().nullable(),
   genres: z.array(z.string()),
   imdbId: z.string().nullable(),
+  /** TMDB `original_language` (ISO 639-1); decides the default subtitle when the audio language is undetermined. */
+  originalLanguage: z.string().nullable(),
 });
 export type MovieDetails = z.infer<typeof MovieDetailsSchema>;
 
@@ -35,6 +37,7 @@ export const ShowDetailsSchema = MediaSummarySchema.extend({
   type: z.literal('tv'),
   genres: z.array(z.string()),
   imdbId: z.string().nullable(),
+  originalLanguage: z.string().nullable(),
   seasons: z.array(SeasonSummarySchema),
 });
 export type ShowDetails = z.infer<typeof ShowDetailsSchema>;

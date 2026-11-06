@@ -25,6 +25,7 @@ import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
 import { deviceMaxRank, startCandidates } from '../streams/rank.js';
 import type { ResolvedStream, StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
+import { chooseDefaultSubtitle } from './defaultSubtitle.js';
 import { decide } from './decision.js';
 import { EncoderProcess, type EncoderHandle, type EncoderProcessOptions } from './encoderProcess.js';
 import { FallingBehindWatch } from './fallingBehind.js';
@@ -263,7 +264,7 @@ export class PlaybackManager {
   private async attemptStart(
     body: SessionStartRequest,
     clientIp: string | null,
-    context: { streamId: string; device: CapabilityProfile; details: { title: string }; attempts: StartAttempt[] },
+    context: { streamId: string; device: CapabilityProfile; details: { title: string; originalLanguage: string | null }; attempts: StartAttempt[] },
   ): Promise<SessionResponse> {
     const { streams } = this.options;
     const id = randomUUID();
@@ -291,7 +292,7 @@ export class PlaybackManager {
       stream: ResolvedStream;
       source: SourceHandle;
       device: CapabilityProfile;
-      details: { title: string };
+      details: { title: string; originalLanguage: string | null };
       attempts: StartAttempt[];
       timings: { t0: number; t1: number };
     },
@@ -303,7 +304,9 @@ export class PlaybackManager {
     const timingsMs = { pickStream: context.timings.t1 - context.timings.t0, source: t2 - context.timings.t1, probe: Date.now() - t2 };
 
     const audio = requireAudio(probe, body.audioIndex);
-    const subtitle = requireSubtitle(probe, body.subtitle);
+    const automatic = body.subtitle === undefined ? chooseDefaultSubtitle(probe.subtitles, audio, details.originalLanguage) : null;
+    const subtitle = automatic ? automatic.selection : requireSubtitle(probe, body.subtitle);
+    const textTracks = selectTextTracks(probe, subtitle?.mode === 'sidecar' ? subtitle.index : null);
 
     const decision = decide({ video: probe.video, audio, device, subtitleBurnIn: subtitle?.mode === 'burn' });
     const format = segmentFormatFor(decision.videoCodec);
@@ -336,6 +339,9 @@ export class PlaybackManager {
       format,
       selectedAudioIndex: audio?.index ?? null,
       selectedSubtitle: subtitle,
+      subtitleDefault: automatic?.kind ?? null,
+      defaultForced: automatic?.forced ?? false,
+      textTracks,
       requestedStartSec: body.startPositionSec ?? 0,
       startedAt: now,
       streamId: stream.id,
@@ -520,6 +526,7 @@ export class PlaybackManager {
     const plan = planPatch(rec.probe, { audioIndex: rec.selectedAudioIndex, subtitle: rec.selectedSubtitle }, body);
     rec.lastActivity = Date.now();
     rec.selectedSubtitle = plan.subtitle;
+    if (body.subtitle !== undefined) rec.subtitleDefault = null;
     if (!plan.restart) return toSessionResponse(rec);
 
     rec.selectedAudioIndex = plan.audio?.index ?? null;
@@ -649,7 +656,11 @@ export class PlaybackManager {
       const body = generateMasterPlaylist({
         decision: rec.decision,
         fps: rec.probe.video.fps,
-        tracks: selectTextTracks(rec.probe),
+        tracks: rec.textTracks,
+        defaultTrack:
+          rec.subtitleDefault && rec.selectedSubtitle?.mode === 'sidecar'
+            ? { index: rec.selectedSubtitle.index, forced: rec.defaultForced }
+            : null,
       });
       return { kind: 'text', body, contentType };
     }
@@ -946,7 +957,7 @@ export class PlaybackManager {
 
   /** The main extractor starts together with the encoder: cues for the start position must not wait for the first segment. */
   private startSubtitles(rec: SessionRecord): void {
-    const tracks = selectTextTracks(rec.probe).map((track) => track.index);
+    const tracks = rec.textTracks.map((track) => track.index);
     if (tracks.length === 0) return;
     rec.subtitles = new SubtitleExtractor({
       ffmpegPath: this.options.config.ffmpegPath,

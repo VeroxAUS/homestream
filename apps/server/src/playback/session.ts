@@ -6,6 +6,7 @@ import type {
   SessionResponse,
   SessionState,
   StartAttempt,
+  SubtitleDefault,
   SubtitleSelection,
   SubtitleTrack,
 } from '@homestream/shared';
@@ -14,7 +15,7 @@ import type { ToneMapper } from './ffmpegArgs.js';
 import type { ProbeResult } from './probe.js';
 import type { SegmentFormat } from './playlist.js';
 import type { SegmentStore } from './segmentStore.js';
-import { selectTextTracks, type SubtitleExtractor } from './subtitleExtractor.js';
+import type { SubtitleExtractor, TextTrack } from './subtitleExtractor.js';
 import type { SourceHandle } from '../sourceproxy/proxy.js';
 
 export interface SessionMeta {
@@ -49,6 +50,12 @@ export interface SessionRecord {
   format: SegmentFormat;
   selectedAudioIndex: number | null;
   selectedSubtitle: SubtitleSelection | null;
+  /** Set while selectedSubtitle is the automatic choice; cleared by any client subtitle PATCH. */
+  subtitleDefault: SubtitleDefault | null;
+  /** The automatic choice is a forced track, so its master playlist rendition is FORCED=YES. */
+  defaultForced: boolean;
+  /** Text tracks that have a rendition and an extractor store; fixed at session start. */
+  textTracks: TextTrack[];
   requestedStartSec: number;
   startedAt: number;
   /** Id of the gateway stream that plays, and the ones an automatic start gave up on before it. */
@@ -107,6 +114,7 @@ export function toActivitySession(rec: SessionRecord): ActivitySession {
     durationSec: rec.probe.durationSec,
     state: rec.state,
     decision: rec.decision,
+    subtitleDefault: rec.subtitleDefault,
     encoder: rec.stats,
     error: rec.error,
   };
@@ -114,7 +122,7 @@ export function toActivitySession(rec: SessionRecord): ActivitySession {
 
 /** Bitmap tracks plus the text tracks that have a rendition (the cap drops the rest); original order. */
 function subtitleTracksOf(rec: SessionRecord): SubtitleTrack[] {
-  const rendered = new Set(selectTextTracks(rec.probe).map((track) => track.index));
+  const rendered = new Set(rec.textTracks.map((track) => track.index));
   const status = rec.subtitles?.store.status() ?? 'error';
   const complete = status === 'complete';
   const tracks: SubtitleTrack[] = [];
@@ -146,6 +154,7 @@ export function toSessionResponse(rec: SessionRecord): SessionResponse {
     subtitleTracks: subtitleTracksOf(rec),
     selectedAudioIndex: rec.selectedAudioIndex,
     selectedSubtitle: rec.selectedSubtitle,
+    subtitleDefault: rec.subtitleDefault,
     streamId: rec.streamId,
     attempts: rec.attempts,
     encoder: rec.stats,

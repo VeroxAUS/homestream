@@ -87,6 +87,11 @@ function imdbIdOf(raw: Json): string | null {
   return /^tt\d+$/.test(id) ? id : null;
 }
 
+function originalLanguageOf(raw: Json): string | null {
+  const language = str(raw.original_language).toLowerCase();
+  return language && language !== 'xx' ? language : null;
+}
+
 export function normalizeMovie(raw: unknown, config: ImageConfig): MovieDetails | null {
   const item = record(raw);
   const summary = normalizeSummary(item, 'movie', config);
@@ -98,6 +103,7 @@ export function normalizeMovie(raw: unknown, config: ImageConfig): MovieDetails 
     runtime: runtime && runtime > 0 ? Math.round(runtime) : null,
     genres: genreNames(item),
     imdbId: imdbIdOf(item),
+    originalLanguage: originalLanguageOf(item),
   };
 }
 
@@ -121,7 +127,7 @@ export function normalizeShow(raw: unknown, config: ImageConfig): ShowDetails | 
     .flatMap((season) => normalizeSeasonSummary(season, config) ?? [])
     .filter((season) => season.seasonNumber > 0)
     .sort((a, b) => a.seasonNumber - b.seasonNumber);
-  return { ...summary, type: 'tv', genres: genreNames(item), imdbId: imdbIdOf(item), seasons };
+  return { ...summary, type: 'tv', genres: genreNames(item), imdbId: imdbIdOf(item), originalLanguage: originalLanguageOf(item), seasons };
 }
 
 function normalizeEpisode(raw: Json, config: ImageConfig): Episode | null {

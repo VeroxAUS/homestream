@@ -100,17 +100,19 @@ describe('details', () => {
       runtime: 142,
       genres: ['Drama', 'Crime'],
       imdbId: 'tt0111161',
+      originalLanguage: 'en',
     });
   });
 
   it('nulls a zero runtime and a malformed imdb id', () => {
     const movie = normalizeMovie({ id: 5, title: 'x', runtime: 0, external_ids: { imdb_id: '' } }, images);
-    expect(movie).toMatchObject({ runtime: null, imdbId: null, genres: [] });
+    expect(movie).toMatchObject({ runtime: null, imdbId: null, genres: [], originalLanguage: null });
   });
 
   it('maps show details, sorts seasons and drops specials', () => {
     const show = normalizeShow(SHOW_DETAILS, images);
     expect(show?.imdbId).toBe('tt0903747');
+    expect(show?.originalLanguage).toBe('en');
     expect(show?.seasons).toEqual([
       { seasonNumber: 1, name: 'Season 1', episodeCount: 7, posterUrl: 'https://image.example.test/t/p/w342/s1.jpg' },
       { seasonNumber: 2, name: 'Season 2', episodeCount: 13, posterUrl: 'https://image.example.test/t/p/w342/s2.jpg' },
