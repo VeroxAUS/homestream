@@ -1,27 +1,29 @@
 # Patterns and conventions
 
-HomeStream uses strict TypeScript, ESM, shared Zod contracts, and explicit service construction. Follow the neighboring implementation rather than adding a second framework.
+HomeStream uses strict TypeScript, shared Zod contracts, thin routes, and explicit service construction. The durable project rules are in `AGENTS.md` and `CONTRIBUTING.md`; follow neighboring code rather than introducing another framework.
 
-## Modules and types
+## Types and modules
 
-`tsconfig.base.json` selects `NodeNext`, strict checking, unchecked-index checking, and explicit override checking. Server imports use `.js` specifiers in TypeScript source. `eslint.config.mjs` enforces type-only imports and permits unused arguments only with an underscore prefix.
+`tsconfig.base.json` sets strict mode, `NodeNext`, unchecked-index checks, explicit override checks, and switch fallthrough checks. Server TypeScript imports use `.js` specifiers. `eslint.config.mjs` enforces type-only imports, camelCase values, PascalCase types, constant naming, cyclomatic and cognitive complexity limits of 20, and nesting depth 4. Existing exceptions are recorded, not permission to add new ones (`docs/TECH_DEBT.md`).
 
-Shared runtime schemas and inferred types belong in `packages/shared/src/`. Domain logic remains in server modules, and `apps/server/src/context.ts` describes the composed dependencies. See [shared contracts](../packages/shared.md).
+Shared runtime schemas and inferred types belong under `packages/shared/src/`. Keep API field names identical across clients. Pure parsing, ranking, decision, playlist, and statistics rules should remain side-effect-free and unit-tested (`AGENTS.md`).
 
-## HTTP errors and validation
+## Routes and errors
 
-Use `AppError` and `invalidRequest` from `apps/server/src/errors.ts` for expected failures. `apps/server/src/app.ts` normalizes errors into an `error` envelope and hides unexpected server error details. Error text is redacted before returning it.
+Validate with shared schemas in `apps/server/src/routes/`, then delegate behavior to services. Use `AppError` or `invalidRequest` from `apps/server/src/errors.ts` for expected failures. Errors have `{error:{code,message,hint?}}`; actionable errors need a plain-English hint. `apps/server/src/app.ts` hides unexpected server error details, and `errorBody` redacts returned text.
 
-Keep route parsing in `apps/server/src/routes/` and service behavior in its domain directory. Preserve shared schema validation when extending request bodies.
+Route changes require shared schemas, route documentation, tests, and a regenerated OpenAPI export. Follow `.factory/skills/homestream-add-api-route/SKILL.md`; see [API](../api/index.md).
 
-## Resources and test seams
+## Resource ownership
 
-`apps/server/src/app.ts` accepts injectable services and narrowly scoped playback/proxy timing options. Its close hook distinguishes owned resources from supplied resources. Changes that create timers, subprocesses, sockets, or files need corresponding shutdown and test cleanup.
+`apps/server/src/app.ts` exposes narrow test seams for network clients, subprocesses, clocks, and limits. Its close hook stops services before releasing owned resources; injected resources remain the caller's responsibility. Timers, sockets, subprocesses, and temporary directories need explicit shutdown and test cleanup.
 
-SQLite queries use prepared statements, and migrations execute transactionally (`apps/server/src/db/index.ts`). Do not alter previously applied SQL in place when introducing a schema change.
+SQLite uses prepared statements and transactional numbered migrations (`apps/server/src/db/index.ts`). Append migrations to `apps/server/src/db/migrations.ts`, never rewrite an applied migration. Regenerate `docs/schema.sql` and update `docs/database.md` when the schema changes.
 
-## Secrets
+## Safety and performance
 
-Register sensitive values through `apps/server/src/redact.ts`; `apps/server/src/logger.ts` applies field-level and full-line redaction. Do not log raw signed source URLs, tokens, request credentials, or user configuration contents.
+Never log raw gateway/CDN URLs or keys. Register secrets with `apps/server/src/redact.ts`; logs, events, API errors, and telemetry have separate scrubbing boundaries. Typed events and allowlisted properties live in `packages/shared/src/analytics.ts`. Telemetry must remain optional, non-blocking, and harmless when unavailable (`apps/server/src/telemetry/index.ts`).
 
-See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).
+Do not change the product decisions: the server re-encodes all video, clients request `streamId: "auto"`, devices replace accounts, and the service is LAN-only (`AGENTS.md`). Measure before and after changing playback startup, segment serving, or other hot paths.
+
+Use isolated temporary directories and port 0 in tests. Real upstream calls belong only in the live tier; real encodes belong in the GPU tier (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).

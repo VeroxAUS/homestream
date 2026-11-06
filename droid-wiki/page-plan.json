@@ -1,35 +1,914 @@
 {
-  "foundation": ["overview/index.md", "overview/architecture.md", "overview/getting-started.md", "overview/glossary.md", "how-to-contribute/patterns-and-conventions.md"],
-  "assignments": [
+  "mode": "full",
+  "pages": [
     {
+      "path": "overview/index.md",
+      "title": "HomeStream",
+      "criticality": "normal",
+      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "relevantSourcePaths": [
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/App.tsx",
+        "packages/shared/src"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "overview/architecture.md",
+      "title": "Architecture",
+      "criticality": "normal",
+      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "relevantSourcePaths": [
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/App.tsx",
+        "packages/shared/src"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "overview/getting-started.md",
+      "title": "Getting started",
+      "criticality": "normal",
+      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "relevantSourcePaths": [
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/App.tsx",
+        "packages/shared/src"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "overview/glossary.md",
+      "title": "Glossary",
+      "criticality": "normal",
+      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "relevantSourcePaths": [
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/App.tsx",
+        "packages/shared/src"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/patterns-and-conventions.md",
+      "title": "Patterns and conventions",
+      "criticality": "normal",
+      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "relevantSourcePaths": [
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/App.tsx",
+        "packages/shared/src"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/index.md",
+      "title": "Systems",
       "criticality": "critical",
-      "pages": ["systems/index.md", "systems/playback/index.md", "systems/playback/encoding.md", "systems/playback/subtitles.md", "systems/playback/lifecycle.md", "systems/source-proxy.md"],
-      "brief": "Trace the playback lifecycle and byte pipeline from real source. Split playback into focused pages as needed, keeping encoding.md available for foundation links.",
-      "sources": ["apps/server/src/playback", "apps/server/src/sourceproxy", "apps/server/test/playback", "apps/server/test/encode", "apps/server/test/sourceproxy"],
-      "related": ["api/index.md", "features/prefetch.md", "features/stream-selection.md", "reference/data-models.md"]
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
     },
     {
-      "criticality": "normal",
-      "pages": ["apps/index.md", "apps/server.md", "apps/web.md", "packages/index.md", "packages/shared.md", "features/index.md", "features/catalog.md", "features/stream-selection.md", "features/prefetch.md", "systems/gateway.md"],
-      "brief": "Document implemented runtimes, shared contracts, catalog, discovery/ranking, gateway policy and speculative warming. Keep the placeholder client and absent desktop distinction explicit.",
-      "sources": ["apps/server/src/tmdb", "apps/server/src/streams", "apps/server/src/gateway", "apps/server/src/prefetch", "apps/web", "packages/shared", "apps/server/src/app.ts", "apps/server/src/index.ts"],
-      "related": ["overview/architecture.md", "systems/source-proxy.md", "systems/playback/index.md", "api/index.md"]
+      "path": "systems/playback/index.md",
+      "title": "Playback",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
     },
     {
+      "path": "systems/playback/encoding.md",
+      "title": "Encoding",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/playback/lifecycle.md",
+      "title": "Lifecycle",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/playback/subtitles.md",
+      "title": "Subtitles",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/source-proxy.md",
+      "title": "Source proxy",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/network.md",
+      "title": "Network controls",
+      "criticality": "critical",
+      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback",
+        "apps/server/src/sourceproxy",
+        "apps/server/src/network",
+        "apps/server/test/playback",
+        "apps/server/test/sourceproxy",
+        "apps/server/test/network"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "apps/index.md",
+      "title": "Apps",
       "criticality": "normal",
-      "pages": ["by-the-numbers.md", "lore.md"],
-      "brief": "Measure tracked working-tree source, git activity, bot co-authorship, complexity and exports with reproducible methods. Tell the dated eight-commit history without inventing eras or removed features.",
-      "sources": ["git history", "apps", "packages", "package.json"],
-      "related": ["overview/index.md", "overview/architecture.md"]
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "apps/server.md",
+      "title": "Server",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "apps/web.md",
+      "title": "Web",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "packages/index.md",
+      "title": "Packages",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "packages/shared.md",
+      "title": "Shared",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/index.md",
+      "title": "Features",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/catalog.md",
+      "title": "Catalog",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/stream-selection.md",
+      "title": "Stream selection",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/prefetch.md",
+      "title": "Prefetch",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/downloads.md",
+      "title": "Downloads",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "features/viewing-progress.md",
+      "title": "Viewing progress",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/gateway.md",
+      "title": "Gateway",
+      "criticality": "normal",
+      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/tmdb",
+        "apps/server/src/home",
+        "apps/server/src/streams",
+        "apps/server/src/prefetch",
+        "apps/server/src/downloads",
+        "apps/server/src/progress",
+        "apps/server/src/stats",
+        "apps/server/src/gateway",
+        "apps/web",
+        "packages/shared"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "by-the-numbers.md",
+      "title": "By the numbers",
+      "criticality": "normal",
+      "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
+      "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "lore.md",
+      "title": "Lore",
+      "criticality": "normal",
+      "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
+      "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/index.md",
+      "title": "Contributing",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/development-workflow.md",
+      "title": "Development workflow",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/testing.md",
+      "title": "Testing",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/debugging.md",
+      "title": "Debugging",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-contribute/tooling.md",
+      "title": "Tooling",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "api/index.md",
+      "title": "API",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "deployment.md",
+      "title": "Deployment",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "security.md",
+      "title": "Security",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "cleanup-opportunities.md",
+      "title": "Cleanup opportunities",
+      "criticality": "normal",
+      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "relevantSourcePaths": [
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "apps/server/src/routes",
+        "apps/server/src/docs",
+        "apps/server/test",
+        "scripts",
+        ".github",
+        "docs/runbooks",
+        "docs/TECH_DEBT.md",
+        "eslint.config.mjs",
+        "SECURITY.md"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/health.md",
+      "title": "Health",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "systems/telemetry.md",
+      "title": "Telemetry",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-monitor/index.md",
+      "title": "Monitoring",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-monitor/logging.md",
+      "title": "Logging",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-monitor/metrics.md",
+      "title": "Metrics",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-monitor/tracing.md",
+      "title": "Tracing",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "how-to-monitor/alerting.md",
+      "title": "Alerting",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "reference/index.md",
+      "title": "Reference",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "reference/configuration.md",
+      "title": "Configuration",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "reference/data-models.md",
+      "title": "Data models",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+    },
+    {
+      "path": "reference/dependencies.md",
+      "title": "Dependencies",
+      "criticality": "normal",
+      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "relevantSourcePaths": [
+        "apps/server/src/health",
+        "apps/server/src/telemetry",
+        "apps/server/src/http",
+        "apps/server/src/metrics",
+        "apps/server/src/logger.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/db",
+        "packages/shared/src",
+        "monitoring",
+        "docs/PRIVACY.md",
+        "docs/observability.md",
+        "docs/alerting.md",
+        ".env.example",
+        "package.json"
+      ],
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
     }
   ],
-  "remaining": ["how-to-contribute/index.md", "how-to-contribute/development-workflow.md", "how-to-contribute/testing.md", "how-to-contribute/debugging.md", "how-to-contribute/tooling.md", "api/index.md", "deployment.md", "security.md", "how-to-monitor.md", "reference/index.md", "reference/configuration.md", "reference/data-models.md", "reference/dependencies.md"],
-  "remainingBrief": "Read corresponding routes, config, database, logging, tests, and manifests. Document actual behavior and absent automation; do not claim deployment pipelines, authentication, metrics backends, or PR policy exist.",
+  "remove": ["how-to-monitor.md"],
   "skipped": {
-    "maintainers.md": "Solo human contributor history",
-    "primitives": "Shared contracts page covers domain types without duplicate lens",
-    "fun-facts.md": "Short same-day history; avoid forced trivia",
-    "background": "Lore and implementation pages cover available evidence",
-    "cleanup-opportunities": "No verified actionable findings yet; add only if source analysis establishes them"
+    "cleanup-opportunities.md": "Verified complexity ceilings and baseline web test coverage in docs/TECH_DEBT.md; do not invent dead code or outdated dependency findings.",
+    "primitives": "Skip separate lens: contract/domain pages cover concepts without duplication.",
+    "background": "Skip separate lens: lore and conventions cover evidence and rationale.",
+    "fun-facts.md": "Skip: compact two-day history, no verified naming lore."
   }
 }

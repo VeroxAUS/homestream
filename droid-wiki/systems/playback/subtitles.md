@@ -1,103 +1,132 @@
-# Progressive subtitles and burn-in
+# Subtitles
 
-Active contributors: VeroxAUS (origin/main sole human)
+Active contributors: VeroxAUS
 
-Text subtitles are progressively extracted to WebVTT independently of the video encoder. Picture-based subtitles are rendered into video on request. The two modes have different seek, restart, and readiness semantics.
+Text subtitles become progressive WebVTT renditions; bitmap subtitles are burned into encoded video. When the client omits a subtitle choice, the server chooses an English default based on the selected audio (`apps/server/src/playback/defaultSubtitle.ts`, `apps/server/src/playback/subtitleExtractor.ts`).
 
 ## Layout and key abstractions
 
-| Module | Responsibility |
-| --- | --- |
-| `apps/server/src/playback/tracks.ts` | Validate text/sidecar versus bitmap/burn choices |
-| `apps/server/src/playback/subtitleExtractor.ts` | Schedule main, seek, and gap-fill runs |
-| `apps/server/src/playback/subtitleRun.ts` | One FFmpeg, growing VTT readers, coverage clock |
-| `apps/server/src/playback/subtitleStore.ts` | Session-owned deduplicated cues and union of trusted coverage |
-| `apps/server/src/playback/vtt.ts` | Parse growing cue blocks and render full/segmented output |
-| `apps/server/src/playback/intervals.ts` | Half-open coverage unions and gap detection |
+| Module                                          | Responsibility                                       |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `apps/server/src/playback/defaultSubtitle.ts`   | Automatic default, separate from explicit validation |
+| `apps/server/src/playback/tracks.ts`            | Sidecar/burn validity and video restart plan         |
+| `apps/server/src/playback/subtitleExtractor.ts` | Bounded main/seek run scheduling and holds           |
+| `apps/server/src/playback/subtitleRun.ts`       | One FFmpeg, growing track readers and coverage clock |
+| `apps/server/src/playback/subtitleStore.ts`     | Session-owned deduplicated cues and trusted coverage |
+| `apps/server/src/playback/extractorSchedule.ts` | Heavy-source concurrency and bandwidth pacing policy |
+| `apps/server/src/playback/vtt.ts`               | Cue parsing, clipping and timestamp rendering        |
 
-Probe recognizes SubRip/SRT, ASS/SSA, mov_text, WebVTT, and text as text tracks; PGS, DVD, DVB, and XSUB as bitmap tracks. Other subtitle codecs are omitted. At most **10 text tracks** get renditions: when over the cap, English is prioritized, then the selected tracks retain source order. Bitmap tracks remain listed without a text URL.
+Probe recognizes SubRip/SRT, ASS/SSA, mov_text, WebVTT and text as text; PGS, DVD, DVB and XSUB as bitmap. Other subtitle codecs are omitted. At most **10 text tracks** get renditions: prefer English when over the cap, force the selected text track to remain, then keep source order. Bitmap tracks remain listed with a null text URL (`apps/server/src/playback/probe.ts`, `apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/session.ts`).
 
-## Text extraction flow
+## Automatic selection
+
+Only an **omitted** start-request `subtitle` triggers defaults. `subtitle: null` means explicit Off; a supplied selection is validated as-is. The starting audio track is selected first, so the subtitle rule follows that track, not just the title's original language (`apps/server/src/playback/manager.ts`).
+
+| Starting audio        | Automatic choice                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| English               | Forced English track; otherwise Off                                                |
+| Known non-English     | Full English track; if absent, forced English; otherwise Off                       |
+| Undetermined/no audio | Use TMDB original language for the same rule; Off if neither identifies a language |
+
+Forced means disposition or a title containing “forced”. English default matching accepts `en`, `eng`, `english` and suffixed language variants. Within the relevant full/forced pool, text wins over bitmap; within a kind the order is default non-SDH, any default, non-SDH, then file order. A full bitmap can therefore beat forced text for non-English audio (`apps/server/src/playback/defaultSubtitle.ts`).
+
+A bitmap default enables burn-in automatically. Text defaults are the sole rendition with `DEFAULT=YES,AUTOSELECT=YES`; `FORCED=YES` is set when applicable. Explicit text choices remain in `selectedSubtitle` without those automatic-default flags. Responses/activity expose `subtitleDefault` as `forced-english`, `english` or null (`apps/server/src/playback/playlist.ts`, `apps/server/src/playback/session.ts`).
+
+Any explicit subtitle PATCH, including Off, clears automatic-default provenance. An audio-only PATCH preserves the previous subtitle/default; it does not rerun the heuristic. This avoids silently re-enabling captions after a user turned them off (`apps/server/src/playback/manager.ts`, `apps/server/test/integration/default-subtitles-routes.test.ts`).
+
+## Progressive text extraction
 
 ```mermaid
 flowchart TD
-    Start[Session starts] --> Main[Main extractor near requested position]
-    Main --> Files[Per-track growing WebVTT files]
-    Main --> Clock[Copy-only video framecrc coverage clock]
-    Files --> Store[Deduplicated session cue store]
-    Clock --> Coverage[Trusted coverage intervals]
-    Request[Subtitle segment request] --> Check{Whole interval covered?}
+    Start[Session starts] --> Run[Main run near playhead]
+    Run --> Vtt[Growing per-track WebVTT]
+    Run --> Clock[Copy-only video framecrc clock]
+    Vtt --> Store[Session cue store]
+    Clock --> Coverage[Trusted coverage union]
+    Request[Subtitle segment request] --> Check{Interval covered?}
     Coverage --> Check
-    Check -->|yes| Render[Clip overlapping cues and serve]
-    Check -->|no| Seek[Steer extractor and hold request]
-    Seek --> Main
-    Seek --> Retry[503 if still unread after hold]
+    Check -->|yes| Render[Clip cues and serve]
+    Check -->|no and within window| Seek[Wait for run or launch seek run]
+    Seek --> Vtt
+    Check -->|still unread| Retry[Hold then 503 with retry hint]
 ```
 
-The main run starts with video encoding, at `max(0, floor(requestedStartSec − 40))`. Each run reads the source once and emits every selected text track. An extra copy-only video `framecrc` output provides the clock: sparse forced/signs subtitles cannot reliably drive FFmpeg's usual output progress. `-copyts` preserves absolute source times.
+The main run starts alongside video at `max(0, floor(requestedStartSec−40))`. It reads the source once for all rendered text tracks and writes a copy-only video `framecrc` output as its clock. Sparse forced/signs tracks cannot reliably drive FFmpeg's ordinary progress clock; `-copyts` retains absolute source times (`apps/server/src/playback/subtitleRun.ts`).
 
-Runs tail outputs every **250 ms**, retaining UTF-8 decoder state and unfinished cue blocks. A complete newline-terminated newest cue can be accepted without waiting for another blank separator. Coverage is committed only after reading the growing track files against a sampled video head.
+Runs tail outputs every **250 ms**, preserving UTF-8 decoder state and incomplete cue blocks. A newline-terminated newest cue can be accepted before the next blank separator. Coverage advances only after track files have been read against a sampled video head (`apps/server/src/playback/subtitleRun.ts`, `apps/server/src/playback/vtt.ts`).
 
-### Coverage and seeks
+### Coverage is not cue presence
 
-- Nonzero seeks trust coverage from `ss + 10 seconds`; zero-start trusts from zero. This guards against cues that started before the input seek.
-- Live coverage ends at `committedHeadSec − 6 seconds` to allow for container-cluster/read lag.
-- Clean completion covers through infinity; the store intersects that with requested media intervals. Full completion tolerates less than 0.5 seconds missing at the end.
-- Coverage is the union over runs, not inferred from cue presence. A covered silent segment may correctly contain no cues; an unread segment must not masquerade as silence.
-- A request within **120 seconds** ahead of a relevant active run waits for it. Otherwise a seek run begins 40 seconds before the target.
-- At most **2 extractor processes** run at once. Seeking replaces a non-main run preferentially, and waits for it to stop before launching. A delayed fill run reads the first uncovered gap after main has progressed at least **60 seconds**, subject to available slots.
-- Overlapping runs hand over after the earlier one reads **10 seconds** into the later run's trusted territory. Completed coverage stops remaining work.
+- A zero-start run trusts coverage from zero; nonzero seeks trust from **ss+10 seconds**, protecting against cues that began before the seek.
+- Live trusted coverage ends **6 seconds behind committed video head** for container/read lag.
+- Clean completion covers from that run's trusted start through infinity. It does not fill a missing prefix.
+- The store unions coverage over runs; complete means no gap before duration minus **0.5 seconds**. An empty covered segment is genuine silence, not unread data (`apps/server/src/playback/subtitleRun.ts`, `apps/server/src/playback/subtitleStore.ts`).
 
-The store deduplicates by start/end/text, sorts deterministically, and keeps cue settings for rendering. Cues crossing four-second segment boundaries are clipped into each interval, retaining **absolute** times and `X-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`. Full-track VTT retains original cue times without that map.
+Cues are deduplicated by start/end/text, sorted deterministically and retain settings. Four-second segments clip overlapping cues while retaining **absolute** times and `X-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`; full VTT keeps original cue times without that map (`apps/server/src/playback/subtitleStore.ts`, `apps/server/src/playback/vtt.ts`).
 
-## Readiness and failures
+### Scheduling and read-ahead
 
-Master and subtitle playlists are duration-derived complete VOD manifests and never wait for extraction. Each text rendition is explicitly `DEFAULT=NO,AUTOSELECT=NO`; choosing a sidecar records selection without restarting video.
+A relevant, unheld run within **120 seconds** of the requested position is waited for. Otherwise a seek run starts 40 seconds before the target. Light sources permit **2** extractor processes; heavy sources permit **1**, replacing the old run only after it stops. A non-main run is replaced preferentially. Earlier overlapping runs stop after reading ten seconds into a later run's trusted territory (`apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/extractorSchedule.ts`).
 
-| Request condition | Result |
-| --- | --- |
-| Trusted segment interval covered | 200 WebVTT, including legitimate empty coverage |
-| Unread interval | Steer extraction, poll up to default **6 seconds**, then 503 `subtitle_not_ready`, `Retry-After: 1`, `Cache-Control: no-store` |
-| Extraction permanently failed, interval unread | Header-only WebVTT with `X-Subtitle-Status: failed` |
-| Full track not complete | 404 `subtitle_not_ready`; `fullUrl` remains null |
-| Full track complete | `fullUrl` exposed; serve full VTT |
-| Unrendered/unknown track or out-of-range segment | 404 |
+There is **no automatic prefix/head-fill scan** after a late start. Earlier gaps are extracted when requested. Long titles also stop extraction at the read-ahead window, so `fullUrl` need not appear early or at all during ordinary partial viewing.
 
-A failed run retries once, starting 40 seconds before its committed head. A second failure marks unfinished extraction as error, logs a warning, and stops active runs. Already-covered intervals remain usable; subtitle failure is not itself a video-session failure. The failed-empty response is a distinct explicit failure path, not the normal not-ready behavior.
+Each run has its own hold window measured from `max(playerReach, run.ss)`, using default **180-second hold / below-120-second resume**. Player reach is the greater of reported position and last requested video-segment start. An unread subtitle request beyond player reach plus the window does not launch far-ahead work; it continues returning not-ready until the player is closer (`apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/manager.ts`). See [network controls](../network.md).
 
-## Bandwidth integration
+## Bandwidth scheduling
 
-Extractors use `SourceHandle.extractorUrl`, sharing cached source bytes with the encoder but **not populating the rolling block cache**. Only upstream extractor traffic is throttled, to **2 MiB/s** while starved; memory reads remain fast.
+“Heavy” means source height **≥2160** or estimated average bitrate **≥45,000,000 bit/s** from source size/duration. This is source workload, not output dimensions (`apps/server/src/playback/extractorSchedule.ts`).
 
-Video normally marks the shared source starved with less than 30 seconds of lead, or positive recent speed below 1.6×. A new main/seek burst relaxes this until it reaches 72 seconds beyond its needed position or 25 seconds wall time, unless positive video speed falls below 1.35×. These are scheduling heuristics, not a guaranteed realtime performance floor. See [source proxy](../source-proxy.md).
+| Situation                      | Upstream extractor pacing                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| Video finished                 | No local extractor pacing                                                                   |
+| Heavy source, encoder not warm | **6 MiB/s**, including initial burst                                                        |
+| Fresh main/seek burst          | Unlimited unless positive average video speed <1.35×, then **2 MiB/s**                      |
+| Outside burst                  | **2 MiB/s** if lead <30 seconds or positive recent/average speed <1.6×; otherwise unlimited |
+
+Warm means at least ten segments past run start, or at least three with recent/average speed ≥2×. A burst ends after reaching **72 seconds beyond the needed position** or **25 seconds wall time**. Recent speed uses a roughly four-second sample window with at least 1.5 seconds of span (`apps/server/src/playback/extractorSchedule.ts`, `apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/manager.ts`).
+
+The pacer is per upstream extractor response; it does not promise an aggregate 2/6 MiB/s ceiling across concurrent reads. Cached reads bypass that pacing. **Both encoders and extractors populate/reuse rolling blocks**. All actual proxy media downloads still share the global cap, whose priority order is encoder, prefetch, extractor with aging (`apps/server/src/sourceproxy/serve.ts`, `apps/server/src/sourceproxy/pacer.ts`). “Unlimited” here never bypasses the [global gate](../network.md).
+
+## Readiness and errors
+
+Master/rendition manifests are duration-derived and do not wait for extraction (`apps/server/src/playback/playlist.ts`).
+
+| Condition                                         | Response from `apps/server/src/playback/manager.ts`                                                      |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Whole requested interval covered                  | 200 WebVTT, possibly legitimately empty                                                                  |
+| Interval unread                                   | Poll for up to **6 seconds**, then 503 `subtitle_not_ready`, `Retry-After: 1`, `Cache-Control: no-store` |
+| Extraction permanently failed, interval unread    | Header-only WebVTT with `X-Subtitle-Status: failed`                                                      |
+| Full track incomplete                             | 404 `subtitle_not_ready`; `fullUrl` stays null                                                           |
+| Track without a rendition or out-of-range segment | 404                                                                                                      |
+
+A failed run retries once from 40 seconds before committed head. A second failure marks unfinished extraction error, logs a warning and stops active runs; already-covered intervals remain usable. Ordinary extraction failure does not fail video, but an **RSS watchdog hit does fail the whole session**. See [lifecycle](lifecycle.md).
 
 ## Bitmap burn-in and track changes
 
-`requireSubtitle` rejects bitmap sidecar and text burn modes. A bitmap selection maps its stream into an overlay graph and passes the authored canvas when known. Video first scales/tone-maps, then overlays subtitles. HDR10 subtitle RGB white is multiplied by **0.58**, targeting SDR-reference-white PQ rather than full-scale HDR white.
+Bitmap sidecar and text burn modes are rejected. Burn-in maps the selected bitmap stream, uses its authoring canvas when available, scales/tone-maps video first and overlays the subtitles. Subtitle input is resampled to video frame rate **before scaling**, preventing FFmpeg's per-packet subtitle heartbeat from queueing redundant large canvases on high-packet-rate audio (`apps/server/src/playback/tracks.ts`, `apps/server/src/playback/ffmpegArgs.ts`).
 
-The inspected working tree uses NVDEC plus CUDA scale and download for compatible retained-HDR output of width ≥3840; subtitle RGBA is rendered at 1920×1080 and neighbor-upscaled. Other burn-in paths use software decode/scale as appropriate, while video encoding remains NVENC. Tone mapping itself still uses Vulkan/libplacebo or OpenCL filters; “software decode” is not “software tone mapping.”
+Retained HDR overlays use 10-bit YUV and RGB white multiplication **0.58** for SDR reference white. Compatible retained-HDR output width ≥3840 uses NVDEC/CUDA scale plus download, rendering subtitles at 1920×1080 before neighbor upscaling. Other burn paths use software-accessible frames as needed; encoding remains NVENC. Input preroll is up to **10 seconds** with output trimming to the requested segment (`apps/server/src/playback/ffmpegArgs.ts`).
 
-Audio changes or enabling/disabling/changing bitmap burn-in restart the video process at the current playhead segment and discard prior video segments and the ready init copy. **Text extractor state survives** these restarts. Burn runs start up to ten seconds early and trim lead-in so an already-visible bitmap cue survives a seek; this is a bounded preroll heuristic.
+Changing audio or bitmap burn target restarts video and invalidates its old segments/init. Text-only selection does not. The text controller/store survives these video restarts. See [encoding](encoding.md) and [lifecycle](lifecycle.md).
 
-## Modification entry points
+## Modification and test pointers
 
-Change supported kinds in `apps/server/src/playback/probe.ts`, selection semantics in `apps/server/src/playback/tracks.ts`, scheduler limits in `apps/server/src/playback/subtitleExtractor.ts`, and trust boundaries in `apps/server/src/playback/subtitleRun.ts`. Preserve the distinction between missing data and silent coverage when changing serving logic in `apps/server/src/playback/manager.ts`. Public URLs belong to the [API](../../api/index.md); video output requirements belong to [encoding](encoding.md).
+Change default policy independently of explicit validation. Preserve the unread-versus-silent distinction, held-run handling and selected-track retention when changing extraction. API shape changes must follow [shared contracts](../../packages/shared.md) and [API guidance](../../api/index.md).
 
-## Measured scope and evidence
-
-Shared playback scope: **20 source `.ts` / 16 `*.test.ts` / 2 helper `.ts` files**, recursively enumerated under `apps/server/src/playback`, `apps/server/test/playback`, and `apps/server/test/encode`; **1 unique committer** in scoped `origin/main` history, deduplicating `%cn <%ce>`. This is the full playback footprint, not subtitle-only allocation.
-
-Read evidence includes cue parsing/coverage tests, progressive integration assertions for late-start equivalence, holding and retrying unread segments, no extractor restart on PATCH, and bitmap preroll. Tests were **not run**. The encoding argument file and its unit test already had uncommitted edits; documentation did not alter them.
+Playback-wide footprint: **27 source / 24 test / 4 helper files**, test/code ratio **0.89**, **1 unique human author** in scoped `origin/main`; [systems](../index.md) defines the scope. Tests were read, not run. Offline default/scheduling/cue tests and GPU progressive/track tests cover different layers.
 
 ## Key source files
 
-| Repository-root path | Role |
-| --- | --- |
-| `apps/server/src/playback/subtitleExtractor.ts` | Bounded run scheduling and retries |
-| `apps/server/src/playback/subtitleRun.ts` | Framecrc clock and incremental cue reads |
-| `apps/server/src/playback/subtitleStore.ts` | Coverage and stable cue set |
-| `apps/server/src/playback/vtt.ts` | Timestamp and clipping rules |
-| `apps/server/src/playback/ffmpegArgs.ts` | Bitmap overlay and preroll |
-| `apps/server/test/playback/subtitles.test.ts` | Cue, interval, and playlist expectations |
-| `apps/server/test/encode/progressive-subtitles.test.ts` | Progressive readiness/lifetime assertions |
-| `apps/server/test/encode/tracks.test.ts` | Audio and burn-in switch assertions |
+| Repository-root path                                            | Role                                                 |
+| --------------------------------------------------------------- | ---------------------------------------------------- |
+| `apps/server/src/playback/defaultSubtitle.ts`                   | Automatic choice rules                               |
+| `apps/server/src/playback/subtitleExtractor.ts`                 | Main/seek scheduling and per-run holds               |
+| `apps/server/src/playback/subtitleRun.ts`                       | Progressive reads and trusted coverage clock         |
+| `apps/server/src/playback/subtitleStore.ts`                     | Stable cue/coverage union                            |
+| `apps/server/src/playback/extractorSchedule.ts`                 | Heavy-source and starvation rules                    |
+| `apps/server/src/playback/ffmpegArgs.ts`                        | Bitmap overlay, frame rate and preroll               |
+| `apps/server/src/playback/manager.ts`                           | Readiness responses and PATCH integration            |
+| `apps/server/test/integration/default-subtitles-routes.test.ts` | Omitted/null/explicit choices and master defaults    |
+| `apps/server/test/playback/extractorSchedule.test.ts`           | Warmup, burst and concurrency policy                 |
+| `apps/server/test/playback/subtitles.test.ts`                   | Cue, interval, rendition and extraction arguments    |
+| `apps/server/test/encode/progressive-subtitles.test.ts`         | Progressive readiness and on-demand earlier coverage |

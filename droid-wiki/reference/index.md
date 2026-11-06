@@ -1,26 +1,16 @@
 # Reference
 
-This section collects implementation-backed values and storage/contracts rather than prescribing deployment policy. Start with [configuration](configuration.md), [data models](data-models.md), and [dependencies](dependencies.md).
+These pages collect current configuration, durable models and direct dependencies. Defaults and schemas describe the implementation at `bb48e6d`, not a promise that every planned client or UI exists.
 
-## Locate a fact
+| Question                                     | Page                                                             | Authoritative source                                  |
+| -------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| Which setting wins, and what is its default? | [Configuration](configuration.md)                                | `apps/server/src/config.ts`, `.env.example`           |
+| What survives a restart?                     | [Data models](data-models.md)                                    | `apps/server/src/db/migrations.ts`                    |
+| Which JSON shapes cross runtime boundaries?  | [Shared](../packages/shared.md)                                  | `packages/shared/src/index.ts`                        |
+| Which packages are directly declared?        | [Dependencies](dependencies.md)                                  | Root and workspace manifests                          |
+| Which routes and probes exist?               | [API](../api/index.md), [monitoring](../how-to-monitor/index.md) | `apps/server/src/routes/`                             |
+| What can leave the machine?                  | [Telemetry](../systems/telemetry.md)                             | `docs/PRIVACY.md`, `packages/shared/src/analytics.ts` |
 
-| Question | Reference or source |
-| --- | --- |
-| Which environment value wins? | [Configuration](configuration.md); `apps/server/src/config.ts` |
-| Which requests exist? | [API](../api/index.md); `apps/server/src/routes/` |
-| What validates a device/session? | `packages/shared/src/schemas.ts`, `packages/shared/src/playback.ts` |
-| What survives restart? | [Data models](data-models.md); `apps/server/src/db/` |
-| Which packages are direct dependencies? | [Dependencies](dependencies.md); workspace manifests |
-| Which output/stat fields are visible? | [Monitoring](../how-to-monitor.md); shared playback schemas |
+Progress/history/downloads/health are implemented server capabilities. Web remains a placeholder and desktop/TV remain planned; schema enums and package allowlists do not prove those apps ship (`apps/web/src/App.tsx`, `README.md`).
 
-The public API and internal service methods are different surfaces. In particular, manager progress helpers and source-proxy counters do not imply corresponding HTTP routes. The route implementations remain authoritative.
-
-## Reading the references
-
-Configuration defaults are values actually loaded by the server, not recommendations for every host. Windows data paths and test helpers are concrete implementation assumptions. Node and pnpm versions observed while generating documentation are explicitly distinguished from repository pins.
-
-Schema presence does not prove a complete product feature. For example, the database includes a progress table, while the current home endpoint returns an empty `continueWatching` list; device kinds include desktop and TV despite absent corresponding applications.
-
-Similarly, packages named in workspace/build allowlists are not necessarily present runtimes. Use the [architecture](../overview/architecture.md) and [tooling](../how-to-contribute/tooling.md) pages to distinguish implemented workspaces from placeholders.
-
-No secret values, personal configuration contents, or local database records belong in these references.
+Local SQLite data includes device/client identity and upstream cache contents. Do not treat telemetry filtering as encryption or anonymization of local storage, and never copy real configuration or database records into examples. See [security](../security.md).

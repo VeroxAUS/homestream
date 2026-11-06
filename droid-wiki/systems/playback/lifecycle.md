@@ -1,105 +1,116 @@
-# Playback lifecycle and recovery
+# Playback lifecycle
 
-Active contributors: VeroxAUS (origin/main sole human)
+Active contributors: VeroxAUS
 
-The playback manager owns session resource lifetime, serializes video restarts, and uses a periodic monitor to reconcile client activity, finished-segment disk usage, and encoder progress. A complete HLS playlist does not require encoding the whole title in advance.
+The manager owns session processes, files and source leases. It serializes seek/track restarts, monitors idle sessions and disk use, and stops a session if any managed FFmpeg exceeds its memory limit (`apps/server/src/playback/manager.ts`).
 
 ## Layout and key abstractions
 
-`SessionRecord` stores state, a generation token, restart promise, current run start/head, player segment, activity timestamps, and a parked flag. `EncoderProcess` wraps a child process; `SegmentStore` indexes finished media files. `SessionMonitor` applies a pure `planDiskCap` result to live sessions. `PidRegistry` is the crash-recovery safety net.
+`SessionRecord` stores public state separately from process state: generation, current run start/head, restart promise, parked flag, playhead and activity timestamps. `EncoderProcess` owns one child; `SegmentStore` indexes finished files; `SessionMonitor` applies the pure disk planner; `MemoryWatchdog` samples process working sets; `PidRegistry` records children for crash recovery.
 
 ```mermaid
 stateDiagram-v2
     [*] --> starting
     starting --> ready: first segment exists
+    starting --> stopped: opening attempt abandoned
     ready --> playing: progress ping
     playing --> paused: paused ping
-    paused --> playing: playing/buffering ping
-    starting --> error: retry exhausted
-    ready --> error: retry exhausted
-    playing --> error: retry exhausted
-    paused --> error: retry exhausted
-    starting --> stopped: end
-    ready --> stopped: end
-    playing --> stopped: end
-    paused --> stopped: end
-    error --> stopped: cleanup
+    paused --> playing: playing ping
+    playing --> buffering: buffering ping
+    buffering --> playing: playing ping
+    ready --> error: terminal process failure
+    playing --> error: terminal process failure
+    paused --> error: terminal process failure
+    buffering --> error: terminal process failure
+    error --> stopped: explicit or idle cleanup
+    playing --> stopped: end session
     stopped --> [*]
 ```
 
-Seeking/retry/parking are process operations, not separate public session states. A paused client can keep a session alive with pings; polling session metadata alone does not count as activity.
+The diagram abbreviates transitions: pings can move any ready/playing/paused/buffering record to any ping state; stop applies to every state. Seeking, retrying and parking are internal process operations, not public states (`apps/server/src/playback/manager.ts`, `apps/server/src/playback/session.ts`).
 
-## Seeking and segment serving
+Opening sessions remain hidden from list/activity until the first segment. [Startup](index.md) describes candidate fallback and two-slot reservation; this page covers behavior after a record exists.
 
-The initial run starts at `floor(startPositionSec / 4)`, clamped to the final segment. Generated playlists still list every segment from zero. Segment requests update `playerSegment`; if no progress ping arrived in 30 seconds, they also set the reported position to that segment's start.
+## Segment serving and seek restarts
 
-1. A finished requested file is served without forcing a restart.
-2. For a missing file, a running encoder is considered close enough only when the target is at/after its run start, at least `head − 1`, and at most `head + 5`.
-3. Otherwise `restartAt` invalidates old callbacks by incrementing generation, stops the prior video child, resets the failure allowance, and launches at the requested index. Restart promises serialize these operations.
-4. A request waits for a final file (not `.tmp`), polling every **100 ms** with a default **30-second** deadline.
-5. If the target was skipped/evicted while waiting, serving can ensure/restart again, up to **3 attempts**. A timed-out wait produces 504 `segment_timeout`; a failed encoder produces 502 `encoder_failed`; a completed run that never produced it produces 404.
+The initial segment is `floor(startPositionSec / 4)`, clamped to the final segment. Playlists still enumerate the complete title. For a requested video segment (`apps/server/src/playback/manager.ts`):
 
-Only one video encoder is intended per session; independent subtitle workers can also exist. Generation checks suppress progress/exit callbacks from replaced video runs.
+1. Wait for any current track reconfiguration; set `playerSegment`. If no progress ping arrived in 30 seconds, also infer reported position from that segment.
+2. Serve an existing finished file without forcing a restart.
+3. For a missing file, keep the running encoder only if the index is at/after its run start and lies between **head−1** and **head+5**.
+4. Otherwise increment generation, stop the old child and launch at the requested segment. A shared restart promise serializes operations; callbacks from old generations are ignored.
+5. Poll for the final file every **100 ms**, up to the default **30-second** deadline. A skipped/evicted target can trigger another ensure/restart, up to **3 serving attempts**.
 
-For fMP4, `init.mp4` is not served as soon as FFmpeg creates it: the manager waits for the current run's first finished segment, copies init to a temporary file, verifies generation stayed unchanged, then renames to `init-ready.mp4`. Ordinary seeks reuse that complete init; track reconfiguration discards it because audio parameters may change. Absolute fragment timestamps are maintained by [encoding flags](encoding.md).
+A wait timeout is 504 `segment_timeout`; terminal encoder failure is 502 with its code; clean completion without that file is 404. No `.tmp` segment is served. Each launch resets the [read-ahead window](../network.md) and recent-speed history. The manager intends one video encoder per session, apart from independent subtitle workers.
 
-## Track reconfiguration
+### Safe fMP4 init
 
-PATCH validates all supplied choices before mutation. Text-only changes do not alter encoded media. A changed audio index or bitmap burn target recalculates the decision, updates the play record, stops video, removes old `.ts`/`.m4s` output and `init-ready.mp4`, clears segment accounting, and launches at `floor(positionSec / 4)`. The playlist URL and segment naming stay stable; clients must reload playback after a media-changing selection. [Subtitle workers and their cue store](subtitles.md) persist.
+FFmpeg creates `init.mp4` before it is complete. The manager waits for a run with a finished first segment, copies init to a temporary file, verifies generation is unchanged and renames it to `init-ready.mp4`. Ordinary seeks reuse that complete copy; audio/burn reconfiguration deletes it. `frag_discont` preserves absolute timestamps across runs, as described in [encoding](encoding.md) (`apps/server/src/playback/manager.ts`).
 
-## Process failure and recovery
+### Track changes
 
-The first unexpected nonzero exit emits a warning, refreshes the proxy's upstream resolution (refresh errors are tolerated here), and relaunches near the first missing segment. `resumePoint` scans from `max(runStart, head − 6)` past existing segments, bounded by the final index.
+PATCH validates requested choices before mutation. Text-only selection changes do not restart video. A changed audio index or bitmap burn target recalculates the decision, updates play history, stops video, removes prior `.ts`/`.m4s` segments and the ready init, clears accounting, and launches at the current position's segment. Playlist URLs remain stable; the client must reload changed media. Failed records reject PATCH with 409 `session_failed`. The subtitle cue store/controller survives video restarts (`apps/server/src/playback/manager.ts`, `apps/server/src/playback/tracks.ts`).
 
-If a tone-mapped libplacebo run fails before producing its first segment, recovery switches that session to OpenCL and marks libplacebo broken for future sessions on that manager instance. This is failure-triggered fallback, not prior hardware validation; there is no software video-encoder fallback.
+## Ordinary encoder recovery
 
-A second unexpected failure in that retry allowance sets state `error`, finalizes the play as failed, emits an error log/event and `session.update`, and removes it from live activity/slot accounting. It **does not immediately delete the record, source handle, subtitle workers, or output directory**; explicit stop, idle cleanup, or shutdown performs teardown. Error details scrub URL-like strings and redact registered secrets.
+The first unexpected nonzero exit refreshes the source link best-effort and relaunches near the first missing segment. `resumePoint()` scans from `max(runStart, head−6)` past finished files, bounded by the final segment. A seek or track reconfiguration resets this one-retry allowance (`apps/server/src/playback/manager.ts`).
 
-`EncoderProcess.stop()` first writes `q` and closes stdin, waits up to **3 seconds**, then force-kills (Windows `taskkill /T /F`; non-Windows SIGKILL to the recorded PID), with a further bounded wait. Stderr is retained only as the last **4,000 characters**.
+If a tone-mapped libplacebo run fails before its first segment, that session switches to OpenCL and the manager remembers libplacebo as broken for later sessions. It still uses NVENC; another source is tried only during automatic startup, not mid-session.
 
-## Disk-cap flow
+A second unexpected failure sets state `error`. For an already-visible session it finalizes failed play history, emits an error and updates activity. The record, files, source lease and subtitle controller are **not immediately deleted**; explicit stop, idle cleanup or shutdown owns teardown. An opening failure instead lets startup abandon the attempt and delete its provisional history. Error text strips URL-like strings and registered secrets (`apps/server/src/playback/manager.ts`).
 
-Housekeeping defaults to **2-second** ticks; overlapping ticks are suppressed. It first ends all sessions inactive for **120 seconds**, including failed records, refreshes live finished-segment sizes, derives bitrate from up to ten recent segments, applies disk policy, and publishes updates.
+## RSS watchdog and CPU protections
 
-The cap is `transcodeMaxGb × 1024³`, using the sizes of completed `seg-N.ts`/`seg-N.m4s` files. It is **not a hard filesystem quota**: `.tmp`, init, playlists, subtitle outputs, and other directory overhead are not counted by this planner, and new data can arrive between ticks.
+`FFMPEG_MAX_RSS_MB` defaults to **4096 MiB per process**. The manager shares one watchdog across video and subtitle FFmpeg children. It samples watched PIDs every **1 second**; Windows uses `tasklist` working sets, other platforms use `ps` RSS. A process is over the limit only when usage is **strictly greater**. Missing/failed samples skip that round, and overlapping sampling is suppressed (`apps/server/src/playback/memoryWatchdog.ts`).
 
-| Stage | Rule |
-| --- | --- |
-| Above 80% | Oldest-activity sessions first: evict watched segments with index `< player − 3`, targeting 65% |
-| Still above 80% | Park running encoders with at least 8 segments (32 s) lead, retaining output |
-| Above 100% | Stop sessions idle at least 30 s, oldest first, never the last remaining session |
-| Still above 100% | Evict from largest remaining sessions toward 65%, protecting player through player+5 and indexes at/after head−2 |
-| Below 60% | Resume a parked encoder if head−player is less than 30 segments (120 s) |
+A video **or subtitle** limit hit fails the whole session immediately as `encoder_memory_limit`, invalidates the process generation, records the error and stops its video/subtitle children. It does not take the ordinary retry path. The offender is asked to quit with `q`, then killed after a **2-second** grace. The session's error record/files still await normal teardown; an opening failure is abandoned by startup (`apps/server/src/playback/manager.ts`, `apps/server/src/playback/encoderProcess.ts`).
 
-Protected regions or insufficient candidates can leave planned usage above the cap. The ratios provide headroom/hysteresis, not guaranteed exact disk bounds. Evicted files remain in the VOD timeline and can be regenerated on request. A missing requested segment can restart a parked encoder directly, independently of monitor resume thresholds.
+This is a sampled per-process guard, not a hard aggregate memory quota, GPU-VRAM limit or Node.js RSS limit. Probing is not enrolled in this watchdog. Video/extraction/probing use best-effort below-normal process priority; encoder/filter threads are capped separately in [encoding](encoding.md) (`apps/server/src/playback/priority.ts`).
 
-## Teardown and startup orphan recovery
+## Idle and disk housekeeping
 
-Ending marks the record stopping, removes it from the manager, waits for an in-flight restart, stops video and subtitles, releases the source owner, and removes the session directory with retries. Nonfailed plays are finalized as `ok` for stop/idle/disk/shutdown; failed history is preserved. `session.end` includes the reason.
+The default tick is **2 seconds**; overlapping sweeps are suppressed. It first ends records inactive for **120 seconds**, including failed records but excluding opening ones. HLS, subtitle and progress requests count as activity; GET session metadata does not. It refreshes live finished-file sizes, estimates bitrate from up to ten recent segments and applies disk policy (`apps/server/src/playback/monitor.ts`, `apps/server/src/playback/manager.ts`).
 
-At server startup, recovery reads `dataDir/ffmpeg-pids.json`. Video entries default to matching their session ID in the command line; extractor entries use the **`webvtt` marker**, not a session-ID match. Only matching recorded PIDs are killed, then registry entries are removed. Windows command lines come from CIM; non-Windows from `ps`.
+`TRANSCODE_MAX_GB` defaults to **20**, interpreted as `20 × 1024³` bytes. Only finished `seg-N.ts`/`seg-N.m4s` sizes feed this planner; temporary files, init, subtitle output and other overhead do not. It is **not a filesystem quota** (`apps/server/src/config.ts`, `apps/server/src/playback/segmentStore.ts`).
 
-Recovery also attempts to delete **every child directory** under the configured transcode directory, not just UUID-shaped ones. Keep unrelated data out of that directory. Registry persistence is best effort, and cleanup failures may leave locked directories for the next startup. This protects against many recycled-PID cases but is not a universal guarantee of child-process identity.
+| Stage       | Policy in `apps/server/src/playback/diskCap.ts`                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| Usage >80%  | Oldest-activity sessions first: evict segments `< player−3`, aiming for 65%                              |
+| Still >80%  | Park running encoders with at least 8 segments/32 seconds of lead                                        |
+| Usage >100% | Stop sessions idle ≥30 seconds, oldest first, never the last remaining session                           |
+| Still >100% | Evict from largest remaining sessions toward 65%, protecting player through player+5 and indexes ≥head−2 |
+| Usage <60%  | Resume parked encoders with less than 30 segments/120 seconds of lead                                    |
 
-## Integrations and modification entry points
+Protected data or insufficient candidates can leave usage above the cap. New writes can also arrive between ticks. A missing video request can restart a parked encoder without waiting for the monitor; evicted positions stay in the VOD playlist and are regenerated. Disk parking stops a process; network read-ahead holding keeps its loopback connection alive. They are different controls.
 
-Session and event contracts are covered by the [API](../../api/index.md), persistence by [data models](../../reference/data-models.md), and upstream retries by the [source proxy](../source-proxy.md). Change restart rules in `apps/server/src/playback/manager.ts`; disk decisions in `apps/server/src/playback/diskCap.ts`; accounting/tick behavior in `apps/server/src/playback/monitor.ts`; process shutdown/identity checks in `apps/server/src/playback/encoderProcess.ts` and `apps/server/src/playback/pidRegistry.ts`.
+## Teardown and crash recovery
 
-## Measured scope and test evidence
+Ending marks stopping, removes the record, waits for any restart, stops video/subtitles, releases its source owner and removes its directory with retries. Nonfailed play history is finalized as `ok` for stop/idle/disk/shutdown; an existing failure is preserved. It emits `session.end` with the reason (`apps/server/src/playback/manager.ts`).
 
-Shared playback footprint: **20 source `.ts` / 16 `*.test.ts` / 2 helper `.ts` files**, recursive working-tree counts under playback source and playback/encode test directories; **1 unique committer** from `origin/main` `%cn <%ce>` scoped to those directories. Counts refer to the whole playback subsystem.
+Ordinary process stop sends `q`, waits **3 seconds**, then force-kills, with a further bounded wait. Windows uses `taskkill /T /F`; POSIX kills the recorded PID. The stderr tail is limited to **4,000 characters** and is scrubbed before user/log exposure (`apps/server/src/playback/encoderProcess.ts`).
 
-`apps/server/test/encode/lifecycle.test.ts` asserts far/backward seeks, concurrent-start reservations, idle behavior, one retry, disk parking, and residue cleanup. Its timings are test expectations, **not benchmarks measured for this wiki**. `apps/server/test/playback/diskCap.test.ts` expresses eviction/protection thresholds; `apps/server/test/playback/pidRegistry.test.ts` covers registry/orphan expectations. Tests were read, not executed.
+Startup reads `ffmpeg-pids.json` under the configured data directory. A recorded PID is killed only if its current command line contains the recorded match: video defaults to session ID; subtitle runs use the `webvtt` marker. Entries are then removed. Persistence is best-effort; this is a safety check, not a universal process-identity guarantee (`apps/server/src/playback/pidRegistry.ts`).
+
+Recovery also deletes **every child directory under the configured transcode directory**, not just UUID-shaped ones. Keep unrelated data out of that directory. Locked cleanup failures may remain until a later startup. Server startup/shutdown ownership is covered in [server](../../apps/server.md).
+
+## Modification and test pointers
+
+Preserve generation and restart ordering when changing `apps/server/src/playback/manager.ts`; change disk rules in the pure planner, working-set sampling in the watchdog and orphan matching in the PID registry. See [monitoring](../../how-to-monitor/index.md) for the startup timeline, events and operational warnings.
+
+Playback footprint: **27 source / 24 test / 4 helper files**, test/code ratio **0.89**, **1 unique human author** on scoped `origin/main`; see [scope](../index.md). Offline tests cover reservations, fake-process failure and RSS decisions; GPU lifecycle tests cover real seeks, idle expiry, disk parking and residue. They were inspected, not run; their time limits are not measured benchmarks.
 
 ## Key source files
 
-| Repository-root path | Role |
-| --- | --- |
-| `apps/server/src/playback/manager.ts` | Serving, restarting, failing, and ending |
-| `apps/server/src/playback/encoderProcess.ts` | Child-process lifecycle |
-| `apps/server/src/playback/monitor.ts` | Serialized housekeeping |
-| `apps/server/src/playback/diskCap.ts` | Pure cap policy |
-| `apps/server/src/playback/segmentStore.ts` | Finished-file accounting |
-| `apps/server/src/playback/pidRegistry.ts` | Persistent PID registry and startup cleanup |
-| `apps/server/test/encode/lifecycle.test.ts` | Lifecycle integration expectations |
-| `apps/server/test/playback/diskCap.test.ts` | Disk planning cases |
+| Repository-root path                               | Role                                               |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `apps/server/src/playback/manager.ts`              | Serving, restart, terminal failure and teardown    |
+| `apps/server/src/playback/encoderProcess.ts`       | Child lifecycle, progress and bounded stderr       |
+| `apps/server/src/playback/memoryWatchdog.ts`       | Per-PID working-set guard                          |
+| `apps/server/src/playback/monitor.ts`              | Serialized housekeeping                            |
+| `apps/server/src/playback/diskCap.ts`              | Pure eviction/park/resume plan                     |
+| `apps/server/src/playback/segmentStore.ts`         | Finished-segment accounting                        |
+| `apps/server/src/playback/pidRegistry.ts`          | Crash registry and stale-directory cleanup         |
+| `apps/server/test/playback/memoryWatchdog.test.ts` | Sampling, threshold and graceful/forced stop tests |
+| `apps/server/test/playback/diskCap.test.ts`        | Disk-protection thresholds                         |
+| `apps/server/test/encode/lifecycle.test.ts`        | Real-media lifecycle expectations                  |
+| `apps/server/test/encode/memory-limit.test.ts`     | Session failure on watchdog hit                    |

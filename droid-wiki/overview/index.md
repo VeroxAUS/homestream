@@ -1,21 +1,24 @@
 # HomeStream
 
-HomeStream is a LAN media server that combines TMDB catalog metadata, gateway stream discovery, and device-specific HLS transcoding. The Fastify server is implemented; the React web client currently renders a placeholder (`apps/server/src/app.ts`, `apps/web/src/App.tsx`).
+HomeStream is a local-network media server. A Windows PC discovers sources through a configured gateway, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to clients. The server works; the React web UI still shows a placeholder (`README.md`, `apps/server/src/app.ts`, `apps/web/src/App.tsx`).
 
 ## Start here
 
-- [Architecture](architecture.md): components and request flow.
+- [Architecture](architecture.md): process boundaries and playback flow.
 - [Getting started](getting-started.md): install, configure, build, and run.
 - [Playback](../systems/playback/index.md): sessions, encoding, seeking, and subtitles.
-- [API](../api/index.md): HTTP and event interfaces.
-- [Contributing](../how-to-contribute/index.md): development and validation.
+- [Features](../features/index.md): catalog, source selection, caching, and viewing progress.
+- [API](../api/index.md): HTTP endpoints, HLS, and server-sent events.
+- [Contributing](../how-to-contribute/index.md): workflow, conventions, and checks.
 
 ## Current scope
 
-The existing workspaces are `apps/server`, `apps/web`, and `packages/shared`. `pnpm-workspace.yaml` also lists `apps/desktop`, but that directory does not exist in this checkout. No TV application is present. Do not interpret these configuration entries as shipped clients.
+The implemented workspaces are `apps/server`, `apps/web`, and `packages/shared`. Desktop and Google TV clients are planned, not shipped applications in this checkout (`README.md`, `pnpm-workspace.yaml`). There are no user accounts. Device capabilities guide encoding; device identity is not authentication.
 
-The server composes SQLite persistence, metadata and gateway clients, a loopback source proxy, playback management, and prefetching in `apps/server/src/app.ts`. Shared Zod schemas describe catalog, device, stream, and playback contracts in `packages/shared/src/index.ts`.
+The server combines SQLite persistence, TMDB metadata, gateway discovery, a loopback source proxy, playback management, TorBox download tracking, health checks, viewing history, and optional telemetry in one process (`apps/server/src/app.ts`). Clients should request `streamId: "auto"`; the PC always re-encodes video (`AGENTS.md`).
 
-## Snapshot
+## Documentation snapshot
 
-This wiki describes the working tree at commit `b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf` on 2026-11-05, including pre-existing uncommitted edits to `apps/server/src/playback/ffmpegArgs.ts` and `apps/server/test/playback/ffmpegArgs.test.ts`. Those edits were not changed by wiki generation. See [history](../lore.md) and [statistics](../by-the-numbers.md).
+Generated from commit `bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406` on 2026-11-06. This replaces a baseline whose recorded commit is absent from the available git history. [Statistics](../by-the-numbers.md) describes measurement scope; [lore](../lore.md) follows the available dated history.
+
+The maintained operational documents live under `docs/`; this generated wiki explains the implementation. See `docs/wiki.md` for the scheduled refresh workflow. Never expose the server directly to the internet. Read [security](../security.md) before deploying it.

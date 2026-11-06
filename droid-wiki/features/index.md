@@ -1,23 +1,44 @@
 # Features
+
 Active contributors: VeroxAUS
 
-Implemented capabilities are server-side. The browser UI remains a placeholder; these pages document service behavior, not completed user-facing screens.
+## Purpose
+
+These pages describe implemented server capabilities, not completed client screens. The [web app](../apps/web.md) is still a placeholder; `apps/server/src/app.ts` composes the services behind the API.
 
 ## Capability map
 
-| Capability | Key abstraction and source | Integration |
-| --- | --- | --- |
-| [Catalog](catalog.md) | TmdbService, `apps/server/src/tmdb/service.ts` | Metadata, home rows, search and details |
-| [Stream selection](stream-selection.md) | StreamService, `apps/server/src/streams/service.ts` | Gateway parsing, filtering, ranking and recommendations |
-| [Prefetch](prefetch.md) | PrefetchService, `apps/server/src/prefetch/service.ts` | Speculative source/probe warming without a playback session |
-| [Playback](../systems/playback/index.md) | PlaybackManager, `apps/server/src/playback/manager.ts` | Sessions, encoding and delivery; documented separately |
+| Capability                               | Main abstraction                                                 | Behavior                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Catalog](catalog.md)                    | `HomeService`, `apps/server/src/home/service.ts`                 | Metadata, search, home rows, featured banner and recommendations        |
+| [Stream selection](stream-selection.md)  | `StreamService`, `apps/server/src/streams/service.ts`            | URL-free discovery, cached-first ranking and automatic-start candidates |
+| [Prefetch](prefetch.md)                  | `PrefetchService`, `apps/server/src/prefetch/service.ts`         | Flag-gated source/probe warming without a session                       |
+| [Downloads](downloads.md)                | `DownloadService`, `apps/server/src/downloads/service.ts`        | Persistent tracking when TorBox must cache a title first                |
+| [Viewing progress](viewing-progress.md)  | `ContinueWatchingService`, `apps/server/src/progress/service.ts` | Resume state, next episode, history and statistics                      |
+| [Playback](../systems/playback/index.md) | `PlaybackManager`, `apps/server/src/playback/manager.ts`         | Probing, device decisions, encoding, HLS and subtitles                  |
 
-## Flow and modification
+## Main flow
 
-Catalog details supply an IMDb ID for gateway discovery. Stream metadata is ranked for a registered device's display tier. Prefetch can warm the recommended cached source; playback then shares the source proxy. See [architecture](../overview/architecture.md) for the whole graph.
+Catalog metadata supplies an IMDb identity for [gateway](../systems/gateway.md) discovery. The stream service ranks candidates for a device's display tier. Prefetch can warm the recommended cached source; Play either starts an encoded session or returns a tracked download. Progress pings feed continue watching, history and Home recommendations (`apps/server/src/tmdb/service.ts`, `apps/server/src/streams/rank.ts`, `apps/server/src/playback/manager.ts`, `apps/server/src/home/service.ts`).
 
-Change normalization and metadata policy in `apps/server/src/tmdb/`, stream interpretation/recommendation in `apps/server/src/streams/`, and speculative scheduling in `apps/server/src/prefetch/`. Request parsing belongs in corresponding `apps/server/src/routes/` files and cross-runtime shapes in [shared contracts](../packages/shared.md).
+The [source proxy](../systems/source-proxy.md) owns shared media bytes; persistent TorBox tracking is a different feature and does not download the whole movie to the PC.
+
+## Modification entry points
+
+Change pure rules in the feature's domain directory, orchestration in its service, HTTP validation in `apps/server/src/routes/`, and cross-runtime shapes in [shared](../packages/shared.md). See [API](../api/index.md) for route contracts and [testing](../how-to-contribute/testing.md) for offline versus opt-in suites.
+
+## Key source files
+
+| File                                   | Purpose                         |
+| -------------------------------------- | ------------------------------- |
+| `apps/server/src/app.ts`               | Feature composition             |
+| `apps/server/src/home/service.ts`      | Home orchestration              |
+| `apps/server/src/streams/rank.ts`      | Selection policy                |
+| `apps/server/src/prefetch/service.ts`  | Speculative warming             |
+| `apps/server/src/downloads/service.ts` | Persistent upstream tracking    |
+| `apps/server/src/progress/service.ts`  | Continue-watching orchestration |
+| `apps/server/src/stats/aggregate.ts`   | History-derived statistics      |
 
 ## Measured scope
 
-The three feature directories above, excluding playback, contain **8 production source files** (TMDB 3, streams 4, prefetch 1), **7 dedicated test files** (2, 4, 1), and **1 unique committer** across their source history. Counts use tracked `.ts` source files and `*.test.ts` in matching `apps/server/test/tmdb/`, `apps/server/test/streams/`, and `apps/server/test/prefetch/`; fixtures/helpers and route/shared files are not included. Two additional live tests in `apps/server/test/live/` exercise TMDB and streams but are outside the dedicated count. Committers are distinct `%cn <%ce>` Git identities, not summed per directory.
+The `apps/server/src/` directories `tmdb`, `home`, `streams`, `prefetch`, `downloads`, `progress` and `stats` contain **20 tracked TypeScript source files**. Matching directories under `apps/server/test/` contain **12 test files**, a **0.60 test-to-code file ratio**. This narrow count excludes routes, DB helpers, shared contracts, playback, integration, GPU and live tests; those still exercise these features. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots.

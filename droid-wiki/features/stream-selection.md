@@ -1,42 +1,76 @@
 # Stream selection
+
 Active contributors: VeroxAUS
 
-Stream discovery converts gateway results into URL-free options and recommends a source by display resolution. It does not itself probe the media or decide the encoder's output codec.
+## Purpose
 
-## Key abstractions
-
-| Abstraction | Source | Responsibility |
-| --- | --- | --- |
-| StreamService | `apps/server/src/streams/service.ts` | Lists, fresh-cache-only reads, server-only URL resolution |
-| Filename parser | `apps/server/src/streams/parse.ts` | Quality, audio, language, size and display labels |
-| Ranking/recommendation | `apps/server/src/streams/rank.ts` | Cached filtering, stable ordering and device tiers |
-| Episode matcher | `apps/server/src/streams/episode.ts` | Rejects explicit contradictory TV markers |
-| Routes | `apps/server/src/routes/streams.ts` | TMDB-to-IMDb bridge and device query validation |
-| Public contracts | `packages/shared/src/streams.ts` | StreamOption and StreamsResponse; no upstream URL field |
+Stream selection turns gateway results into URL-free quality options, ranks them for a device, and supplies automatic-start candidates. Actual probing, output codec decisions and encoding belong to [playback](../systems/playback/index.md) (`apps/server/src/streams/service.ts`, `apps/server/src/streams/rank.ts`).
 
 ## Discovery and parsing
 
-Movie/TV routes resolve TMDB details first; missing IMDb IDs return an empty list with `recommendedId: null` and `reason: no_streams`. Otherwise [the gateway](../systems/gateway.md) looks up the IMDb title/episode. Invalid requests fail before discovery; upstream errors propagate as HTTP errors rather than a successful empty result.
+`apps/server/src/routes/streams.ts` resolves TMDB details to IMDb before querying the [gateway](../systems/gateway.md). Missing IMDb identity or no relevant candidates produces an empty list with `recommendedId: null` and `reason: no_streams`. Upstream errors remain HTTP errors rather than successful empty results.
 
-For TV, explicit `SxxEyy` (including episode ranges), `1x02`, season ranges and season-only markers must agree with the request. Unmarked names remain eligible; this is contradiction filtering, not guaranteed episode verification.
+`apps/server/src/streams/episode.ts` rejects filenames with contradictory explicit episode/season markers, including episode ranges and `1x02` notation. Unmarked filenames remain eligible; filtering does not prove that an unmarked file is the right episode.
 
-Parsing normalizes filename separators and derives resolution, video codec, HDR, source, audio/channels and language tags. Resolution buckets are 2160p/1080p/720p/480p/unknown; low-resolution markers collapse to 480p and explicit 1440p remains unknown. Lower known tiers default to SDR without an HDR marker; 2160p/unknown do not. A lightning marker in the gateway name means cached on TorBox; this is gateway metadata, not a fresh availability probe. Human labels combine parsed values and cache state.
+`parseStream` in `apps/server/src/streams/parse.ts` derives resolution, codec, HDR, source, audio/channels, language tags and a display label from filenames. Resolution buckets are 2160p/1080p/720p/480p/unknown; 576/360 collapse to 480p and explicit 1440p is unknown. Lower known tiers default to SDR without an HDR marker. These are filename hints, not probe results.
 
-## Exact ranking policy
+Structured gateway `cached` metadata wins when present, including explicit `false`; otherwise the legacy lightning-name marker supplies cache status. This is upstream metadata, not a fresh availability probe.
 
-1. If any relevant candidate is cached, remove every uncached candidate. Otherwise retain all uncached candidates.
-2. Sort by resolution descending: 2160p, 1080p, 720p, 480p, unknown.
-3. Within a resolution, sort source quality: Remux, BluRay, WEB-DL, WEBRip, HDTV, then unranked values such as DVD/Unknown.
-4. Preserve original gateway order for remaining ties. Size, codec, HDR, audio and language do not break ties.
+## Exact ranking and recommendation
 
-Without a known registered device, recommend the first ranked option. With a profile, derive width and height tiers independently and take their minimum: 3840/2160 for 4K, 1920/1080 for 1080p, 1280/720 for 720p, otherwise the lowest tier. Recommend the first option at or below that tier; unknown resolution has rank zero and fits. If none fits, choose the first-ranked option at the lowest available resolution. Codec/HDR support affects later [playback decisions](../systems/playback/index.md), not this recommendation.
+`rankStreams` in `apps/server/src/streams/rank.ts` applies:
 
-## Privacy and cached identity
+1. If any relevant option is cached, discard all uncached options.
+2. Sort resolution descending: 2160p, 1080p, 720p, 480p, unknown.
+3. Within a resolution, prefer **WEB-DL, BluRay, WEBRip, Remux, HDTV**, then unranked values.
+4. Preserve gateway order for remaining ties.
 
-Public options contain metadata and a 16-hex ID, never the raw gateway URL. `getStreamById` is a server-only operation: locate the originating cache row, use its URL while fresh, or re-fetch the original lookup when expired. If the ID is unknown or disappears, return null. IDs derive from the URL, so a changed URL can change identity. `cachedList` only consults a fresh row and never starts or waits for network discovery.
+WEB-DL precedes Remux to favor smaller/faster-starting sources, but the rule does not sort by measured size. Codec, HDR, language and audio do not break ranking ties.
 
-## Modification and measurement
+Without a known device, recommendation is the first ranked option. With a registered profile, `deviceMaxRank` takes the lower width/height tier: 3840/2160 for 4K, 1920/1080 for 1080p, 1280/720 for 720p, otherwise the lowest tier. The first option at or below that tier wins; unknown resolution always fits. If none fits, choose the first-ranked option at the lowest available resolution. Codec/HDR support affects the later encoding decision, not this recommendation.
 
-Change token heuristics in `apps/server/src/streams/parse.ts`, recommendation policy in `apps/server/src/streams/rank.ts`, episode handling in `apps/server/src/streams/episode.ts`, and orchestration in `apps/server/src/streams/service.ts`. Preserve the URL boundary and extend fixtures/tests with each parsing change. [Prefetch](prefetch.md) uses the same recommendation.
+## Automatic fallback and placeholders
 
-Measured subsystem: **4 source files**, **4 dedicated test files**, **1 unique committer**. Scope is tracked `.ts` in `apps/server/src/streams/`, tracked `*.test.ts` in `apps/server/test/streams/`, and distinct `%cn <%ce>` source-history identities. The fixture, route/shared modules and additional `apps/server/test/live/streams.live.test.ts` are excluded. Tests cover parsing, ranking, episode matching, routes, privacy and expired-ID refresh; they were not run for this documentation.
+Clients send `streamId: "auto"`. `startCandidates` in `apps/server/src/streams/rank.ts` selects cached fitting options, or cached options at the lowest resolution if none fit. `apps/server/src/playback/manager.ts` tries at most **3**, cleaning up failed attempts. Invalid audio/subtitle requests and shutdown do not trigger another candidate. An explicit stream ID is accepted internally but gets one attempt; it is not a manual-picker product feature.
+
+A successful session reports earlier `{streamId, code}` attempts. Exhausted cached candidates return 502 `all_streams_failed` with attempts in the error and top-level envelopes (`apps/server/src/errors.ts`, `packages/shared/src/playback.ts`). With no cached option, only the recommended uncached option is considered; it is not retried across releases. That path can return **202 downloading** instead of **201 session**; see [downloads](downloads.md).
+
+Gateway placeholder clips must never be encoded as the title. `apps/server/src/playback/resolveUrl.ts` detects same-host `/static/<reason>.mp4` redirect targets before requesting them. On ordinary source resolution:
+
+| Placeholder            | Error                      |
+| ---------------------- | -------------------------- |
+| `downloading`          | 409 `stream_not_cached`    |
+| `store_limit_exceeded` | 409 `torbox_slots_full`    |
+| `429`                  | 429 `gateway_rate_limited` |
+| Other clip             | 502 `stream_unavailable`   |
+
+The download-start probe interprets `downloading` as accepted tracking instead; it does not use the normal resolver's error mapping.
+
+## Identity and cache integration
+
+Public `StreamOption` has metadata and a 16-hex URL-hash ID, never the raw URL (`packages/shared/src/streams.ts`, `apps/server/src/gateway/types.ts`). `getStreamById` in `apps/server/src/streams/service.ts` finds the originating cache row, uses it while fresh, or refetches its lookup after expiry. Missing/disappeared IDs return null. A changed URL can change ID.
+
+`cachedList` never triggers or waits for network lookup. `refresh` bypasses list-cache freshness and updates it, which lets download completion recheck availability. [Prefetch](prefetch.md) shares the same recommendation policy.
+
+## Modification entry points
+
+Change token heuristics in `apps/server/src/streams/parse.ts`, ordering/candidate policy in `apps/server/src/streams/rank.ts`, episode contradictions in `apps/server/src/streams/episode.ts`, and orchestration in `apps/server/src/streams/service.ts`. Extend regression tests and preserve the server-only URL boundary.
+
+## Key source files
+
+| File                                                     | Purpose                                                   |
+| -------------------------------------------------------- | --------------------------------------------------------- |
+| `apps/server/src/streams/service.ts`                     | Listing, refresh, cached reads and server-only URL lookup |
+| `apps/server/src/streams/parse.ts`                       | Filename interpretation and labels                        |
+| `apps/server/src/streams/rank.ts`                        | Ranking, display tiers and start candidates               |
+| `apps/server/src/streams/episode.ts`                     | Episode contradiction filtering                           |
+| `apps/server/src/routes/streams.ts`                      | TMDB/device HTTP adapter                                  |
+| `apps/server/src/playback/manager.ts`                    | Candidate attempts and cleanup                            |
+| `apps/server/src/playback/resolveUrl.ts`                 | Placeholder-aware redirect resolution                     |
+| `apps/server/test/streams/rank.test.ts`                  | Exact ranking/candidate policy                            |
+| `apps/server/test/integration/streams-routes.test.ts`    | Route and identity integration                            |
+| `apps/server/test/integration/playback-fallback.test.ts` | Offline automatic fallback                                |
+
+## Measured scope
+
+`apps/server/src/streams/`: **4 source files**. `apps/server/test/streams/`: **3 test files**, **0.75 test-to-code file ratio**. Integration, resolver, GPU/live tests and fixtures are excluded. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots.
