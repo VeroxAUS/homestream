@@ -98,6 +98,19 @@ describe('.env.example', () => {
     expect(missingFrom(example, read)).toEqual([]);
   });
 
+  it('documents every repository secret that a workflow reads (except GITHUB_TOKEN)', () => {
+    const workflows = path.join(repoRoot, '.github', 'workflows');
+    const secrets = new Set<string>();
+    for (const name of readdirSync(workflows).filter((file) => /\.ya?ml$/.test(file))) {
+      const text = readFileSync(path.join(workflows, name), 'utf8');
+      for (const match of text.matchAll(/\bsecrets\.([A-Z][A-Z0-9_]*)\b/g)) secrets.add(match[1] as string);
+    }
+    secrets.delete('GITHUB_TOKEN');
+    expect(secrets.size).toBeGreaterThan(0);
+    expect(secrets.has('FACTORY_API_KEY')).toBe(true);
+    expect(missingFrom(example, [...secrets])).toEqual([]);
+  });
+
   it('contains no values and no secret-looking text', () => {
     for (const [key, value] of assignedKeys(example)) expect(value, `${key} must not have a value`).toBe('');
     expect(example).not.toMatch(/eyJ[\w-]{10,}/);

@@ -11,11 +11,14 @@ const OPS_ROUTES = new Set(['/healthz', '/readyz', '/metrics']);
 const API_VERSION = '1.0.0';
 
 const ERROR_REF = '#/components/schemas/ErrorResponse';
+/** Every route can fail with the global error handler's `internal_error`, so every operation documents it. */
+const UNEXPECTED_ERROR_STATUS = 500;
 const ERROR_DESCRIPTIONS: Record<number, string> = {
   400: 'The request is invalid.',
   404: 'Nothing matches the id or path.',
   409: 'The request conflicts with the current state.',
   429: 'Too many requests or sessions.',
+  500: 'Unexpected server error.',
   502: 'An upstream service (TMDB, gateway, TorBox or ffmpeg) failed.',
   503: 'The server or an upstream service is not available right now.',
   504: 'An upstream service or the encoder timed out.',
@@ -77,7 +80,7 @@ function schemaFor(doc: RouteDoc, url: string): FastifySchema {
       ...Object.fromEntries(
         Object.entries(doc.responses).map(([status, response]) => [status, responseObject(response)]),
       ),
-      ...errorResponses(doc.errors),
+      ...errorResponses([...new Set([...doc.errors, UNEXPECTED_ERROR_STATUS])]),
     },
   } as FastifySchema;
 }

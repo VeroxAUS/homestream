@@ -5,6 +5,7 @@ export function anchorsOf(markdown: string): Set<string>;
 export function linksOf(markdown: string): Array<{ line: number; target: string }>;
 export function mermaidBlocks(markdown: string): string[];
 export function diagramProblems(markdown: string): string[];
+export function schemaDriftProblems(markdown: string, schemaSql: string): string[];
 export function checkFile(
   file: string,
   markdown: string,

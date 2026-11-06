@@ -79,6 +79,31 @@ describe('validate-agents-md', () => {
     expect(result.stderr).toContain('does-not-exist');
   });
 
+  it('keeps a four-backtick block that contains a three-backtick line as one block', () => {
+    const result = check(agentsMd('````powershell\npnpm lint\n```\npnpm does-not-exist\n````'));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('does-not-exist');
+  });
+
+  it('does not treat "```n" as a closing fence, and reports the unclosed fence', () => {
+    const result = check(agentsMd('```powershell\npnpm lint\n```n\nProse paragraph.'));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('AGENTS.md:');
+    expect(result.stderr).toContain('unclosed code fence');
+  });
+
+  it('checks a powershell block appended after the shape of the former broken AGENTS.md', () => {
+    const fixed = agentsMd(
+      ['```powershell', 'pnpm lint', '```', '', 'Prose paragraph.', '', '```powershell', 'pnpm test:unit', '```'].join(
+        '\n',
+      ),
+    );
+    expect(check(fixed).status).toBe(0);
+    const result = check(`${fixed}\n\`\`\`powershell\npnpm does-not-exist\n\`\`\`\n`);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('does-not-exist');
+  });
+
   it('fails on a filtered script that is not defined in that package', () => {
     const result = check(agentsMd('```\npnpm --filter @homestream/server lint\n```'));
     expect(result.status).toBe(1);

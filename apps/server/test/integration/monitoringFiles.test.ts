@@ -32,7 +32,50 @@ function metricNames(text: string): string[] {
   return [...new Set(names.map((name) => name.replace(/_(bucket|count|sum)$/, '')))];
 }
 
+const PROMQL_WORDS = new Set(['and', 'or', 'unless', 'by', 'without', 'on', 'ignoring', 'bool']);
+
+/** The text of every `expr:` in a Prometheus rule file, single-line or block scalar. */
+function expressions(yaml: string): string[] {
+  const lines = yaml.split('\n');
+  const found: string[] = [];
+  lines.forEach((line, index) => {
+    const match = /^(\s*)(?:-\s+)?expr:\s*(.*)$/.exec(line);
+    if (!match) return;
+    if (match[2] !== '|' && match[2] !== '>') {
+      found.push(match[2] as string);
+      return;
+    }
+    const body: string[] = [];
+    for (const next of lines.slice(index + 1)) {
+      if (next.trim() !== '' && next.length - next.trimStart().length <= (match[1] as string).length) break;
+      body.push(next);
+    }
+    found.push(body.join('\n'));
+  });
+  return found;
+}
+
+/** Identifiers in a PromQL expression that are metric names: not functions, keywords, label names or numbers. */
+function bareMetricNames(expression: string): string[] {
+  const stripped = expression
+    .replace(/"[^"]*"/g, '')
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/\b(?:by|without)\s*\([^)]*\)/g, '')
+    .replace(/\b\d[\w.]*/g, '');
+  return [...stripped.matchAll(/\b([A-Za-z_:][A-Za-z0-9_:]*)\b(?!\s*\()/g)]
+    .map((match) => match[1] as string)
+    .filter((name) => !PROMQL_WORDS.has(name) && !/^(?:homestream|nodejs|process)_/.test(name));
+}
+
 describe('monitoring files and documentation agree with the code', () => {
+  it('the only metric in the Prometheus alerts that /metrics does not expose is up, which Prometheus generates', () => {
+    const rules = expressions(read('monitoring/prometheus/alerts.yml'));
+    expect(rules.length).toBeGreaterThan(8);
+    const bare = new Set(rules.flatMap(bareMetricNames));
+    expect(bare).toEqual(new Set(['up']));
+    expect(exposed.has('up')).toBe(false);
+  });
+
   it('every metric used by a Prometheus alert is exposed by /metrics', () => {
     const names = metricNames(read('monitoring/prometheus/alerts.yml'));
     expect(names.length).toBeGreaterThan(8);

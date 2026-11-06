@@ -204,9 +204,14 @@ erDiagram
     TEXT json
     INTEGER expires_at
   }
+  settings {
+    TEXT key PK
+    TEXT value
+    INTEGER updated_at
+  }
 ```
 
-The relations are logical: the schema has no foreign keys, so deleting a device or a progress row never cascades. `tmdb_cache` and `gateway_cache` are standalone key/value caches with an expiry. The exact columns are in [schema.sql](schema.sql), with a description of every table in [database.md](database.md).
+The relations are logical: the schema has no foreign keys, so deleting a device or a progress row never cascades. `tmdb_cache` and `gateway_cache` are standalone key/value caches with an expiry, and `settings` is a standalone key/value table for the server's own state, such as the anonymous install id. The exact columns are in [schema.sql](schema.sql), with a description of every table in [database.md](database.md).
 
 ## Telemetry and CI/CD
 

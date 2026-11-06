@@ -1,10 +1,12 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fenceProblems, fencedBlocks, scanFences } from './lib/markdown.mjs';
 import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 
 /**
- * Checks the markdown documentation: every relative link points at an existing file, every `#anchor` matches a heading
- * in the target file, and docs/architecture.md has its mermaid diagrams. `pnpm docs:check`.
+ * Checks the markdown documentation: every code fence is closed, every relative link points at an existing file, every
+ * `#anchor` matches a heading in the target file, and docs/architecture.md has its mermaid diagrams, with an erDiagram
+ * entity for each table in docs/schema.sql. `pnpm docs:check`.
  */
 
 /** Generated or vendored markdown that is not hand-maintained. */
@@ -40,13 +42,9 @@ function stripTags(text) {
 
 /** Lines outside fenced code blocks, with their 1-based numbers. */
 function proseLines(markdown) {
-  const lines = [];
-  let fenced = false;
-  markdown.split('\n').forEach((text, index) => {
-    if (/^\s*```/.test(text)) fenced = !fenced;
-    else if (!fenced) lines.push({ line: index + 1, text });
-  });
-  return lines;
+  return scanFences(markdown)
+    .lines.filter((entry) => entry.kind === 'prose')
+    .map(({ line, text }) => ({ line, text }));
 }
 
 export function anchorsOf(markdown) {
@@ -82,7 +80,36 @@ function isExternal(target) {
 }
 
 export function mermaidBlocks(markdown) {
-  return [...markdown.matchAll(/^```mermaid[^\n]*\n([\s\S]*?)^```/gm)].map((match) => match[1]);
+  return fencedBlocks(markdown)
+    .filter((block) => block.lang === 'mermaid')
+    .map((block) => block.lines.join('\n'));
+}
+
+/** Names of the `CREATE TABLE` statements in a SQL dump, without quotes. */
+function tableNames(sql) {
+  return new Set(
+    [...sql.matchAll(/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`[]?(\w+)/gim)].map((match) => match[1]),
+  );
+}
+
+/** Entity names declared in the `erDiagram` blocks (`name {`), as opposed to relation lines. */
+function erEntities(markdown) {
+  const names = new Set();
+  for (const block of mermaidBlocks(markdown)) {
+    if (!/^\s*erDiagram\b/m.test(block)) continue;
+    for (const match of block.matchAll(/^\s+(\w+)\s*\{/gm)) names.add(match[1]);
+  }
+  return names;
+}
+
+/** Tables that docs/schema.sql has but the erDiagram lacks, and entities that name no table. */
+export function schemaDriftProblems(markdown, schemaSql) {
+  const tables = tableNames(schemaSql);
+  const entities = erEntities(markdown);
+  return [
+    ...[...tables].filter((name) => !entities.has(name)).map((name) => `erDiagram is missing the table ${name}`),
+    ...[...entities].filter((name) => !tables.has(name)).map((name) => `erDiagram has ${name}, which is not a table`),
+  ];
 }
 
 export function diagramProblems(markdown) {
@@ -104,7 +131,7 @@ export function diagramProblems(markdown) {
 }
 
 export function checkFile(file, markdown, root, readTarget = (target) => readFileSync(target, 'utf8')) {
-  const problems = [];
+  const problems = fenceProblems(file, markdown);
   const here = path.dirname(path.join(root, file));
   const ownAnchors = anchorsOf(markdown);
   for (const { line, target } of linksOf(markdown)) {
@@ -143,7 +170,13 @@ export function main(root = repoRoot()) {
   for (const file of files) {
     const markdown = readFileSync(path.join(root, file), 'utf8');
     problems.push(...checkFile(file, markdown, root));
-    if (file === 'docs/architecture.md') problems.push(...diagramProblems(markdown).map((p) => `${file}: ${p}`));
+    if (file === 'docs/architecture.md') {
+      problems.push(...diagramProblems(markdown).map((p) => `${file}: ${p}`));
+      const schema = path.join(root, 'docs', 'schema.sql');
+      if (existsSync(schema)) {
+        problems.push(...schemaDriftProblems(markdown, readFileSync(schema, 'utf8')).map((p) => `${file}: ${p}`));
+      }
+    }
   }
   if (!files.includes('docs/architecture.md')) problems.push('docs/architecture.md is missing');
   for (const problem of problems) console.error(`[docs] ${problem}`);

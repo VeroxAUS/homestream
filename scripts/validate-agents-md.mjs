@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { fenceProblems, scanFences } from './lib/markdown.mjs';
 import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 
 /**
@@ -75,23 +76,17 @@ function openApiMatchers(root) {
   return Object.keys(paths).map((template) => new RegExp(`^${template.replace(/\{[^}]+\}/g, '[^/]+')}/?$`));
 }
 
-/** Fenced code blocks as `{line, text}` and inline code spans as `{line, text}`. */
+/** Fenced code lines as `{line, text}` and inline code spans as `{line, text}`. */
 export function extractCode(markdown) {
   const blocks = [];
   const inline = [];
-  let fence = null;
-  markdown.split('\n').forEach((raw, index) => {
-    const line = index + 1;
-    if (/^\s*```/.test(raw)) {
-      fence = fence === null ? { lang: raw.trim().slice(3).trim() } : null;
-      return;
+  for (const { line, text, kind, lang } of scanFences(markdown).lines) {
+    if (kind === 'code') {
+      if (lang !== 'mermaid') blocks.push({ line, text });
+    } else if (kind === 'prose') {
+      for (const match of text.matchAll(/`([^`\n]+)`/g)) inline.push({ line, text: match[1] });
     }
-    if (fence) {
-      if (fence.lang !== 'mermaid') blocks.push({ line, text: raw });
-      return;
-    }
-    for (const match of raw.matchAll(/`([^`\n]+)`/g)) inline.push({ line, text: match[1] });
-  });
+  }
   return { blocks, inline };
 }
 
@@ -228,8 +223,9 @@ export function validateMarkdown(file, markdown, context) {
     ),
     ...inline.flatMap(({ line, text }) => commandProblems(text, context).map((message) => ({ line, message }))),
   ];
-  return found.map(({ line, message }) => `${file}:${line}: ${message}`);
+  return [...fenceProblems(file, markdown), ...found.map(({ line, message }) => `${file}:${line}: ${message}`)];
 }
+
 export function missingHeadings(markdown) {
   const headings = markdown.split('\n').filter((line) => /^#{1,3}\s/.test(line));
   return REQUIRED_HEADINGS.filter(({ pattern }) => !headings.some((heading) => pattern.test(heading))).map(

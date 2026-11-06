@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { anchorsOf, diagramProblems, linksOf, slugify } from '../../../../scripts/check-docs.mjs';
+import { anchorsOf, diagramProblems, linksOf, schemaDriftProblems, slugify } from '../../../../scripts/check-docs.mjs';
 import { removeDir } from '../helpers.js';
 import { makeTempRepo, runScript, writeAndStage } from './repoHelpers.js';
 
@@ -64,6 +64,44 @@ describe('check-docs', () => {
     const result = check('# R\n');
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('has 1 mermaid diagrams, needs at least 5');
+  });
+});
+
+describe('check-docs schema drift', () => {
+  const SCHEMA = 'CREATE TABLE a (id TEXT);\nCREATE TABLE "b" (id TEXT);\nCREATE TABLE settings (key TEXT);\n';
+  const diagram = (...entities: string[]) =>
+    `\`\`\`mermaid\nerDiagram\n  a ||--o{ b : has\n${entities.map((name) => `  ${name} {\n    TEXT id PK\n  }`).join('\n')}\n\`\`\``;
+
+  it('names a table that is missing from the erDiagram', () => {
+    expect(schemaDriftProblems(diagram('a', 'b'), SCHEMA)).toEqual(['erDiagram is missing the table settings']);
+  });
+
+  it('names an entity that is not a table', () => {
+    expect(schemaDriftProblems(diagram('a', 'b', 'settings', 'ghost'), SCHEMA)).toEqual([
+      'erDiagram has ghost, which is not a table',
+    ]);
+  });
+
+  it('passes when entities and tables match, ignoring relation lines', () => {
+    expect(schemaDriftProblems(diagram('a', 'b', 'settings'), SCHEMA)).toEqual([]);
+  });
+
+  it('fails the script and names the missing table when docs/schema.sql has one more table', () => {
+    writeAndStage(repo, 'docs/schema.sql', 'CREATE TABLE A (x TEXT);\nCREATE TABLE extra_table (x TEXT);\n');
+    writeAndStage(
+      repo,
+      'docs/architecture.md',
+      `# Architecture\n\n${DIAGRAMS.replace('A ||--o{ B : has', 'A ||--o{ B : has\n  A {\n    TEXT x\n  }')}\n`,
+    );
+    const result = check('# R\n');
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('erDiagram is missing the table extra_table');
+  });
+
+  it('reports an unclosed code fence', () => {
+    const result = check('# R\n\n```powershell\npnpm lint\n');
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('README.md:3: unclosed code fence');
   });
 });
 

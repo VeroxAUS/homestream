@@ -115,6 +115,27 @@ describe('/api/docs/json', () => {
     expect(badRequest?.content?.['application/json']?.schema?.$ref).toBe('#/components/schemas/ErrorResponse');
   });
 
+  it('gives every operation a 4xx or 5xx response that references ErrorResponse, including a 500', async () => {
+    const { paths } = await document();
+    const ref = '#/components/schemas/ErrorResponse';
+    let operations = 0;
+    for (const [url, methods] of Object.entries(paths)) {
+      for (const [method, operation] of Object.entries(methods)) {
+        operations += 1;
+        const errors = Object.entries(operation.responses ?? {}).filter(([status]) => /^[45]/.test(status));
+        expect(
+          errors.some(([, response]) => response.content?.['application/json']?.schema?.$ref === ref),
+          `${method.toUpperCase()} ${url} documents no ErrorResponse`,
+        ).toBe(true);
+        expect(
+          operation.responses?.['500']?.content?.['application/json']?.schema?.$ref,
+          `${method.toUpperCase()} ${url} has no 500 ErrorResponse`,
+        ).toBe(ref);
+      }
+    }
+    expect(operations).toBe(registered.size);
+  });
+
   it('does not list the docs routes or static files', async () => {
     const { paths } = await document();
     expect(Object.keys(paths).filter((url) => url.startsWith('/api/docs'))).toEqual([]);
