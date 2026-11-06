@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defineConfig } from '@playwright/test';
@@ -8,8 +8,6 @@ const webRoot = fileURLToPath(new URL('.', import.meta.url));
 const serverEntry = path.join(webRoot, '..', 'server', 'dist', 'index.js');
 const runRoot = path.join(webRoot, 'reports', 'e2e-run');
 const ci = !!process.env.CI;
-
-if (!existsSync(serverEntry)) throw new Error('Build the server first: pnpm --filter @homestream/server build');
 
 function serverEnv(name: 'plain' | 'stub', port: number): Record<string, string> {
   const root = path.join(runRoot, name);

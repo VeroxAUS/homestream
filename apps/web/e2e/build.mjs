@@ -3,10 +3,16 @@
 //   stub   points Sentry and PostHog at the local receivers of the stub hub and enables the telemetry test trigger
 // The developer's .env never leaks in: every telemetry variable is set explicitly for both builds.
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ports from './ports.json' with { type: 'json' };
 
 const webRoot = fileURLToPath(new URL('..', import.meta.url));
+// The Playwright config itself must stay loadable without a built server (knip imports it).
+if (!existsSync(fileURLToPath(new URL('../../server/dist/index.js', import.meta.url)))) {
+  console.error('Build the server first: pnpm --filter @homestream/server build');
+  process.exit(1);
+}
 const NO_TELEMETRY = {
   SENTRY_DSN_WEB: '',
   POSTHOG_API_KEY: '',
