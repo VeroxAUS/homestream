@@ -29,6 +29,7 @@ const KNOWN_KEYS = [
   'READ_AHEAD_RESUME_SEC',
   'HOMESTREAM_WEB_DIR',
   'HEALTH_NVENC_TEST',
+  'LOG_LEVEL',
 ] as const;
 
 export const DEFAULT_PORT = 8600;
@@ -64,6 +65,8 @@ export interface Config {
   readAheadResumeSec: number;
   /** Whether the ffmpeg health check runs its 1 s NVENC test encode. Off: only versions and encoder names are checked. */
   healthNvencTest: boolean;
+  /** Console and server.log verbosity; `debug` adds the playback start timing lines. */
+  logLevel: LogLevel;
   serverName: string;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
@@ -137,6 +140,17 @@ function positiveInteger(raw: string | undefined, fallback: number, name: string
 
 export const DEFAULT_TORBOX_API_URL = 'https://api.torbox.app';
 
+const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
+function logLevelFrom(raw: string | undefined, warnings: string[]): LogLevel {
+  if (raw === undefined) return 'info';
+  const level = LOG_LEVELS.find((candidate) => candidate === raw.toLowerCase());
+  if (level) return level;
+  warnings.push(`LOG_LEVEL="${raw}" is not one of ${LOG_LEVELS.join(', ')}; using info.`);
+  return 'info';
+}
+
 function httpOrigin(raw: string | undefined, fallback: string, name: string, warnings: string[]): string {
   if (raw === undefined) return fallback;
   try {
@@ -199,6 +213,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     readAheadSec: limits.readAheadSec,
     readAheadResumeSec: limits.readAheadResumeSec,
     healthNvencTest: !/^(0|false|off|no)$/i.test(values.HEALTH_NVENC_TEST ?? ''),
+    logLevel: logLevelFrom(values.LOG_LEVEL, warnings),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,

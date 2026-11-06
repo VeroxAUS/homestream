@@ -18,6 +18,7 @@ import type { SegmentFormat } from './playlist.js';
 import type { SegmentStore } from './segmentStore.js';
 import type { SubtitleExtractor, TextTrack } from './subtitleExtractor.js';
 import type { SourceHandle } from '../sourceproxy/proxy.js';
+import type { StartTimeline } from './startTimeline.js';
 
 export interface SessionMeta {
   mediaKey: string;
@@ -68,6 +69,8 @@ export interface SessionRecord {
   attempts: StartAttempt[];
   /** True from the encoder launch until its first segment exists; an opening session is invisible to clients and can still be thrown away. */
   opening: boolean;
+  /** Debug timing of this start; set until the session is ready. */
+  startTimeline: StartTimeline | null;
 
   state: SessionState;
   error: { message: string; hint?: string } | null;

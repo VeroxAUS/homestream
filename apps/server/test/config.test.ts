@@ -91,6 +91,15 @@ describe('loadConfig', () => {
     expect(config.warnings[0]).toMatch(/default/);
   });
 
+  it('reads LOG_LEVEL (info by default) and falls back with a warning on an unknown level', () => {
+    const file = envFile('log-level.env', '');
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null }).logLevel).toBe('info');
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, LOG_LEVEL: 'DEBUG' }, repoRoot: null }).logLevel).toBe('debug');
+    const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, LOG_LEVEL: 'chatty' }, repoRoot: null });
+    expect(bad.logLevel).toBe('info');
+    expect(bad.warnings.join('\n')).toContain('LOG_LEVEL');
+  });
+
   it('names only the keys that are missing', () => {
     const file = envFile('partial.env', 'GATEWAY_MANIFEST_URL=https://gw.test/stremio/a/b/manifest.json\n');
     const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });

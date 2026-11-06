@@ -55,7 +55,8 @@ export function registerEventRoutes(app: FastifyInstance, ctx: AppContext, optio
     raw.on('error', cleanup);
   });
 
-  app.addHook('onClose', async () => {
+  // preClose, not onClose: closing the HTTP server waits for every open connection, and the onClose hooks only run after that.
+  app.addHook('preClose', async () => {
     for (const raw of open) raw.end();
     open.clear();
   });

@@ -42,4 +42,14 @@ describe('TokenBucket', () => {
     expect(taken).toBeLessThanOrEqual(rate * 20 + 100_000 + 65_536);
     expect(taken).toBeGreaterThanOrEqual(rate * 20 - 65_536);
   });
+
+  it('can require a reserve to stay unspent', () => {
+    const bucket = new TokenBucket(1000, 500, 0);
+    bucket.take(400, 0);
+    expect(bucket.canTake(0)).toBe(true);
+    expect(bucket.canTake(0, 200)).toBe(false);
+    expect(bucket.msUntilAvailable(0, 200)).toBeCloseTo(100, 5);
+    expect(bucket.canTake(100, 200)).toBe(true);
+    expect(bucket.msUntilAvailable(100, 200)).toBe(0);
+  });
 });

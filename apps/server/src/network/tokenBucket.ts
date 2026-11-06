@@ -23,10 +23,10 @@ export class TokenBucket {
     }
   }
 
-  /** True when a take would be allowed right now. */
-  canTake(nowMs: number): boolean {
+  /** True when a take would be allowed right now; with a eserveBytes, only when at least that much is left unspent. */
+  canTake(nowMs: number, reserveBytes = 0): boolean {
     this.refill(nowMs);
-    return this.tokens >= 0;
+    return this.tokens >= reserveBytes;
   }
 
   take(bytes: number, nowMs: number): void {
@@ -35,8 +35,8 @@ export class TokenBucket {
   }
 
   /** Milliseconds until the next take is allowed (0 when it is allowed now). */
-  msUntilAvailable(nowMs: number): number {
+  msUntilAvailable(nowMs: number, reserveBytes = 0): number {
     this.refill(nowMs);
-    return this.tokens >= 0 ? 0 : (-this.tokens * 1000) / this.bytesPerSec;
+    return this.tokens >= reserveBytes ? 0 : ((reserveBytes - this.tokens) * 1000) / this.bytesPerSec;
   }
 }

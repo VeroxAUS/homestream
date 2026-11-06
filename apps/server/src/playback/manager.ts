@@ -55,6 +55,7 @@ import {
 import type { RawProgress } from './progress.js';
 import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
+import { StartTimeline } from './startTimeline.js';
 import {
   extractorLimit,
   isHeavySource,
@@ -204,6 +205,7 @@ export class PlaybackManager {
 
   /** Resolves to a session (201) or, for a title TorBox has to cache first, to the tracked download (202). */
   async start(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse | DownloadStartedResponse> {
+    const timeline = new StartTimeline(this.options.logger);
     if (body.streamId === 'auto') {
       // A repeat Play needs no session slot, gateway lookup or TMDB call.
       const pending = this.options.downloads?.existing(body);
@@ -211,7 +213,7 @@ export class PlaybackManager {
     }
     this.reserveSlot();
     try {
-      return await this.startSession(body, clientIp);
+      return await this.startSession(body, clientIp, timeline);
     } finally {
       this.starting -= 1;
     }
@@ -229,7 +231,11 @@ export class PlaybackManager {
     this.starting += 1;
   }
 
-  private async startSession(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse | DownloadStartedResponse> {
+  private async startSession(
+    body: SessionStartRequest,
+    clientIp: string | null,
+    timeline: StartTimeline,
+  ): Promise<SessionResponse | DownloadStartedResponse> {
     const { db, tmdb, downloads } = this.options;
 
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
@@ -244,7 +250,7 @@ export class PlaybackManager {
     const attempts: StartAttempt[] = [];
     for (const streamId of plan.streamIds) {
       try {
-        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts });
+        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts, timeline });
       } catch (error) {
         // An explicit stream id gets one try, and a refused request or a shutdown is not the stream's fault.
         if (!plan.auto || !isStreamFault(error)) throw error;
@@ -287,20 +293,24 @@ export class PlaybackManager {
   private async attemptStart(
     body: SessionStartRequest,
     clientIp: string | null,
-    context: { streamId: string; device: CapabilityProfile; details: TitleDetails; attempts: StartAttempt[] },
+    context: { streamId: string; device: CapabilityProfile; details: TitleDetails; attempts: StartAttempt[]; timeline: StartTimeline },
   ): Promise<SessionResponse> {
     const { streams } = this.options;
     const id = randomUUID();
+    const timeline = context.timeline.nextAttempt();
     const t0 = Date.now();
     const stream = await streams.getStreamById(context.streamId);
     if (!stream) {
       throw new AppError(404, 'stream_not_found', 'That stream is no longer available.', 'Use streamId "auto", or list the streams again to get current ids.');
     }
     const t1 = Date.now();
+    timeline.mark('stream picked', id);
     // A prefetch of the same stream has already resolved the link, warmed the proxy and run ffprobe.
     const source = await this.proxy.acquire(stream.url, id);
+    timeline.mark('source acquired', id);
+    void source.headReady.then(() => timeline.mark('head fill done', id));
     try {
-      return await this.startWithSource(body, clientIp, { ...context, id, stream, source, timings: { t0, t1 } });
+      return await this.startWithSource(body, clientIp, { ...context, id, stream, source, timings: { t0, t1 }, timeline });
     } catch (error) {
       source.release();
       throw error;
@@ -318,12 +328,14 @@ export class PlaybackManager {
       details: TitleDetails;
       attempts: StartAttempt[];
       timings: { t0: number; t1: number };
+      timeline: StartTimeline;
     },
   ): Promise<SessionResponse> {
     const { config, db } = this.options;
     const { id, stream, source, device, details } = context;
     const t2 = Date.now();
     const probe = await source.probe();
+    context.timeline.mark('probe done', id);
     const timingsMs = { pickStream: context.timings.t1 - context.timings.t0, source: t2 - context.timings.t1, probe: Date.now() - t2 };
 
     const audio = requireAudio(probe, body.audioIndex);
@@ -372,6 +384,7 @@ export class PlaybackManager {
       streamId: stream.id,
       attempts: [...context.attempts],
       opening: true,
+      startTimeline: context.timeline,
       state: 'starting',
       error: null,
       errorCode: null,
@@ -434,6 +447,7 @@ export class PlaybackManager {
       throw error;
     }
     rec.opening = false;
+    rec.startTimeline = null;
     rec.pingClock = Date.now();
     Object.assign(timingsMs, { firstSegment: Date.now() - tFirst });
     this.options.logger.info({ sessionId: id, decision, timingsMs }, 'Playback session started');
@@ -457,6 +471,7 @@ export class PlaybackManager {
     const deadline = Date.now() + this.firstSegmentWaitMs;
     for (;;) {
       if (existsSync(first)) {
+        rec.startTimeline?.mark('first segment written', rec.id);
         this.markReady(rec);
         return;
       }
@@ -889,6 +904,7 @@ export class PlaybackManager {
       onMemoryLimit: (hit) => this.onMemoryLimit(rec, 'The video encoder', hit),
     });
     rec.process = proc;
+    if (rec.opening) rec.startTimeline?.mark('encoder spawned', rec.id);
     const pid = proc.pid;
     if (pid !== undefined) this.registry.add({ pid, sessionId: rec.id, startedAt: Date.now() });
     void proc.exited.then((exit) => {
@@ -1049,11 +1065,13 @@ export class PlaybackManager {
       durationSec: rec.probe.durationSec,
       tracks,
       maxRuns: maxExtractorRuns(this.isHeavy(rec)),
-      onRunEvent: (run) =>
+      onRunEvent: (run) => {
+        if (run.event === 'start' && rec.opening) rec.startTimeline?.mark('extractor started', rec.id);
         this.options.logger.info(
           { sessionId: rec.id, sinceStartMs: Date.now() - rec.startedAt, ...run },
           `Subtitle extractor run ${run.event === 'start' ? 'started' : 'stopped'}`,
-        ),
+        );
+      },
       registry: this.registry,
       watchdog: this.watchdog,
       onMemoryLimit: (hit) => this.onMemoryLimit(rec, 'The subtitle extractor', hit),

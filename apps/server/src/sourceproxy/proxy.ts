@@ -56,6 +56,8 @@ export interface SourceHandle {
   /** Encoder start, seek or restart: the window is measured from here again. */
   resetReadAhead(): void;
   readonly readAhead: ReadAheadState;
+  /** Settles when the head of the file has been downloaded (or the download stopped). */
+  readonly headReady: Promise<void>;
   readonly leadSec: number;
   /** This source's own upstream download rate, Mbps, 5 s average. */
   rateMbps(): number;
@@ -244,6 +246,9 @@ export class SourceProxy {
       resetReadAhead: () => entry.resetReadAhead(owner),
       get readAhead() {
         return entry.readAhead;
+      },
+      get headReady() {
+        return entry.headReady;
       },
       get leadSec() {
         return entry.leadOf(owner);

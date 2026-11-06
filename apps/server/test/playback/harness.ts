@@ -9,7 +9,7 @@ import { EventBus } from '../../src/events/bus.js';
 import { openDatabase, type Db } from '../../src/db/index.js';
 import { GatewayClient } from '../../src/gateway/client.js';
 import { RateLimiter } from '../../src/gateway/rateLimiter.js';
-import { createSilentLogger } from '../../src/logger.js';
+import { createSilentLogger, type Logger } from '../../src/logger.js';
 import { lowerPriority } from '../../src/playback/priority.js';
 import { createFfprobeRunner, type ProbeRunner } from '../../src/playback/probe.js';
 import { TmdbService, type FetchLike } from '../../src/tmdb/service.js';
@@ -124,6 +124,8 @@ export interface HarnessOptions {
   prefetch?: BuildAppOptions['prefetch'];
   /** Replaces the fake TMDB (default: makeFakeTmdb). */
   tmdbFetch?: FetchLike;
+  /** Receives the app's log lines (default: silent). */
+  logger?: Logger;
 }
 
 /** App wired to a stub gateway whose stream URLs resolve to local files, so ffprobe/ffmpeg run for real. */
@@ -135,7 +137,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const config = testConfig(options.root, { GATEWAY_MANIFEST_URL: stub.manifestUrl, ...options.env });
   mkdirSync(config.transcodeDir, { recursive: true });
   const db = openDatabase(config.dataDir);
-  const logger = createSilentLogger();
+  const logger = options.logger ?? createSilentLogger();
   const tmdb = new TmdbService({ config, db, logger, fetch: options.tmdbFetch ?? makeFakeTmdb().fetch });
   const gateway = new GatewayClient({
     config, db, logger, limiter: new RateLimiter({ maxRequests: 5, windowMs: 100, marginMs: 5 }), timeoutMs: 5_000,

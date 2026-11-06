@@ -8,6 +8,20 @@ export const BUCKET_DEPTH_SEC = 0.2;
 export const AGING_MS = 1500;
 /** The cap counts as binding while some request was held back within this long. */
 const LIMITED_GRACE_MS = 3000;
+/** An encoder with less lead than this and a request held back by the cap is at risk of stalling its player. */
+export const LOW_LEAD_SEC = 15;
+/** An encoder with more lead than this can wait for the cap without its player noticing. */
+export const HIGH_LEAD_SEC = 60;
+/** The at-risk state outlasts the moment a request waits, because the reader asks again a few milliseconds after each grant. */
+export const LOW_LEAD_MEMORY_MS = 200;
+/** While an at-risk encoder is waiting, other encoders get only tokens beyond this much of the cap (seconds), which covers the reader's gap between a grant and its next request. */
+export const SURPLUS_RESERVE_SEC = 0.05;
+
+/** What other encoders may take while a session with a small lead is waiting. */
+export interface Guard {
+  /** The bucket holds more than the reserve, so the at-risk reader is not being outrun. */
+  surplus: boolean;
+}
 
 /** Lower `rank` goes first; within a rank the smaller `lead` (seconds of video already buffered) goes first. */
 export interface Priority {
@@ -47,13 +61,29 @@ interface Waiter {
   signal: AbortSignal | undefined;
 }
 
-/** Picks the waiter to serve next. Pure so the order can be tested without time passing. */
-export function pickNext<T extends { since: number; seq: number; priority: PriorityInput }>(waiters: readonly T[], nowMs: number): T | undefined {
+function resolvePriority(input: PriorityInput): Priority {
+  return typeof input === 'function' ? input() : input;
+}
+
+const isAtRisk = (priority: Priority): boolean => priority.rank === RANK_ENCODER && priority.lead < LOW_LEAD_SEC;
+
+/** Encoders that are not at risk wait while one is: above HIGH_LEAD_SEC always, in between until the bucket has a surplus. */
+function isHeldBack(priority: Priority, guard: Guard | null): boolean {
+  if (!guard || priority.rank !== RANK_ENCODER || priority.lead < LOW_LEAD_SEC) return false;
+  return priority.lead > HIGH_LEAD_SEC || !guard.surplus;
+}
+
+/**
+ * Picks the waiter to serve next. Pure so the order can be tested without time passing. With a guard, encoders that
+ * are not at risk of stalling are skipped, aging included, so the session about to stall gets the tokens first.
+ */
+export function pickNext<T extends { since: number; seq: number; priority: PriorityInput }>(waiters: readonly T[], nowMs: number, guard: Guard | null = null): T | undefined {
   let best: T | undefined;
   let bestKey: [number, number, number] = [0, 0, 0];
   for (const waiter of waiters) {
+    const priority = resolvePriority(waiter.priority);
+    if (isHeldBack(priority, guard)) continue;
     const aged = nowMs - waiter.since >= AGING_MS;
-    const priority = typeof waiter.priority === 'function' ? waiter.priority() : waiter.priority;
     const key: [number, number, number] = aged ? [-1, waiter.since, waiter.seq] : [priority.rank, priority.lead, waiter.seq];
     if (!best || key[0] < bestKey[0] || (key[0] === bestKey[0] && (key[1] < bestKey[1] || (key[1] === bestKey[1] && key[2] < bestKey[2])))) {
       best = waiter;
@@ -70,11 +100,14 @@ export function pickNext<T extends { since: number; seq: number; priority: Prior
 export class DownloadGate {
   readonly meter = new RateMeter();
   private readonly bucket: TokenBucket;
+  private readonly reserveBytes: number;
   private readonly waiters: Waiter[] = [];
   private timer: unknown = null;
+  private guardTimer = false;
   private seq = 0;
   private limitedSince: number | null = null;
   private lastLimited = 0;
+  private atRiskAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     readonly capMbps: number,
@@ -82,6 +115,7 @@ export class DownloadGate {
   ) {
     const rate = mbpsToBytesPerSec(capMbps);
     this.bucket = new TokenBucket(rate, rate * BUCKET_DEPTH_SEC, clock.now());
+    this.reserveBytes = rate * SURPLUS_RESERVE_SEC;
   }
 
   get queued(): number {
@@ -92,11 +126,13 @@ export class DownloadGate {
   acquire(bytes: number, priority: PriorityInput, signal?: AbortSignal): Promise<void> {
     const now = this.clock.now();
     if (signal?.aborted) return Promise.resolve();
-    if (this.waiters.length === 0 && this.bucket.canTake(now)) {
+    const resolved = resolvePriority(priority);
+    if (this.waiters.length === 0 && this.bucket.canTake(now) && !isHeldBack(resolved, this.guard(now))) {
       this.grantNow(bytes, now);
       return Promise.resolve();
     }
     this.markLimited(now);
+    if (isAtRisk(resolved)) this.atRiskAt = now;
     return new Promise<void>((resolve) => {
       const waiter: Waiter = { bytes, priority, since: now, seq: (this.seq += 1), grant: resolve, onAbort: null, signal };
       if (signal) {
@@ -137,28 +173,45 @@ export class DownloadGate {
     this.meter.add(bytes, now);
   }
 
+  private guard(now: number): Guard | null {
+    if (now - this.atRiskAt > LOW_LEAD_MEMORY_MS) return null;
+    return { surplus: this.bucket.canTake(now, this.reserveBytes) };
+  }
+
   private markLimited(now: number): void {
     if (this.limitedSince === null || now - this.lastLimited > LIMITED_GRACE_MS) this.limitedSince = now;
     this.lastLimited = now;
   }
 
   private schedule(): void {
-    if (this.timer !== null) return;
+    // A timer waiting on tokens stays valid for a new waiter; one waiting for held back readers does not, because the new one may be servable now.
+    if (this.timer !== null && !this.guardTimer) return;
+    if (this.timer !== null) this.clock.clearTimer(this.timer);
     this.pump();
   }
 
   private pump(): void {
     this.timer = null;
+    this.guardTimer = false;
     for (;;) {
       const now = this.clock.now();
       if (this.waiters.length === 0) return;
+      if (this.waiters.some((waiter) => isAtRisk(resolvePriority(waiter.priority)))) this.atRiskAt = now;
       if (!this.bucket.canTake(now)) {
         this.markLimited(now);
         this.timer = this.clock.setTimer(Math.max(1, Math.ceil(this.bucket.msUntilAvailable(now))), () => this.pump());
         return;
       }
-      const next = pickNext(this.waiters, now);
-      if (!next) return;
+      const guard = this.guard(now);
+      const next = pickNext(this.waiters, now, guard);
+      if (!next) {
+        // Everyone waiting is held back for a session about to stall: look again when it has been quiet long enough or the reserve is full.
+        const quiet = this.atRiskAt + LOW_LEAD_MEMORY_MS - now + 1;
+        const wait = guard && !guard.surplus ? Math.min(quiet, Math.ceil(this.bucket.msUntilAvailable(now, this.reserveBytes))) : quiet;
+        this.timer = this.clock.setTimer(Math.max(1, wait), () => this.pump());
+        this.guardTimer = true;
+        return;
+      }
       this.waiters.splice(this.waiters.indexOf(next), 1);
       if (next.onAbort) next.signal?.removeEventListener('abort', next.onAbort);
       this.grantNow(next.bytes, now);

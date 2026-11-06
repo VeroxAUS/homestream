@@ -6,6 +6,7 @@ import { startDiscovery } from './discovery.js';
 import { recordConfigWarnings } from './events/configWarnings.js';
 import { createLogger } from './logger.js';
 import { displayGatewayUrl } from './redact.js';
+import { createShutdown } from './shutdown.js';
 import { SERVER_VERSION, serverRoot } from './version.js';
 
 function findRepoRoot(): string | null {
@@ -26,7 +27,7 @@ async function main(): Promise<void> {
   });
   mkdirSync(config.dataDir, { recursive: true });
 
-  const appLogger = createLogger({ dataDir: config.dataDir });
+  const appLogger = createLogger({ dataDir: config.dataDir, level: config.logLevel });
   const { logger } = appLogger;
   for (const warning of config.warnings) logger.warn(warning);
   if (config.missingKeys.length > 0) {
@@ -58,15 +59,18 @@ async function main(): Promise<void> {
     onError: (error) => logger.warn(`mDNS advertisement problem: ${error.message}`),
   });
 
-  let stopping = false;
-  const shutdown = async (reason: string): Promise<void> => {
-    if (stopping) return;
-    stopping = true;
+  const stopAll = createShutdown({
+    stop: async () => {
+      await discovery.stop();
+      await app.close();
+      await appLogger.close();
+    },
+    exit: (code) => process.exit(code),
+    warn: (message) => logger.warn(message),
+  });
+  const shutdown = (reason: string): Promise<void> => {
     logger.info(`Shutting down (${reason})`);
-    await discovery.stop();
-    await app.close();
-    await appLogger.close();
-    process.exit(0);
+    return stopAll(reason);
   };
 
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'] as const) {
