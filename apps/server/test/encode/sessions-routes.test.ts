@@ -1,11 +1,15 @@
-import { readdirSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
 import { bootHarness, listFfmpegCommandLines, PROFILES, startSession, type Harness } from '../playback/harness.js';
 import { hasNvenc } from '../hasNvenc.js';
+
+const execFileAsync = promisify(execFile);
 
 const PROBE: ProbeResult = {
   durationSec: 120,
@@ -27,14 +31,27 @@ const PROBE: ProbeResult = {
 let root: string;
 let harness: Harness;
 
+/** Streams match PROBE: 0 video, 1 audio, 2 subrip. */
+async function generateSource(dir: string): Promise<string> {
+  const srt = path.join(dir, 'cues.srt');
+  writeFileSync(srt, '1\n00:00:01,000 --> 00:00:03,000\nHello\n');
+  const file = path.join(dir, 'source.mkv');
+  // prettier-ignore
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=24', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', srt, '-t', '20', '-map', '0:v', '-map', '1:a', '-map', '2:s', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '48', '-c:a', 'ac3', '-ac', '6', '-c:s', 'srt', file];
+  await execFileAsync('ffmpeg', args);
+  return file;
+}
+
 beforeAll(async () => {
   root = makeTempDir('sessions');
+  // The 201 waits for the first segment, so the encoder needs a real file even though the probe is stubbed.
+  const source = await generateSource(root);
   harness = await bootHarness({
     root,
-    sources: { movie: { filename: 'Movie.1994.1080p.WEB-DL.x264.mkv', path: path.join(root, 'does-not-exist.mkv') } },
+    sources: { movie: { filename: 'Movie.1994.1080p.WEB-DL.x264.mkv', path: source } },
     probe: async () => PROBE,
   });
-});
+}, 120_000);
 
 afterAll(async () => {
   await harness?.close();
@@ -163,8 +180,8 @@ describe.skipIf(!hasNvenc())('session start with a stubbed probe', () => {
           forced: false,
           default: false,
           url: `/hls/${body.sessionId}/subs/2/index.m3u8`,
-          fullUrl: null,
-          status: 'extracting',
+          fullUrl: `/hls/${body.sessionId}/subs/2.vtt`,
+          status: 'complete',
         },
       ],
       decision: {

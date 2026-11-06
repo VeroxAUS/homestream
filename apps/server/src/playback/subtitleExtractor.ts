@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { ReadAheadWindow } from '../network/readAhead.js';
 import type { EncoderExit } from './encoderProcess.js';
+import { burstActive } from './extractorSchedule.js';
 import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import type { PidRegistry } from './pidRegistry.js';
 import type { ProbeResult } from './probe.js';
@@ -14,7 +15,6 @@ const PREROLL_SEC = 40;
 const NEAR_AHEAD_SEC = 120;
 /** A new run is unthrottled until it has read this far past the position it was started for (60 s of cues plus the coverage lag), but never for longer than `BURST_MAX_MS`. */
 const BURST_AHEAD_SEC = 72;
-const BURST_MAX_MS = 25_000;
 /** A run is stopped once it has read this far into the territory of a later run. */
 const HANDOVER_SEC = 10;
 const DEFAULT_MAX_RUNS = 2;
@@ -97,6 +97,7 @@ export class SubtitleExtractor {
   private gaveUp = false;
   private launching: Promise<void> | null = null;
   private readonly windows = new Map<number, ReadAheadWindow>();
+  private readonly warmAt = new WeakMap<SubtitleRun, number>();
 
   private readonly maxRuns: number;
 
@@ -116,10 +117,25 @@ export class SubtitleExtractor {
    * viewer waits for, so these reads are exempt from the throttle that otherwise yields source bandwidth to the encoder.
    */
   get bursting(): boolean {
-    const now = Date.now();
+    const nowMs = Date.now();
     return this.runs.some(
-      (run) => run.running && !run.stopRequested && now - run.startedAt < BURST_MAX_MS && run.headSec < run.needSec,
+      (run) =>
+        run.running &&
+        !run.stopRequested &&
+        burstActive({
+          nowMs,
+          startedAtMs: run.startedAt,
+          warmAtMs: this.warmAt.get(run) ?? null,
+          headSec: run.headSec,
+          needSec: run.needSec,
+        }),
     );
+  }
+
+  /** The encoder of a heavy source has warmed up: the running runs' burst clocks start now (see `burstActive`). */
+  noteEncoderWarm(): void {
+    const now = Date.now();
+    for (const run of this.runs) if (run.running && !this.warmAt.has(run)) this.warmAt.set(run, now);
   }
 
   /** Processes currently alive, including ones that are being stopped. */

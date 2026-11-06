@@ -72,6 +72,7 @@ import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
 import { StartTimeline } from './startTimeline.js';
 import {
+  encoderWarm,
   extractorLimit,
   isHeavySource,
   limitLabel,
@@ -1159,18 +1160,17 @@ export class PlaybackManager {
 
   /** Subtitle extraction must not compete with an encoder that has little lead over the player or runs slower than 1.2x. */
   private updateStarved(rec: SessionRecord): void {
-    const limit = extractorLimit({
-      heavy: this.isHeavy(rec),
-      bursting: rec.subtitles?.bursting ?? false,
-      encoder: {
-        done: rec.encoderDone,
-        startSegment: rec.startSegment,
-        headSegment: rec.stats.headSegment,
-        playerSegment: rec.playerSegment,
-        speed: rec.stats.speed,
-        recentSpeed: this.recentSpeed(rec),
-      },
-    });
+    const heavy = this.isHeavy(rec);
+    const encoder = {
+      done: rec.encoderDone,
+      startSegment: rec.startSegment,
+      headSegment: rec.stats.headSegment,
+      playerSegment: rec.playerSegment,
+      speed: rec.stats.speed,
+      recentSpeed: this.recentSpeed(rec),
+    };
+    if (heavy && encoderWarm(encoder)) rec.subtitles?.noteEncoderWarm();
+    const limit = extractorLimit({ heavy, bursting: rec.subtitles?.bursting ?? false, encoder });
     rec.source.setExtractorLimit(limit);
     const label = limitLabel(limit);
     if (this.limitLabels.get(rec) !== label) {

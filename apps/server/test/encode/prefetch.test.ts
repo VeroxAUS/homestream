@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { bootHarness, listFfmpegCommandLines, PROFILES, type Harness } from '../playback/harness.js';
+import { bootHarness, generateSources, listFfmpegCommandLines, PROFILES, type Harness } from '../playback/harness.js';
 import { hasNvenc } from '../hasNvenc.js';
 
 const PROBE: ProbeResult = {
@@ -35,13 +35,15 @@ let harness: Harness;
 
 beforeAll(async () => {
   root = makeTempDir('prefetch');
+  // The 201 waits for the first segment, so the encoder needs a real file even though the probe is stubbed.
+  const sources = await generateSources(path.join(root, 'sources'));
   harness = await bootHarness({
     root,
-    sources: { movie: { filename: 'Movie.1994.1080p.WEB-DL.x264.mkv', path: path.join(root, 'does-not-exist.mkv') } },
+    sources: { movie: { filename: 'Movie.1994.1080p.WEB-DL.x264.mkv', path: sources.sdr } },
     probe: async () => PROBE,
     prefetch: { streamIdBudgetMs: 150 },
   });
-});
+}, 120_000);
 
 afterAll(async () => {
   await harness?.close();

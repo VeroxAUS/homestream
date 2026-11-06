@@ -57,6 +57,26 @@ export function encoderWarm(view: EncoderView): boolean {
   return produced >= WARMUP_MIN_SEGMENTS && (view.recentSpeed || view.speed) >= WARMUP_SPEED;
 }
 
+/** How long a fresh run may read unthrottled while the encoder keeps at least `BURST_FLOOR_SPEED`. */
+export const BURST_MAX_MS = 25_000;
+
+export interface BurstInput {
+  nowMs: number;
+  startedAtMs: number;
+  /** When the encoder of a heavy source finished warming up; null while it has not, and always null for light sources. */
+  warmAtMs: number | null;
+  headSec: number;
+  needSec: number;
+}
+
+/**
+ * True while a run is still reading its first stretch. On a heavy source the warm-up phase is throttled to `WARMUP_BYTES_PER_SEC`,
+ * so the burst clock starts when the warm-up ends; counted from the run start, the burst would be over before it began.
+ */
+export function burstActive({ nowMs, startedAtMs, warmAtMs, headSec, needSec }: BurstInput): boolean {
+  return nowMs - Math.max(startedAtMs, warmAtMs ?? 0) < BURST_MAX_MS && headSec < needSec;
+}
+
 export interface LimitInput {
   heavy: boolean;
   /** An extractor run is still reading its first stretch, which the viewer waits for. */

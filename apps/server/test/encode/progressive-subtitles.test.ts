@@ -304,7 +304,7 @@ describe.skipIf(!hasNvenc())('progressive text subtitles', () => {
       const harness = await boot({ playback: { monitorTickMs: 0 } });
       const started = (await startSession(harness, 'movie', 'desktop', { startPositionSec: 400 })).body;
       const { sessionId } = started;
-      expect(await extractorCount(harness, sessionId)).toBeGreaterThanOrEqual(1);
+      // The 201 waits for the first segment, by which time a small file's run may already be done.
       expect(await extractorCount(harness, sessionId)).toBeLessThanOrEqual(2);
       const before = (await getSession(harness, sessionId)).subtitleTracks;
 
@@ -339,7 +339,9 @@ describe.skipIf(!hasNvenc())('progressive text subtitles', () => {
     async () => {
       const gated = await startGatedSource(source);
       gated.gate.closed = true;
+      // The window is wider than the file: extractors only chase segments within the read-ahead window of the player, and this one never plays.
       const harness = await boot({
+        env: { READ_AHEAD_SEC: '700', READ_AHEAD_RESUME_SEC: '600' },
         playback: { resolveUrl: async () => gated.url, subtitleHoldMs: 1500, monitorTickMs: 0 },
       });
       const { sessionId } = (await startSession(harness, 'movie', 'desktop')).body;

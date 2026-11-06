@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BURST_FLOOR_SPEED,
+  BURST_MAX_MS,
+  burstActive,
   encoderWarm,
   extractorLimit,
   HEAVY_BITRATE_BPS,
@@ -148,6 +150,31 @@ describe('extractorLimit', () => {
 
     it('is not limited by a slow start of a 1080p encoder', () => {
       expect(extractorLimit({ heavy: false, bursting: true, encoder: lead(2, { speed: 0 }) })).toBeNull();
+    });
+  });
+
+  describe('burstActive', () => {
+    const base = { nowMs: 100_000, startedAtMs: 100_000, warmAtMs: null, headSec: 560, needSec: 672 };
+
+    it('lasts BURST_MAX_MS from the run start when there is no warm-up', () => {
+      expect(burstActive({ ...base, nowMs: 100_000 + BURST_MAX_MS - 1 })).toBe(true);
+      expect(burstActive({ ...base, nowMs: 100_000 + BURST_MAX_MS })).toBe(false);
+    });
+
+    it('starts the clock when a heavy source finishes warming up', () => {
+      const warm = { ...base, warmAtMs: 121_000 };
+      expect(burstActive({ ...warm, nowMs: 125_000 })).toBe(true);
+      expect(burstActive({ ...warm, nowMs: 121_000 + BURST_MAX_MS - 1 })).toBe(true);
+      expect(burstActive({ ...warm, nowMs: 121_000 + BURST_MAX_MS })).toBe(false);
+    });
+
+    it('ends once the run has read the stretch it was started for', () => {
+      expect(burstActive({ ...base, headSec: 671.9 })).toBe(true);
+      expect(burstActive({ ...base, headSec: 672 })).toBe(false);
+    });
+
+    it('is not shortened by a warm-up that ended before the run started', () => {
+      expect(burstActive({ ...base, warmAtMs: 90_000, nowMs: 100_000 + BURST_MAX_MS - 1 })).toBe(true);
     });
   });
 
