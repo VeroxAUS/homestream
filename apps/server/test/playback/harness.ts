@@ -19,20 +19,52 @@ import { testConfig } from '../helpers.js';
 
 export const PROFILES = {
   chromecast4k: {
-    deviceId: 'val-cc4k', deviceName: 'Val Chromecast', kind: 'tv', maxWidth: 3840, maxHeight: 2160,
-    h264: true, hevc: true, hevcMain10: true, hdr10: true, maxAudioChannels: 6,
+    deviceId: 'val-cc4k',
+    deviceName: 'Val Chromecast',
+    kind: 'tv',
+    maxWidth: 3840,
+    maxHeight: 2160,
+    h264: true,
+    hevc: true,
+    hevcMain10: true,
+    hdr10: true,
+    maxAudioChannels: 6,
   },
   emulator: {
-    deviceId: 'val-emu', deviceName: 'Val Emulator', kind: 'tv', maxWidth: 1920, maxHeight: 1080,
-    h264: true, hevc: true, hevcMain10: false, hdr10: false, maxAudioChannels: 6,
+    deviceId: 'val-emu',
+    deviceName: 'Val Emulator',
+    kind: 'tv',
+    maxWidth: 1920,
+    maxHeight: 1080,
+    h264: true,
+    hevc: true,
+    hevcMain10: false,
+    hdr10: false,
+    maxAudioChannels: 6,
   },
   desktop: {
-    deviceId: 'val-desktop', deviceName: 'Val Desktop', kind: 'desktop', maxWidth: 3840, maxHeight: 2160,
-    h264: true, hevc: false, hevcMain10: false, hdr10: false, maxAudioChannels: 2,
+    deviceId: 'val-desktop',
+    deviceName: 'Val Desktop',
+    kind: 'desktop',
+    maxWidth: 3840,
+    maxHeight: 2160,
+    h264: true,
+    hevc: false,
+    hevcMain10: false,
+    hdr10: false,
+    maxAudioChannels: 2,
   },
   p720: {
-    deviceId: 'val-720', deviceName: 'Val 720p', kind: 'web', maxWidth: 1280, maxHeight: 720,
-    h264: true, hevc: false, hevcMain10: false, hdr10: false, maxAudioChannels: 2,
+    deviceId: 'val-720',
+    deviceName: 'Val 720p',
+    kind: 'web',
+    maxWidth: 1280,
+    maxHeight: 720,
+    h264: true,
+    hevc: false,
+    hevcMain10: false,
+    hdr10: false,
+    maxAudioChannels: 2,
   },
 } satisfies Record<string, CapabilityProfile>;
 
@@ -72,18 +104,74 @@ export async function generateSources(dir: string): Promise<LocalSources> {
   const hdr = path.join(dir, 'source-hdr.mkv');
   const common = ['-hide_banner', '-loglevel', 'error', '-y'];
   await run('ffmpeg', [
-    ...common, '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=24',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000',
-    '-t', '60', '-map', '0:v', '-map', '1:a', '-map', '2:a', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-    '-c:a:0', 'ac3', '-ac:a:0', '6', '-c:a:1', 'aac', '-ac:a:1', '2',
-    '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra', '-disposition:a:0', 'default', sdr,
+    ...common,
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=1920x1080:rate=24',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=880:sample_rate=48000',
+    '-t',
+    '60',
+    '-map',
+    '0:v',
+    '-map',
+    '1:a',
+    '-map',
+    '2:a',
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a:0',
+    'ac3',
+    '-ac:a:0',
+    '6',
+    '-c:a:1',
+    'aac',
+    '-ac:a:1',
+    '2',
+    '-metadata:s:a:0',
+    'language=eng',
+    '-metadata:s:a:1',
+    'language=fra',
+    '-disposition:a:0',
+    'default',
+    sdr,
   ]);
   await run('ffmpeg', [
-    ...common, '-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=24,format=p010le',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=10', '-t', '10',
-    '-c:v', 'hevc_nvenc', '-profile:v', 'main10', '-pix_fmt', 'p010le', '-tag:v', 'hvc1',
-    '-bsf:v', 'hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9',
-    '-c:a', 'ac3', '-ac', '6', hdr,
+    ...common,
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=3840x2160:rate=24,format=p010le',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000:duration=10',
+    '-t',
+    '10',
+    '-c:v',
+    'hevc_nvenc',
+    '-profile:v',
+    'main10',
+    '-pix_fmt',
+    'p010le',
+    '-tag:v',
+    'hvc1',
+    '-bsf:v',
+    'hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9',
+    '-c:a',
+    'ac3',
+    '-ac',
+    '6',
+    hdr,
   ]);
   return { sdr, hdr };
 }
@@ -92,11 +180,41 @@ export async function generateSources(dir: string): Promise<LocalSources> {
 export async function generateLongSource(dir: string): Promise<string> {
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'source-long.mkv');
-  await run('ffmpeg', [
-    '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '1500', '-c:v', 'libx264', '-preset', 'ultrafast',
-    '-crf', '32', '-g', '48', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '64k', file,
-  ], 300_000);
+  await run(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc2=size=640x360:rate=24',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=48000',
+      '-t',
+      '1500',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-crf',
+      '32',
+      '-g',
+      '48',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '64k',
+      file,
+    ],
+    300_000,
+  );
   return file;
 }
 
@@ -132,7 +250,11 @@ export interface HarnessOptions {
 export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const keys = Object.keys(options.sources);
   const stub = await startStubGateway(() => ({
-    body: { streams: keys.map((key, i) => stubStream(i, (options.sources[key] as { filename: string }).filename, { cached: true })) },
+    body: {
+      streams: keys.map((key, i) =>
+        stubStream(i, (options.sources[key] as { filename: string }).filename, { cached: true }),
+      ),
+    },
   }));
   const config = testConfig(options.root, { GATEWAY_MANIFEST_URL: stub.manifestUrl, ...options.env });
   mkdirSync(config.transcodeDir, { recursive: true });
@@ -140,7 +262,11 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const logger = options.logger ?? createSilentLogger();
   const tmdb = new TmdbService({ config, db, logger, fetch: options.tmdbFetch ?? makeFakeTmdb().fetch });
   const gateway = new GatewayClient({
-    config, db, logger, limiter: new RateLimiter({ maxRequests: 5, windowMs: 100, marginMs: 5 }), timeoutMs: 5_000,
+    config,
+    db,
+    logger,
+    limiter: new RateLimiter({ maxRequests: 5, windowMs: 100, marginMs: 5 }),
+    timeoutMs: 5_000,
   });
 
   const probeCalls: string[] = [];
@@ -148,7 +274,11 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   const realProbe = createFfprobeRunner('ffprobe');
   const bus = new EventBus();
   const app = await buildApp(config, {
-    logger, db, tmdb, gateway, bus,
+    logger,
+    db,
+    tmdb,
+    gateway,
+    bus,
     prefetch: options.prefetch,
     playback: {
       resolveUrl: async (raw) => {
@@ -167,7 +297,9 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   });
   await app.ready();
 
-  const listing = (await app.inject('/api/streams/movie/278')).json() as { streams: Array<{ id: string; filename: string }> };
+  const listing = (await app.inject('/api/streams/movie/278')).json() as {
+    streams: Array<{ id: string; filename: string }>;
+  };
   const streamIds: Record<string, string> = {};
   for (const key of keys) {
     const filename = (options.sources[key] as { filename: string }).filename;
@@ -175,7 +307,15 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   }
 
   return {
-    app, db, stub, config, bus, transcodeDir: config.transcodeDir, probeCalls, resolveCalls, streamIds,
+    app,
+    db,
+    stub,
+    config,
+    bus,
+    transcodeDir: config.transcodeDir,
+    probeCalls,
+    resolveCalls,
+    streamIds,
     close: async () => {
       await app.close();
       db.close();
@@ -193,12 +333,22 @@ export async function startSession(
   const res = await harness.app.inject({
     method: 'POST',
     url: '/api/sessions',
-    payload: { mediaType: 'movie', tmdbId: 278, streamId: harness.streamIds[streamKey], device: PROFILES[profile], ...extra },
+    payload: {
+      mediaType: 'movie',
+      tmdbId: 278,
+      streamId: harness.streamIds[streamKey],
+      device: PROFILES[profile],
+      ...extra,
+    },
   });
   return { status: res.statusCode, body: res.json() };
 }
 
-export async function fetchHls(harness: Harness, sessionId: string, file: string): Promise<{ status: number; headers: Record<string, unknown>; body: Buffer }> {
+export async function fetchHls(
+  harness: Harness,
+  sessionId: string,
+  file: string,
+): Promise<{ status: number; headers: Record<string, unknown>; body: Buffer }> {
   const res = await harness.app.inject(`/hls/${sessionId}/${file}`);
   return { status: res.statusCode, headers: res.headers, body: res.rawPayload };
 }
@@ -225,7 +375,13 @@ export async function probeSegment(
   sessionId: string,
   segment: string,
   workDir: string,
-): Promise<{ streams: ProbedStream[]; formatStart: number; formatDuration: number; firstVideoFlags: string; file: string }> {
+): Promise<{
+  streams: ProbedStream[];
+  formatStart: number;
+  formatDuration: number;
+  firstVideoFlags: string;
+  file: string;
+}> {
   mkdirSync(workDir, { recursive: true });
   const seg = await fetchHls(harness, sessionId, segment);
   if (seg.status !== 200) throw new Error(`${segment} returned ${seg.status}: ${seg.body.toString()}`);
@@ -243,7 +399,17 @@ export async function probeSegment(
     await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file]),
   ) as { streams: ProbedStream[]; format: { start_time: string; duration: string } };
   const packets = await run('ffprobe', [
-    '-v', 'error', '-select_streams', 'v:0', '-read_intervals', '%+#1', '-show_entries', 'packet=flags', '-of', 'csv=p=0', file,
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-read_intervals',
+    '%+#1',
+    '-show_entries',
+    'packet=flags',
+    '-of',
+    'csv=p=0',
+    file,
   ]);
   return {
     streams: info.streams,
@@ -257,8 +423,9 @@ export async function probeSegment(
 /** Running ffmpeg processes whose command line contains `needle` (a session id), with their pids. */
 export async function listFfmpegPids(needle: string): Promise<number[]> {
   const out = await run('powershell.exe', [
-    '-NoProfile', '-Command',
-    "Get-CimInstance Win32_Process -Filter \"Name='ffmpeg.exe'\" | ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }",
+    '-NoProfile',
+    '-Command',
+    'Get-CimInstance Win32_Process -Filter "Name=\'ffmpeg.exe\'" | ForEach-Object { "$($_.ProcessId)|$($_.CommandLine)" }',
   ]);
   return out
     .split(/\r?\n/)
@@ -268,8 +435,9 @@ export async function listFfmpegPids(needle: string): Promise<number[]> {
 
 export async function listFfmpegCommandLines(): Promise<string[]> {
   const out = await run('powershell.exe', [
-    '-NoProfile', '-Command',
-    "Get-CimInstance Win32_Process -Filter \"Name='ffmpeg.exe'\" | ForEach-Object { $_.CommandLine }",
+    '-NoProfile',
+    '-Command',
+    'Get-CimInstance Win32_Process -Filter "Name=\'ffmpeg.exe\'" | ForEach-Object { $_.CommandLine }',
   ]);
   return out.split(/\r?\n/).filter(Boolean);
 }

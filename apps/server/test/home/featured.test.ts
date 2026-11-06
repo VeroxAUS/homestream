@@ -16,7 +16,8 @@ function media(type: 'movie' | 'tv', tmdbId: number, overrides: Partial<MediaSum
   };
 }
 
-const list = (type: 'movie' | 'tv', first: number, count = 5) => Array.from({ length: count }, (_, i) => media(type, first + i));
+const list = (type: 'movie' | 'tv', first: number, count = 5) =>
+  Array.from({ length: count }, (_, i) => media(type, first + i));
 
 function input(overrides: Partial<FeaturedInput> = {}): FeaturedInput {
   return {
@@ -55,12 +56,22 @@ describe('buildFeatured', () => {
       ['popular', 'movie', 200],
       ['popular', 'tv', 300],
     ]);
-    expect(featured.map((item) => item.reasonLabel)).toEqual(['Trending this week', 'Trending show this week', 'Popular right now', 'Popular show']);
+    expect(featured.map((item) => item.reasonLabel)).toEqual([
+      'Trending this week',
+      'Trending show this week',
+      'Popular right now',
+      'Popular show',
+    ]);
     expect(featured.some((item) => item.basedOn)).toBe(false);
   });
 
   it('adds a "Because you watched" item second when recommendations exist', () => {
-    const featured = buildFeatured(input({ because: { base, recommendations: [media('movie', 500), media('movie', 501)] }, played: new Set(['movie:278']) }));
+    const featured = buildFeatured(
+      input({
+        because: { base, recommendations: [media('movie', 500), media('movie', 501)] },
+        played: new Set(['movie:278']),
+      }),
+    );
     expect(featured).toHaveLength(5);
     expect(featured[1]).toMatchObject({
       reason: 'because_you_watched',
@@ -80,19 +91,27 @@ describe('buildFeatured', () => {
       media('movie', 305),
     ];
     const featured = buildFeatured(
-      input({ because: { base, recommendations }, played: new Set(['movie:278', 'movie:301']), continueWatching: [cw('movie', 302)] }),
+      input({
+        because: { base, recommendations },
+        played: new Set(['movie:278', 'movie:301']),
+        continueWatching: [cw('movie', 302)],
+      }),
     );
     expect(featured.find((item) => item.reason === 'because_you_watched')?.tmdbId).toBe(305);
   });
 
   it('omits the slot when nothing usable is recommended', () => {
-    const featured = buildFeatured(input({ because: { base, recommendations: [media('movie', 278)] }, played: new Set(['movie:278']) }));
+    const featured = buildFeatured(
+      input({ because: { base, recommendations: [media('movie', 278)] }, played: new Set(['movie:278']) }),
+    );
     expect(featured.map((item) => item.reason)).not.toContain('because_you_watched');
     expect(featured).toHaveLength(4);
   });
 
   it('never repeats a title across slots', () => {
-    const featured = buildFeatured(input({ because: { base, recommendations: [media('movie', 1), media('movie', 200)] } }));
+    const featured = buildFeatured(
+      input({ because: { base, recommendations: [media('movie', 1), media('movie', 200)] } }),
+    );
     const keys = featured.map((item) => `${item.mediaType}:${item.tmdbId}`);
     expect(new Set(keys).size).toBe(keys.length);
     expect(featured.find((item) => item.reason === 'because_you_watched')?.tmdbId).toBe(200);
@@ -106,7 +125,13 @@ describe('buildFeatured', () => {
 
   it('takes the first usable title of a list when the head lacks a backdrop or overview', () => {
     const featured = buildFeatured(
-      input({ trendingMovies: [media('movie', 1, { backdropUrl: null }), media('movie', 2, { overview: '' }), media('movie', 3)] }),
+      input({
+        trendingMovies: [
+          media('movie', 1, { backdropUrl: null }),
+          media('movie', 2, { overview: '' }),
+          media('movie', 3),
+        ],
+      }),
     );
     expect(featured[0]).toMatchObject({ reason: 'trending', tmdbId: 3 });
   });
@@ -133,8 +158,12 @@ describe('buildFeatured', () => {
   });
 
   it('never exceeds five items and returns an empty list when TMDB gave nothing', () => {
-    expect(buildFeatured(input({ because: { base, recommendations: list('movie', 700, 9) } })).length).toBeLessThanOrEqual(5);
-    expect(buildFeatured(input({ trendingMovies: [], trendingShows: [], popularMovies: [], popularShows: [] }))).toEqual([]);
+    expect(
+      buildFeatured(input({ because: { base, recommendations: list('movie', 700, 9) } })).length,
+    ).toBeLessThanOrEqual(5);
+    expect(
+      buildFeatured(input({ trendingMovies: [], trendingShows: [], popularMovies: [], popularShows: [] })),
+    ).toEqual([]);
   });
 
   it('fills every field and omits logoUrl', () => {

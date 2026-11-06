@@ -51,12 +51,16 @@ const SDH = /\bsdh\b|hearing[- ]impaired|\bhoh\b|\bcc\b|closed caption/i;
 export const isSdhTitle = (title: string): boolean => SDH.test(title);
 
 function attributeText(text: string): string {
-  return text.replace(/[\r\n]+/g, ' ').replace(/"/g, "'").trim();
+  return text
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/"/g, "'")
+    .trim();
 }
 
 /** `<label> [<idx>]`: unique, and the suffix is how clients map a rendition back to the server's track index. */
 export function renditionName(track: RenditionTrack): string {
-  const label = attributeText(track.title) || (track.language && track.language !== 'und' ? track.language : 'Subtitles');
+  const label =
+    attributeText(track.title) || (track.language && track.language !== 'und' ? track.language : 'Subtitles');
   return `${label} [${track.index}]`;
 }
 
@@ -86,7 +90,11 @@ export function generateMasterPlaylist(input: MasterInput): string {
     if (track.language && track.language !== 'und') attributes.push(`LANGUAGE="${attributeText(track.language)}"`);
     const isDefault = input.defaultTrack?.index === track.index;
     const forced = track.forced || (isDefault && input.defaultTrack?.forced === true);
-    attributes.push(isDefault ? 'DEFAULT=YES' : 'DEFAULT=NO', isDefault ? 'AUTOSELECT=YES' : 'AUTOSELECT=NO', `FORCED=${forced ? 'YES' : 'NO'}`);
+    attributes.push(
+      isDefault ? 'DEFAULT=YES' : 'DEFAULT=NO',
+      isDefault ? 'AUTOSELECT=YES' : 'AUTOSELECT=NO',
+      `FORCED=${forced ? 'YES' : 'NO'}`,
+    );
     if (SDH.test(track.title)) attributes.push('CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog"');
     attributes.push(`URI="${subtitlePlaylistPath(track.index)}"`);
     lines.push(`#EXT-X-MEDIA:${attributes.join(',')}`);
@@ -103,7 +111,13 @@ export function generateMasterPlaylist(input: MasterInput): string {
 /** Subtitle rendition playlist: a pure function of the duration, so it is identical on every request and never waits for extraction. */
 export function generateSubtitlePlaylist(durationSec: number): string {
   const count = segmentCount(durationSec);
-  const lines = ['#EXTM3U', '#EXT-X-VERSION:7', `#EXT-X-TARGETDURATION:${SEGMENT_SECONDS}`, '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD'];
+  const lines = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:7',
+    `#EXT-X-TARGETDURATION:${SEGMENT_SECONDS}`,
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-PLAYLIST-TYPE:VOD',
+  ];
   for (let index = 0; index < count; index += 1) {
     const length = index === count - 1 ? durationSec - index * SEGMENT_SECONDS : SEGMENT_SECONDS;
     lines.push(`#EXTINF:${Math.min(SEGMENT_SECONDS, Math.max(0.001, length)).toFixed(3)},`, `seg-${index}.vtt`);

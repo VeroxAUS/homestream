@@ -20,17 +20,14 @@ export interface GatewayStream {
 export const GATEWAY_USER_AGENT = 'AIOStreams-HomeStream/1.0';
 
 export type StreamQuery =
-  | { type: 'movie'; imdbId: string }
-  | { type: 'tv'; imdbId: string; season: number; episode: number };
+  { type: 'movie'; imdbId: string } | { type: 'tv'; imdbId: string; season: number; episode: number };
 
 export function streamId(url: string): string {
   return createHash('sha256').update(url).digest('hex').slice(0, 16);
 }
 
 export function queryKey(query: StreamQuery): string {
-  return query.type === 'movie'
-    ? `movie:${query.imdbId}`
-    : `tv:${query.imdbId}:${query.season}:${query.episode}`;
+  return query.type === 'movie' ? `movie:${query.imdbId}` : `tv:${query.imdbId}:${query.season}:${query.episode}`;
 }
 
 export function queryFromKey(key: string): StreamQuery | null {

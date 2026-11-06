@@ -54,7 +54,12 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
   };
 
   const unknownSubtitleFile = (name: string) =>
-    new AppError(404, 'not_found', `Unknown subtitle file "${name.slice(0, 40)}".`, 'Use the subtitle urls listed in the session or in index.m3u8.');
+    new AppError(
+      404,
+      'not_found',
+      `Unknown subtitle file "${name.slice(0, 40)}".`,
+      'Use the subtitle urls listed in the session or in index.m3u8.',
+    );
 
   app.get<{ Params: { id: string; file: string } }>('/hls/:id/subs/:file', async (request, reply) => {
     const index = parseSubtitleFullName(request.params.file);
@@ -65,7 +70,8 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.get<{ Params: { id: string; idx: string; file: string } }>('/hls/:id/subs/:idx/:file', async (request, reply) => {
     const index = /^\d{1,4}$/.test(request.params.idx) ? Number(request.params.idx) : null;
     if (index === null) throw unknownSubtitleFile(request.params.idx);
-    if (request.params.file === SUBTITLE_PLAYLIST) return send(reply, playback.serveSubtitlePlaylist(request.params.id, index));
+    if (request.params.file === SUBTITLE_PLAYLIST)
+      return send(reply, playback.serveSubtitlePlaylist(request.params.id, index));
     const segment = parseSubtitleSegmentName(request.params.file);
     if (segment === null) throw unknownSubtitleFile(request.params.file);
     const aborted = new AbortController();
@@ -78,7 +84,12 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.get<{ Params: { id: string; file: string } }>('/hls/:id/:file', async (request, reply) => {
     const file = parseHlsFileName(request.params.file);
     if (!file) {
-      throw new AppError(404, 'not_found', `Unknown HLS file "${request.params.file.slice(0, 40)}".`, 'Use index.m3u8, video.m3u8, init.mp4 or a seg-N file.');
+      throw new AppError(
+        404,
+        'not_found',
+        `Unknown HLS file "${request.params.file.slice(0, 40)}".`,
+        'Use index.m3u8, video.m3u8, init.mp4 or a seg-N file.',
+      );
     }
     return send(reply, await playback.serve(request.params.id, file));
   });

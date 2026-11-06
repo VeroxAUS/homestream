@@ -23,17 +23,30 @@ export interface BurnTarget {
 export function requireAudio(probe: ProbeResult, requestedIndex?: number): AudioTrack | null {
   const audio = selectAudioTrack(probe.audio, requestedIndex);
   if (requestedIndex !== undefined && !audio) {
-    throw new AppError(400, 'invalid_audio_index', `The file has no audio track ${requestedIndex}.`, 'Pick one of the audioTracks of this file.');
+    throw new AppError(
+      400,
+      'invalid_audio_index',
+      `The file has no audio track ${requestedIndex}.`,
+      'Pick one of the audioTracks of this file.',
+    );
   }
   return audio;
 }
 
 /** A subtitle choice must name a real track, and the mode must suit its kind: text is side-loaded, bitmaps are burned in. */
-export function requireSubtitle(probe: ProbeResult, selection: SubtitleSelection | null | undefined): SubtitleSelection | null {
+export function requireSubtitle(
+  probe: ProbeResult,
+  selection: SubtitleSelection | null | undefined,
+): SubtitleSelection | null {
   if (!selection) return null;
   const track: SubtitleTrackInfo | undefined = probe.subtitles.find((item) => item.index === selection.index);
   if (!track) {
-    throw new AppError(400, 'invalid_subtitle_index', `The file has no subtitle track ${selection.index}.`, 'Pick one of the subtitleTracks of this file.');
+    throw new AppError(
+      400,
+      'invalid_subtitle_index',
+      `The file has no subtitle track ${selection.index}.`,
+      'Pick one of the subtitleTracks of this file.',
+    );
   }
   if (track.kind === 'bitmap' && selection.mode === 'sidecar') {
     throw new AppError(
@@ -61,9 +74,13 @@ export function burnTarget(probe: ProbeResult, selection: SubtitleSelection | nu
 }
 
 export function planPatch(probe: ProbeResult, current: TrackState, request: SessionPatchRequest): TrackPlan {
-  const audio = request.audioIndex === undefined ? requireAudio(probe, current.audioIndex ?? undefined) : requireAudio(probe, request.audioIndex);
+  const audio =
+    request.audioIndex === undefined
+      ? requireAudio(probe, current.audioIndex ?? undefined)
+      : requireAudio(probe, request.audioIndex);
   const subtitle = request.subtitle === undefined ? current.subtitle : requireSubtitle(probe, request.subtitle);
   const audioChanged = (audio?.index ?? null) !== current.audioIndex;
-  const burnChanged = (burnTarget(probe, subtitle)?.index ?? null) !== (burnTarget(probe, current.subtitle)?.index ?? null);
+  const burnChanged =
+    (burnTarget(probe, subtitle)?.index ?? null) !== (burnTarget(probe, current.subtitle)?.index ?? null);
   return { audio, subtitle, restart: audioChanged || burnChanged };
 }

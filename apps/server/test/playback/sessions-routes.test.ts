@@ -8,7 +8,17 @@ import { bootHarness, listFfmpegCommandLines, PROFILES, startSession, type Harne
 
 const PROBE: ProbeResult = {
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [{ index: 2, codec: 'subrip', language: 'eng', title: '', kind: 'text', forced: false, default: false }],
 };
@@ -36,7 +46,12 @@ async function post(payload: unknown) {
   return { status: res.statusCode, body: res.json() };
 }
 
-const valid = () => ({ mediaType: 'movie', tmdbId: 278, streamId: harness.streamIds.movie, device: PROFILES.chromecast4k });
+const valid = () => ({
+  mediaType: 'movie',
+  tmdbId: 278,
+  streamId: harness.streamIds.movie,
+  device: PROFILES.chromecast4k,
+});
 
 async function expectNoEncoder(run: () => Promise<void>): Promise<void> {
   const before = (await listFfmpegCommandLines()).filter((l) => l.includes(harness.transcodeDir)).length;
@@ -67,12 +82,21 @@ describe('invalid session requests', () => {
     await expectNoEncoder(async () => {
       const { status, body } = await post(payload());
       expect(status).toBe(400);
-      expect(body.error).toMatchObject({ code: 'invalid_request', message: expect.any(String), hint: expect.any(String) });
+      expect(body.error).toMatchObject({
+        code: 'invalid_request',
+        message: expect.any(String),
+        hint: expect.any(String),
+      });
     });
   });
 
   it('rejects a non-JSON body with 4xx', async () => {
-    const res = await harness.app.inject({ method: 'POST', url: '/api/sessions', headers: { 'content-type': 'application/json' }, payload: '{nope' });
+    const res = await harness.app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: { 'content-type': 'application/json' },
+      payload: '{nope',
+    });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBeTruthy();
   });
@@ -116,7 +140,10 @@ describe('invalid session requests', () => {
 
 describe('session start with a stubbed probe', () => {
   it('returns the documented response shape and upserts the device', async () => {
-    const { status, body } = await startSession(harness, 'movie', 'emulator', { audioIndex: 1, subtitle: { index: 2, mode: 'sidecar' } });
+    const { status, body } = await startSession(harness, 'movie', 'emulator', {
+      audioIndex: 1,
+      subtitle: { index: 2, mode: 'sidecar' },
+    });
     expect(status).toBe(201);
     expect(body).toMatchObject({
       playlistUrl: `/hls/${body.sessionId}/index.m3u8`,
@@ -128,11 +155,27 @@ describe('session start with a stubbed probe', () => {
       audioTracks: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
       subtitleTracks: [
         {
-          index: 2, language: 'eng', title: '', kind: 'text', forced: false, default: false,
-          url: `/hls/${body.sessionId}/subs/2/index.m3u8`, fullUrl: null, status: 'extracting',
+          index: 2,
+          language: 'eng',
+          title: '',
+          kind: 'text',
+          forced: false,
+          default: false,
+          url: `/hls/${body.sessionId}/subs/2/index.m3u8`,
+          fullUrl: null,
+          status: 'extracting',
         },
       ],
-      decision: { videoCodec: 'hevc', width: 1920, height: 1080, dynamicRange: 'sdr', toneMapped: false, audioCodec: 'aac', audioChannels: 6, subtitleBurnIn: false },
+      decision: {
+        videoCodec: 'hevc',
+        width: 1920,
+        height: 1080,
+        dynamicRange: 'sdr',
+        toneMapped: false,
+        audioCodec: 'aac',
+        audioChannels: 6,
+        subtitleBurnIn: false,
+      },
       encoder: { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0, headSegment: 0 },
     });
     expect(JSON.stringify(body)).not.toMatch(/https?:\/\//);

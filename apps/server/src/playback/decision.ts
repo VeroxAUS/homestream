@@ -98,7 +98,8 @@ const BITRATE_TABLE: Record<'hevc' | 'h264', Array<{ minHeight: number } & Video
 
 export function videoBitrate(decision: Pick<Decision, 'videoCodec' | 'height'>): VideoBitrate {
   const tier = BITRATE_TABLE[decision.videoCodec].find((row) => decision.height >= row.minHeight);
-  const { targetKbps, maxKbps } = tier ?? (BITRATE_TABLE[decision.videoCodec].at(-1) as VideoBitrate & { minHeight: number });
+  const { targetKbps, maxKbps } =
+    tier ?? (BITRATE_TABLE[decision.videoCodec].at(-1) as VideoBitrate & { minHeight: number });
   return { targetKbps, maxKbps };
 }
 

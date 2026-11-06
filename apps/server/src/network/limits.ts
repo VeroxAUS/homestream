@@ -43,7 +43,9 @@ export function resolveDownloadLimits(raw: RawDownloadLimits, warnings: string[]
   const window = parse(raw.READ_AHEAD_SEC);
   if (window !== null) {
     if (Number.isNaN(window) || window <= 0) {
-      warnings.push(`READ_AHEAD_SEC="${raw.READ_AHEAD_SEC}" is invalid (a number of seconds above 0 is needed); using the default ${DEFAULT_READ_AHEAD_SEC}.`);
+      warnings.push(
+        `READ_AHEAD_SEC="${raw.READ_AHEAD_SEC}" is invalid (a number of seconds above 0 is needed); using the default ${DEFAULT_READ_AHEAD_SEC}.`,
+      );
     } else {
       readAheadSec = window;
     }

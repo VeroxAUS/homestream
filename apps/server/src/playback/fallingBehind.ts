@@ -19,7 +19,11 @@ export class FallingBehindWatch {
   private readonly since = new Map<string, number>();
 
   observe(sessionId: string, observation: SpeedObservation, nowMs: number): void {
-    const slow = !observation.idle && observation.readAhead === 'filling' && observation.speed > 0 && observation.speed < FALLING_BEHIND_SPEED;
+    const slow =
+      !observation.idle &&
+      observation.readAhead === 'filling' &&
+      observation.speed > 0 &&
+      observation.speed < FALLING_BEHIND_SPEED;
     if (!slow) this.since.delete(sessionId);
     else if (!this.since.has(sessionId)) this.since.set(sessionId, nowMs);
   }

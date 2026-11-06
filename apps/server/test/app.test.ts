@@ -211,13 +211,21 @@ describe('devices', () => {
   });
 
   it.each([
-    ['missing deviceId', (() => { const { deviceId: _d, ...rest } = profile('x'); return rest; })()],
+    [
+      'missing deviceId',
+      (() => {
+        const { deviceId: _d, ...rest } = profile('x');
+        return rest;
+      })(),
+    ],
     ['unknown kind', profile('x', { kind: 'toaster' })],
     ['empty body object', {}],
   ])('rejects %s with the standard error shape', async (_name, payload) => {
     const res = await app.inject({ method: 'POST', url: '/api/devices', payload });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: { code: 'invalid_request', message: expect.any(String), hint: expect.any(String) } });
+    expect(res.json()).toMatchObject({
+      error: { code: 'invalid_request', message: expect.any(String), hint: expect.any(String) },
+    });
   });
 
   it('rejects a request with no body', async () => {

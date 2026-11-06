@@ -28,7 +28,8 @@ export function parseTasklistCsv(output: string): Map<number, number> {
     const pid = Number(fields[1]);
     const memory = fields[4] as string;
     // Separators are locale dependent (1,234 K / 1.234 K / 1 234 K), so only the digits count.
-    if (Number.isInteger(pid) && pid > 0 && /\d/.test(memory)) result.set(pid, Number(memory.replace(/\D/g, '')) * 1024);
+    if (Number.isInteger(pid) && pid > 0 && /\d/.test(memory))
+      result.set(pid, Number(memory.replace(/\D/g, '')) * 1024);
   }
   return result;
 }
@@ -45,7 +46,9 @@ export function parsePsRss(output: string): Map<number, number> {
 
 function execText(command: string, args: string[]): Promise<string> {
   return new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true, timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (_error, stdout) => resolve(stdout ?? ''));
+    execFile(command, args, { windowsHide: true, timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (_error, stdout) =>
+      resolve(stdout ?? ''),
+    );
   });
 }
 

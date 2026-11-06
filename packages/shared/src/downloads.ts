@@ -51,7 +51,9 @@ export const MovieDetailsWithDownloadSchema = MovieDetailsSchema.extend({ downlo
 export type MovieDetailsWithDownload = z.infer<typeof MovieDetailsWithDownloadSchema>;
 
 /** `GET /api/tv/:id`: `downloads` lists the show's pending episode downloads and is omitted when there are none. */
-export const ShowDetailsWithDownloadsSchema = ShowDetailsSchema.extend({ downloads: z.array(DownloadSchema).optional() });
+export const ShowDetailsWithDownloadsSchema = ShowDetailsSchema.extend({
+  downloads: z.array(DownloadSchema).optional(),
+});
 export type ShowDetailsWithDownloads = z.infer<typeof ShowDetailsWithDownloadsSchema>;
 
 const EventTitleFields = {

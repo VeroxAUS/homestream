@@ -175,7 +175,9 @@ export class DownloadService {
   }
 
   /** The pending download of a title, if any. No gateway or TMDB work. */
-  existing(body: Pick<SessionStartRequest, 'mediaType' | 'tmdbId' | 'season' | 'episode'>): DownloadStartedResponse | null {
+  existing(
+    body: Pick<SessionStartRequest, 'mediaType' | 'tmdbId' | 'season' | 'episode'>,
+  ): DownloadStartedResponse | null {
     const row = this.store.pendingForTitle(mediaKeyFor(body.mediaType, body.tmdbId, body.season, body.episode));
     if (!row) return null;
     this.event({
@@ -200,7 +202,11 @@ export class DownloadService {
     const row = this.store.get(id);
     if (!row || !this.store.delete(id)) return false;
     this.lastGatewayCheck.delete(id);
-    this.event({ level: 'info', message: `Stopped tracking the download of "${row.title}".`, details: { downloadId: id } });
+    this.event({
+      level: 'info',
+      message: `Stopped tracking the download of "${row.title}".`,
+      details: { downloadId: id },
+    });
     this.schedule();
     return true;
   }
@@ -283,7 +289,11 @@ export class DownloadService {
         throw placeholderError('download_failed');
       case 'placeholder':
         if (probe.name === 'downloading') return 'accepted';
-        this.event({ level: 'warn', message: `TorBox refused the download of "${title}" (${probe.name}).`, details: { clip: probe.name } });
+        this.event({
+          level: 'warn',
+          message: `TorBox refused the download of "${title}" (${probe.name}).`,
+          details: { clip: probe.name },
+        });
         throw placeholderError(probe.name);
     }
   }
@@ -333,7 +343,9 @@ export class DownloadService {
       const due = this.store.listPending().filter((row) => row.nextPollAt <= this.now());
       if (due.length > 0) await this.pollDue(due);
     } catch (error) {
-      this.options.logger.warn(`Download poll failed: ${redact(error instanceof Error ? error.message : String(error))}`);
+      this.options.logger.warn(
+        `Download poll failed: ${redact(error instanceof Error ? error.message : String(error))}`,
+      );
     } finally {
       this.ticking = false;
       this.schedule();
@@ -349,7 +361,8 @@ export class DownloadService {
         items = await this.torbox.list();
         this.noteTorboxRecovered();
       } catch (error) {
-        const failure = error instanceof TorboxError ? error : new TorboxError('unavailable', 'TorBox could not be read');
+        const failure =
+          error instanceof TorboxError ? error : new TorboxError('unavailable', 'TorBox could not be read');
         torboxUsable = failure.kind !== 'auth';
         this.noteTorboxFailure(failure);
       }
@@ -360,7 +373,9 @@ export class DownloadService {
       try {
         await this.pollRow(row, items, torboxUsable, listFailed);
       } catch (error) {
-        this.options.logger.warn(`Download ${row.id} poll failed: ${redact(error instanceof Error ? error.message : String(error))}`);
+        this.options.logger.warn(
+          `Download ${row.id} poll failed: ${redact(error instanceof Error ? error.message : String(error))}`,
+        );
         this.store.update(row.id, { nextPollAt: this.now() + this.limits.fastPollMs }, this.now());
       }
     }
@@ -368,10 +383,17 @@ export class DownloadService {
 
   /** Rows may have been cancelled while the TorBox list was in flight. */
   private freshRows(rows: DownloadRow[]): DownloadRow[] {
-    return rows.map((row) => this.store.get(row.id)).filter((row): row is DownloadRow => row !== null && row.status === 'pending');
+    return rows
+      .map((row) => this.store.get(row.id))
+      .filter((row): row is DownloadRow => row !== null && row.status === 'pending');
   }
 
-  private async pollRow(row: DownloadRow, items: TorboxItem[] | null, torboxUsable: boolean, listFailed: boolean): Promise<void> {
+  private async pollRow(
+    row: DownloadRow,
+    items: TorboxItem[] | null,
+    torboxUsable: boolean,
+    listFailed: boolean,
+  ): Promise<void> {
     const now = this.now();
     const age = now - row.createdAt;
     const interval = pollIntervalMs(age, this.limits);
@@ -408,8 +430,16 @@ export class DownloadService {
       return;
     }
     if (verdict.kind === 'ready') {
-      this.store.update(row.id, { state: 'downloading', progress: 1, etaSec: null, readySince: now, nextPollAt: now }, now);
-      this.event({ level: 'info', message: `TorBox finished "${row.title}"; checking that it is listed as cached.`, details: { downloadId: row.id } });
+      this.store.update(
+        row.id,
+        { state: 'downloading', progress: 1, etaSec: null, readySince: now, nextPollAt: now },
+        now,
+      );
+      this.event({
+        level: 'info',
+        message: `TorBox finished "${row.title}"; checking that it is listed as cached.`,
+        details: { downloadId: row.id },
+      });
       await this.confirm(this.store.get(row.id) as DownloadRow);
       return;
     }
@@ -457,7 +487,10 @@ export class DownloadService {
     }
     const waited = now - (row.readySince ?? now);
     if (waited >= this.limits.confirmWindowMs) {
-      this.markReady(row, 'The gateway still lists it as not cached, but TorBox has finished; Play opens the link directly.');
+      this.markReady(
+        row,
+        'The gateway still lists it as not cached, but TorBox has finished; Play opens the link directly.',
+      );
       return;
     }
     this.store.update(row.id, { nextPollAt: now + this.limits.confirmRetryMs }, now);
@@ -470,7 +503,9 @@ export class DownloadService {
       const listed = await this.options.streams.refresh(query);
       return listed.streams.some((stream) => stream.cached);
     } catch (error) {
-      this.options.logger.warn(`Download re-check failed: ${redact(error instanceof Error ? error.message : String(error))}`);
+      this.options.logger.warn(
+        `Download re-check failed: ${redact(error instanceof Error ? error.message : String(error))}`,
+      );
       return false;
     }
   }
@@ -485,7 +520,11 @@ export class DownloadService {
       { status: 'ready', state: 'ready', progress: 1, etaSec: null, reason: null, notifiedAt: notified ? now : null },
       now,
     );
-    this.event({ level: 'info', message: `"${row.title}" is ready to watch. ${note}`, details: { downloadId: row.id } });
+    this.event({
+      level: 'info',
+      message: `"${row.title}" is ready to watch. ${note}`,
+      details: { downloadId: row.id },
+    });
     this.options.bus.emit('download.ready', eventBase(row));
   }
 

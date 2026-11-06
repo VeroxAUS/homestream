@@ -20,9 +20,16 @@ export function createShutdown(options: ShutdownOptions): (reason: string) => Pr
     const late = new Promise<'late'>((resolve) => {
       timer = setTimeout(() => resolve('late'), deadlineMs);
     });
-    const outcome = await Promise.race([options.stop().then(() => 'done' as const, () => 'done' as const), late]);
+    const outcome = await Promise.race([
+      options.stop().then(
+        () => 'done' as const,
+        () => 'done' as const,
+      ),
+      late,
+    ]);
     clearTimeout(timer);
-    if (outcome === 'late') options.warn(`Shutdown (${reason}) did not finish within ${Math.round(deadlineMs / 1000)} s; exiting anyway.`);
+    if (outcome === 'late')
+      options.warn(`Shutdown (${reason}) did not finish within ${Math.round(deadlineMs / 1000)} s; exiting anyway.`);
     options.exit(0);
   };
 }

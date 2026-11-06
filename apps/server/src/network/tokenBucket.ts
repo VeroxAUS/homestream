@@ -23,7 +23,8 @@ export class TokenBucket {
     }
   }
 
-  /** True when a take would be allowed right now; with a eserveBytes, only when at least that much is left unspent. */
+  /** True when a take would be allowed right now; with a 
+eserveBytes, only when at least that much is left unspent. */
   canTake(nowMs: number, reserveBytes = 0): boolean {
     this.refill(nowMs);
     return this.tokens >= reserveBytes;

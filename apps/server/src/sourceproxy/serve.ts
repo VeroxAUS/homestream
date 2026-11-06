@@ -168,7 +168,13 @@ async function pumpFile(entry: SourceEntry, range: ByteRange, sink: Sink, counte
 }
 
 /** Waits for another stream to deliver the bytes at `pos` into memory; false when none is coming or it took too long. */
-async function waitForSharedBytes(entry: SourceEntry, cache: BlockCache, pos: number, end: number, sink: Sink): Promise<boolean> {
+async function waitForSharedBytes(
+  entry: SourceEntry,
+  cache: BlockCache,
+  pos: number,
+  end: number,
+  sink: Sink,
+): Promise<boolean> {
   const deadline = Date.now() + SHARE_WAIT_MS;
   while (!sink.closed && Date.now() < deadline) {
     if (fromMemory(entry, cache, pos, end)) return true;

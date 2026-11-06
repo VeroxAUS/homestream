@@ -21,7 +21,12 @@ function source(seasons: Record<number, Season['episodes']>): SeasonSource & { s
     seasonCalls: calls,
     async show() {
       return {
-        seasons: Object.entries(seasons).map(([n, list]) => ({ seasonNumber: Number(n), name: `Season ${n}`, episodeCount: list.length, posterUrl: null })),
+        seasons: Object.entries(seasons).map(([n, list]) => ({
+          seasonNumber: Number(n),
+          name: `Season ${n}`,
+          episodeCount: list.length,
+          posterUrl: null,
+        })),
       } as ShowDetails;
     },
     async season(_id, number) {

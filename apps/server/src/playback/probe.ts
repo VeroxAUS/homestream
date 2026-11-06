@@ -158,7 +158,9 @@ export function parseProbeOutput(raw: unknown): ProbeResult {
         kind,
         forced: stream.disposition?.forced === 1,
         default: stream.disposition?.default === 1,
-        ...(kind === 'bitmap' && stream.width && stream.height ? { canvas: { width: stream.width, height: stream.height } } : {}),
+        ...(kind === 'bitmap' && stream.width && stream.height
+          ? { canvas: { width: stream.width, height: stream.height } }
+          : {}),
       });
     }
   }
@@ -183,7 +185,6 @@ export type ProbeRunner = (url: string) => Promise<ProbeResult>;
  * and keeps both ffprobe and the encoder's own input probing from downloading far more before the first frame.
  */
 export const PROBE_LIMIT_ARGS = ['-probesize', '8M', '-analyzeduration', '3M'];
-
 
 export function createFfprobeRunner(ffprobePath: string, timeoutMs = 60_000): ProbeRunner {
   return (url) =>

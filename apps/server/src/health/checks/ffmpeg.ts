@@ -23,7 +23,10 @@ export function parseEncoders(output: string, names: readonly string[]): Record<
 }
 
 function lastLine(text: string): string {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   return (lines[lines.length - 1] ?? '').slice(0, 200);
 }
 
@@ -56,9 +59,18 @@ export async function checkFfmpeg({ config, run, now = Date.now }: FfmpegCheckDe
 
   const ffmpegVersion = parseVersion(version.stdout);
   const ffprobeVersion = parseVersion(probe.stdout);
-  const encoderList = await run(config.ffmpegPath, ['-hide_banner', '-encoders'], { timeoutMs: FFMPEG_VERSION_TIMEOUT_MS });
+  const encoderList = await run(config.ffmpegPath, ['-hide_banner', '-encoders'], {
+    timeoutMs: FFMPEG_VERSION_TIMEOUT_MS,
+  });
   const encoders = parseEncoders(encoderList.stdout, ['h264_nvenc', 'hevc_nvenc']);
-  const base = { ffmpegFound: true, ffprobeFound: true, ffmpegVersion, ffprobeVersion, h264_nvenc: encoders.h264_nvenc, hevc_nvenc: encoders.hevc_nvenc };
+  const base = {
+    ffmpegFound: true,
+    ffprobeFound: true,
+    ffmpegVersion,
+    ffprobeVersion,
+    h264_nvenc: encoders.h264_nvenc,
+    hevc_nvenc: encoders.hevc_nvenc,
+  };
 
   if (!encoders.h264_nvenc || !encoders.hevc_nvenc) {
     const lacking = ['h264_nvenc', 'hevc_nvenc'].filter((name) => !encoders[name]).join(' and ');
@@ -80,7 +92,20 @@ export async function checkFfmpeg({ config, run, now = Date.now }: FfmpegCheckDe
   const started = now();
   const encode = await run(
     config.ffmpegPath,
-    ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=1280x720:rate=30', '-c:v', 'h264_nvenc', '-f', 'null', '-'],
+    [
+      '-hide_banner',
+      '-v',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=duration=1:size=1280x720:rate=30',
+      '-c:v',
+      'h264_nvenc',
+      '-f',
+      'null',
+      '-',
+    ],
     { timeoutMs: NVENC_TEST_TIMEOUT_MS },
   );
   const durationMs = now() - started;
@@ -89,7 +114,10 @@ export async function checkFfmpeg({ config, run, now = Date.now }: FfmpegCheckDe
     return failure(
       'The NVENC test encode failed.',
       `The NVIDIA encoder did not start. Update the NVIDIA driver, make sure the GPU is not disabled or fully used by another program, and check that ${where} points to an ffmpeg build with NVENC.`,
-      { ...base, testEncode: { ok: false, durationMs, testedAt, error: lastLine(encode.stderr) || encode.failure || null } },
+      {
+        ...base,
+        testEncode: { ok: false, durationMs, testedAt, error: lastLine(encode.stderr) || encode.failure || null },
+      },
     );
   }
   return {

@@ -29,11 +29,7 @@ export interface StubGateway {
 
 const PREFIX = '/stremio/stubsecret1/stubsecret2';
 
-export function stubStream(
-  index: number,
-  filename: string,
-  options: { cached: boolean; size?: number },
-): StubStream {
+export function stubStream(index: number, filename: string, options: { cached: boolean; size?: number }): StubStream {
   return {
     name: options.cached ? CACHED_NAME : UNCACHED_NAME,
     description: 'ignored',

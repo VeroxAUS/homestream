@@ -9,7 +9,13 @@ import { createSilentLogger } from '../../src/logger.js';
 import { clearSecrets } from '../../src/redact.js';
 import { TmdbService } from '../../src/tmdb/service.js';
 import { makeTempDir, removeDir, testConfig } from '../helpers.js';
-import { startStubGateway, stubStream, type StubGateway, type StubResponse, type StubStream } from '../gateway/stubGateway.js';
+import {
+  startStubGateway,
+  stubStream,
+  type StubGateway,
+  type StubResponse,
+  type StubStream,
+} from '../gateway/stubGateway.js';
 import { makeFakeTmdb } from '../tmdb/fixtures.js';
 
 const SHAWSHANK_FILES: Array<[string, boolean]> = [

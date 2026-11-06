@@ -64,7 +64,10 @@ function placeholderError(target: URL, gatewayHost: string): AppError | null {
  * intermediate URLs (which carry secrets) never end up in an error message, and so a redirect to one of the gateway's
  * placeholder clips is stopped before the clip is requested.
  */
-export function createUrlResolver(fetchImpl: FetchImpl = (url, init) => fetch(url, init), timeoutMs = RESOLVE_TIMEOUT_MS): UrlResolver {
+export function createUrlResolver(
+  fetchImpl: FetchImpl = (url, init) => fetch(url, init),
+  timeoutMs = RESOLVE_TIMEOUT_MS,
+): UrlResolver {
   return async (rawUrl) => {
     const signal = AbortSignal.timeout(timeoutMs);
     let current = rawUrl;
@@ -77,7 +80,12 @@ export function createUrlResolver(fetchImpl: FetchImpl = (url, init) => fetch(ur
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
       let response: Response;
       try {
-        response = await fetchImpl(current, { method: 'GET', redirect: 'manual', headers: { Range: 'bytes=0-0' }, signal });
+        response = await fetchImpl(current, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { Range: 'bytes=0-0' },
+          signal,
+        });
       } catch (error) {
         if (signal.aborted) throw unavailable(`no answer within ${Math.round(timeoutMs / 1000)} seconds`);
         throw unavailable((error as Error).message);

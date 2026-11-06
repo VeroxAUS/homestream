@@ -12,7 +12,17 @@ import { bootHarness, startSession, type Harness } from './harness.js';
 
 const PROBE: ProbeResult = {
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [{ index: 2, codec: 'subrip', language: 'eng', title: '', kind: 'text', forced: false, default: false }],
 };
@@ -40,7 +50,13 @@ describe('StartTimeline', () => {
     const timeline = new StartTimeline(logger, Date.now() - 1500);
     timeline.mark('probe done', 'abc');
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ level: DEBUG, source: 'playback', step: 'probe done', sessionId: 'abc', msg: 'Start timing: probe done' });
+    expect(lines[0]).toMatchObject({
+      level: DEBUG,
+      source: 'playback',
+      step: 'probe done',
+      sessionId: 'abc',
+      msg: 'Start timing: probe done',
+    });
     expect(lines[0]?.sinceStartMs).toBeGreaterThanOrEqual(1500);
     expect(lines[0]?.sinceStartMs).toBeLessThan(5000);
   });
@@ -91,9 +107,21 @@ describe('session start timing lines', () => {
     expect(started.status).toBe(201);
 
     const timing = lines.filter((line) => line.step !== undefined);
-    expect(timing.every((line) => line.level === DEBUG && line.source === 'playback' && line.sessionId === started.body.sessionId)).toBe(true);
+    expect(
+      timing.every(
+        (line) => line.level === DEBUG && line.source === 'playback' && line.sessionId === started.body.sessionId,
+      ),
+    ).toBe(true);
     const steps = timing.map((line) => line.step);
-    for (const step of ['stream picked', 'source acquired', 'probe done', 'head fill done', 'extractor started', 'encoder spawned', 'first segment written']) {
+    for (const step of [
+      'stream picked',
+      'source acquired',
+      'probe done',
+      'head fill done',
+      'extractor started',
+      'encoder spawned',
+      'first segment written',
+    ]) {
       expect(steps.filter((name) => name === step)).toHaveLength(1);
     }
     expect(steps.indexOf('stream picked')).toBeLessThan(steps.indexOf('source acquired'));
@@ -102,7 +130,9 @@ describe('session start timing lines', () => {
     const times = timing.map((line) => line.sinceStartMs as number);
     expect(times.every((ms) => Number.isFinite(ms) && ms >= 0 && ms < 30_000)).toBe(true);
     const first = timing.find((line) => line.step === 'first segment written');
-    expect(first?.sinceStartMs).toBeGreaterThanOrEqual(timing.find((line) => line.step === 'probe done')?.sinceStartMs as number);
+    expect(first?.sinceStartMs).toBeGreaterThanOrEqual(
+      timing.find((line) => line.step === 'probe done')?.sinceStartMs as number,
+    );
 
     const text = JSON.stringify(timing);
     expect(text).not.toMatch(/https?:|127\.0\.0\.1|token|aiostreams/i);

@@ -60,12 +60,19 @@ export interface FakeGateway {
 export function makeFakeGateway(): FakeGateway {
   const lists = new Map<string, FakeStream[]>();
   const calls: GatewayCall[] = [];
-  const byToken = (token: string): FakeStream | undefined => [...lists.values()].flat().find((stream) => stream.token === token);
+  const byToken = (token: string): FakeStream | undefined =>
+    [...lists.values()].flat().find((stream) => stream.token === token);
 
   const fetch: GatewayFetch = async (url, init) => {
     const target = new URL(url);
     const headers = init.headers;
-    const call: GatewayCall = { kind: 'list', path: target.pathname, method: init.method ?? 'GET', headers, redirect: init.redirect };
+    const call: GatewayCall = {
+      kind: 'list',
+      path: target.pathname,
+      method: init.method ?? 'GET',
+      headers,
+      redirect: init.redirect,
+    };
     calls.push(call);
     const playback = /^\/api\/v1\/playback\/([^/]+)\//.exec(target.pathname);
     if (playback) {
@@ -86,10 +93,15 @@ export function makeFakeGateway(): FakeGateway {
         case 'server_error':
           return new Response('boom', { status: 500 });
         case 'available':
-          return new Response(null, { status: 307, headers: { location: 'https://cdn.example.test/file/abc.mkv?sig=zzz' } });
+          return new Response(null, {
+            status: 307,
+            headers: { location: 'https://cdn.example.test/file/abc.mkv?sig=zzz' },
+          });
         case 'hang':
           return new Promise<Response>((_, reject) => {
-            init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
+            init.signal.addEventListener('abort', () =>
+              reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })),
+            );
           });
       }
     }
@@ -178,7 +190,12 @@ export function makeFakes(): Fakes {
   return {
     gateway: makeFakeGateway(),
     torbox: makeFakeTorbox(),
-    clock: { now: Date.now(), advance(ms) { this.now += ms; } },
+    clock: {
+      now: Date.now(),
+      advance(ms) {
+        this.now += ms;
+      },
+    },
   };
 }
 

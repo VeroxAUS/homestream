@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { clampPosition, isCompleted, isResumable, MAX_PING_GAP_SEC, playingSecondsSince } from '../../src/progress/rules.js';
+import {
+  clampPosition,
+  isCompleted,
+  isResumable,
+  MAX_PING_GAP_SEC,
+  playingSecondsSince,
+} from '../../src/progress/rules.js';
 
 describe('completion rule', () => {
   it.each([

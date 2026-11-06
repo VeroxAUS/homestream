@@ -52,7 +52,19 @@ export function makeFakeCatalog(): FakeCatalog {
           });
         }
         if (path === '/tv/1396/recommendations') {
-          return json({ results: [{ id: 2000, name: 'Better Call Saul', overview: 'Saul.', first_air_date: '2015-02-08', poster_path: '/p.jpg', backdrop_path: '/b.jpg', vote_average: 8.9 }] });
+          return json({
+            results: [
+              {
+                id: 2000,
+                name: 'Better Call Saul',
+                overview: 'Saul.',
+                first_air_date: '2015-02-08',
+                poster_path: '/p.jpg',
+                backdrop_path: '/b.jpg',
+                vote_average: 8.9,
+              },
+            ],
+          });
         }
         return json({ results: [] });
       }
@@ -84,7 +96,8 @@ export function makeFakeCatalog(): FakeCatalog {
           })),
         });
       }
-      if (path === '/movie/693134') return json({ ...MOVIE_DETAILS, id: 693134, title: 'Dune: Part Two', external_ids: { imdb_id: 'tt15239678' } });
+      if (path === '/movie/693134')
+        return json({ ...MOVIE_DETAILS, id: 693134, title: 'Dune: Part Two', external_ids: { imdb_id: 'tt15239678' } });
       catalog.calls.push(path);
       return base.fetch(url, init);
     },

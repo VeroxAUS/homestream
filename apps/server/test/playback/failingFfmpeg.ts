@@ -16,7 +16,11 @@ export interface FailingFfmpegOptions {
  * Builds a stand-in for ffmpeg.exe (use it as FFMPEG_PATH). Every encoder invocation appends a line to `counter`
  * (see `readCounter`) so a test can tell how many encoders a start launched.
  */
-export async function buildFailingFfmpeg(exe: string, counter: string, options: FailingFfmpegOptions = {}): Promise<void> {
+export async function buildFailingFfmpeg(
+  exe: string,
+  counter: string,
+  options: FailingFfmpegOptions = {},
+): Promise<void> {
   const failFirst = options.failFirst ?? 2_000_000_000;
   const real = (options.realFfmpeg ?? 'ffmpeg').replace(/\\/g, '\\\\');
   const source = `
@@ -48,7 +52,11 @@ class W {
   }
 }`;
   const script = `Add-Type -TypeDefinition @'\n${source}\n'@ -OutputAssembly '${exe}' -OutputType ConsoleApplication`;
-  await run('powershell.exe', ['-NoProfile', '-Command', `New-Item -ItemType Directory -Force '${path.dirname(exe)}' | Out-Null; ${script}`], 120_000);
+  await run(
+    'powershell.exe',
+    ['-NoProfile', '-Command', `New-Item -ItemType Directory -Force '${path.dirname(exe)}' | Out-Null; ${script}`],
+    120_000,
+  );
 }
 
 /** Number of encoder invocations the wrapper has seen. */

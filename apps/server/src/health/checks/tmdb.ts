@@ -28,7 +28,7 @@ export async function checkTmdb({ config, ping }: TmdbCheckDeps): Promise<CheckO
     }
     return failure(
       'TMDB could not be reached.',
-      'TMDB unreachable - check this PC\'s internet connection. TMDB may also be down; try again in a few minutes.',
+      "TMDB unreachable - check this PC's internet connection. TMDB may also be down; try again in a few minutes.",
       details,
     );
   }

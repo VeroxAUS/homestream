@@ -18,7 +18,10 @@ afterAll(() => {
 });
 
 function sleeper(marker: string): ChildProcess {
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)', marker], { stdio: 'ignore', windowsHide: true });
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)', marker], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
   children.push(child);
   return child;
 }
@@ -76,7 +79,12 @@ describe('cleanupOrphans', () => {
   it('matches an entry on its own marker instead of the session id when it has one', async () => {
     const child = sleeper('marker-webvtt-job');
     const registry = new PidRegistry(path.join(root, 'marker', PID_FILE_NAME));
-    registry.add({ pid: child.pid as number, sessionId: 'id-not-on-command-line', startedAt: Date.now(), match: 'marker-webvtt-job' });
+    registry.add({
+      pid: child.pid as number,
+      sessionId: 'id-not-on-command-line',
+      startedAt: Date.now(),
+      match: 'marker-webvtt-job',
+    });
 
     const result = await cleanupOrphans(registry, path.join(root, 'no-such-dir'));
     await waitGone(child.pid as number);

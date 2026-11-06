@@ -59,7 +59,13 @@ class Session {
   }
 }
 
-async function run(clock: FakeClock, gate: DownloadGate, sessions: Session[], seconds: number, onSecond?: (sec: number) => void): Promise<void> {
+async function run(
+  clock: FakeClock,
+  gate: DownloadGate,
+  sessions: Session[],
+  seconds: number,
+  onSecond?: (sec: number) => void,
+): Promise<void> {
   for (const session of sessions) {
     void (async () => {
       for (;;) {
@@ -129,7 +135,7 @@ describe('DownloadGate lead priority under overload', () => {
     await run(clock, gate, [a, b], 30);
 
     expect(a.stalls).toBe(0);
-    expect(a.bytes * 8 / 1_000_000 / 30).toBeGreaterThanOrEqual(44);
+    expect((a.bytes * 8) / 1_000_000 / 30).toBeGreaterThanOrEqual(44);
     expect(((a.bytes + b.bytes) * 8) / 1_000_000 / 30).toBeLessThanOrEqual(cap * 1.05);
   });
 
@@ -227,7 +233,9 @@ describe('DownloadGate lead priority under overload', () => {
     const limit = mbpsToBytesPerSec(cap) * 5 * 1.05;
     let worst = 0;
     for (let start = 0; start <= 35_000; start += 250) {
-      const sum = log.filter((entry) => entry.at >= start && entry.at < start + 5000).reduce((total, entry) => total + entry.bytes, 0);
+      const sum = log
+        .filter((entry) => entry.at >= start && entry.at < start + 5000)
+        .reduce((total, entry) => total + entry.bytes, 0);
       worst = Math.max(worst, sum);
     }
     expect(worst).toBeLessThanOrEqual(limit);

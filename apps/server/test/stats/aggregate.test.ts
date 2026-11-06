@@ -41,7 +41,14 @@ function play(overrides: Partial<StatsPlay>): StatsPlay {
 /** The fixture of VAL-PROG-011/012: three plays today and one 40 days ago. */
 const FIXTURE: StatsPlay[] = [
   play({}),
-  play({ deviceId: 'val-emu', deviceName: 'Emulator', startedAt: at(0, 14, 30), watchedSec: 300, bytesServed: 400_000, decision: decision({ width: 1920, height: 1080, dynamicRange: 'sdr' }) }),
+  play({
+    deviceId: 'val-emu',
+    deviceName: 'Emulator',
+    startedAt: at(0, 14, 30),
+    watchedSec: 300,
+    bytesServed: 400_000,
+    decision: decision({ width: 1920, height: 1080, dynamicRange: 'sdr' }),
+  }),
   play({
     type: 'tv',
     tmdbId: 1396,
@@ -70,7 +77,9 @@ describe('summarize', () => {
   it('matches the seeded plays for 7 days', () => {
     const summary = summarize(FIXTURE, 7, NOW);
     expect(summary).toMatchObject({ days: 7, totalPlays: 3, totalWatchSec: 1800, bytesServed: 3_900_000 });
-    expect(summary.mostWatchedMovies).toEqual([{ tmdbId: 278, title: 'The Shawshank Redemption', plays: 2, watchSec: 900 }]);
+    expect(summary.mostWatchedMovies).toEqual([
+      { tmdbId: 278, title: 'The Shawshank Redemption', plays: 2, watchSec: 900 },
+    ]);
     expect(summary.mostWatchedShows).toEqual([{ tmdbId: 1396, title: 'Breaking Bad', plays: 1, watchSec: 900 }]);
     expect(summary.topDevices.map((device) => [device.deviceId, device.watchSec])).toEqual([
       ['val-desk', 900],
@@ -113,13 +122,19 @@ describe('summarize', () => {
   });
 
   it('groups episodes under their show and names the show', () => {
-    const plays = [1, 2, 3].map((episode) => play({ type: 'tv', tmdbId: 1396, title: `Ep ${episode}`, showTitle: 'Breaking Bad' }));
-    expect(summarize(plays, 7, NOW).mostWatchedShows).toEqual([{ tmdbId: 1396, title: 'Breaking Bad', plays: 3, watchSec: 1800 }]);
+    const plays = [1, 2, 3].map((episode) =>
+      play({ type: 'tv', tmdbId: 1396, title: `Ep ${episode}`, showTitle: 'Breaking Bad' }),
+    );
+    expect(summarize(plays, 7, NOW).mostWatchedShows).toEqual([
+      { tmdbId: 1396, title: 'Breaking Bad', plays: 3, watchSec: 1800 },
+    ]);
   });
 
   it('files plays without a device under "unknown"', () => {
     const plays = [play({ deviceId: null, deviceName: null, deviceKind: null })];
-    expect(summarize(plays, 7, NOW).topDevices).toEqual([{ deviceId: 'unknown', deviceName: 'Unknown device', deviceKind: null, plays: 1, watchSec: 600 }]);
+    expect(summarize(plays, 7, NOW).topDevices).toEqual([
+      { deviceId: 'unknown', deviceName: 'Unknown device', deviceKind: null, plays: 1, watchSec: 600 },
+    ]);
   });
 });
 
@@ -128,14 +143,26 @@ describe('graphs', () => {
 
   it('lists every local day of the window, zero-filled, today last', () => {
     expect(result.byDay).toHaveLength(7);
-    expect(result.byDay.map((day) => day.date)).toEqual(['2026-10-31', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']);
+    expect(result.byDay.map((day) => day.date)).toEqual([
+      '2026-10-31',
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+    ]);
     expect(result.byDay.at(-1)).toEqual({ date: '2026-11-06', plays: 3, watchSec: 1800 });
     expect(result.byDay.slice(0, 6).every((day) => day.plays === 0 && day.watchSec === 0)).toBe(true);
   });
 
   it('buckets by local hour of the start time', () => {
     expect(result.byHour).toHaveLength(24);
-    expect(result.byHour.filter((hour) => hour.plays > 0).map((hour) => [hour.hour, hour.plays])).toEqual([[9, 1], [11, 1], [14, 1]]);
+    expect(result.byHour.filter((hour) => hour.plays > 0).map((hour) => [hour.hour, hour.plays])).toEqual([
+      [9, 1],
+      [11, 1],
+      [14, 1],
+    ]);
     expect(result.byHour.reduce((sum, hour) => sum + hour.plays, 0)).toBe(3);
   });
 
@@ -147,7 +174,11 @@ describe('graphs', () => {
   });
 
   it('counts plays by device', () => {
-    expect(result.byDevice.map((device) => [device.deviceId, device.plays]).sort()).toEqual([['val-cc4k', 1], ['val-desk', 1], ['val-emu', 1]]);
+    expect(result.byDevice.map((device) => [device.deviceId, device.plays]).sort()).toEqual([
+      ['val-cc4k', 1],
+      ['val-desk', 1],
+      ['val-emu', 1],
+    ]);
   });
 
   it('counts plays by decision: dynamic range, codec and resolution', () => {
@@ -165,7 +196,8 @@ describe('graphs', () => {
       { key: '2160p', plays: 2, watchSec: 1500 },
       { key: '1080p', plays: 1, watchSec: 300 },
     ]);
-    for (const buckets of [dynamicRange, codec, resolution]) expect(buckets.reduce((sum, bucket) => sum + bucket.plays, 0)).toBe(3);
+    for (const buckets of [dynamicRange, codec, resolution])
+      expect(buckets.reduce((sum, bucket) => sum + bucket.plays, 0)).toBe(3);
   });
 
   it('is all zeros without plays', () => {
@@ -191,6 +223,10 @@ describe('decisionKeys', () => {
 
   it('falls back to "unknown" for a missing or partial decision', () => {
     expect(decisionKeys(null)).toEqual({ dynamicRange: 'unknown', codec: 'unknown', resolution: 'unknown' });
-    expect(decisionKeys({ videoCodec: 'hevc' } as Decision)).toEqual({ dynamicRange: 'unknown', codec: 'hevc', resolution: 'unknown' });
+    expect(decisionKeys({ videoCodec: 'hevc' } as Decision)).toEqual({
+      dynamicRange: 'unknown',
+      codec: 'hevc',
+      resolution: 'unknown',
+    });
   });
 });

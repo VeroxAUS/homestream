@@ -68,7 +68,9 @@ interface RawStreamData {
 }
 
 /** Only the fields downloads need; everything else AIOStreams puts in `streamData` is dropped. */
-function parseStreamData(value: unknown): Pick<GatewayStream, 'cached' | 'infoHash' | 'fileIdx' | 'kind'> & { size: number } {
+function parseStreamData(
+  value: unknown,
+): Pick<GatewayStream, 'cached' | 'infoHash' | 'fileIdx' | 'kind'> & { size: number } {
   const data = (value && typeof value === 'object' ? value : {}) as RawStreamData;
   const result: Pick<GatewayStream, 'cached' | 'infoHash' | 'fileIdx' | 'kind'> & { size: number } = { size: 0 };
   if (typeof data.service?.cached === 'boolean') result.cached = data.service.cached;
@@ -99,7 +101,8 @@ export function parseGatewayResponse(body: unknown): GatewayStream[] {
     if (seen.has(id)) continue;
     seen.add(id);
     const hints = raw.behaviorHints ?? {};
-    const filename = typeof hints.filename === 'string' && hints.filename.trim() ? hints.filename.trim() : filenameFromUrl(raw.url);
+    const filename =
+      typeof hints.filename === 'string' && hints.filename.trim() ? hints.filename.trim() : filenameFromUrl(raw.url);
     const size = Number(hints.videoSize);
     const { size: dataSize, ...data } = parseStreamData(raw.streamData);
     result.push({
@@ -252,14 +255,20 @@ export class GatewayClient {
     } catch (error) {
       const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
       throw timedOut
-        ? this.unavailable(`no answer within ${Math.round(this.timeoutMs / 1000)} s`, 'The gateway is slow or stuck. Try again in a minute.')
+        ? this.unavailable(
+            `no answer within ${Math.round(this.timeoutMs / 1000)} s`,
+            'The gateway is slow or stuck. Try again in a minute.',
+          )
         : this.unavailable('connection failed');
     }
 
     if (!response.ok) {
       const status = response.status;
       if (status === 429) {
-        throw this.unavailable('HTTP 429 (rate limited)', 'The gateway is rate limiting requests. Wait a few seconds and try again.');
+        throw this.unavailable(
+          'HTTP 429 (rate limited)',
+          'The gateway is rate limiting requests. Wait a few seconds and try again.',
+        );
       }
       if (status === 401 || status === 403 || status === 404) {
         throw this.unavailable(

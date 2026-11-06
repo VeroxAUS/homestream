@@ -16,7 +16,9 @@ function listTests(dir: string): string[] {
 }
 
 function matchesGlob(glob: string, relative: string): boolean {
-  return glob.endsWith('/**/*.test.ts') ? relative.startsWith(glob.slice(0, -'**/*.test.ts'.length)) : relative === glob;
+  return glob.endsWith('/**/*.test.ts')
+    ? relative.startsWith(glob.slice(0, -'**/*.test.ts'.length))
+    : relative === glob;
 }
 
 const inGpuGroup = (relative: string): boolean => GPU_TEST_GLOBS.some((glob) => matchesGlob(glob, relative));
@@ -24,7 +26,8 @@ const inGpuGroup = (relative: string): boolean => GPU_TEST_GLOBS.some((glob) => 
 // Anything that creates local media or boots the app with a real ffmpeg must live in the sequential gpu project.
 // A file that boots the harness with a fake encoder and a stubbed probe says so with this marker and stays in the parallel unit project.
 const NO_FFMPEG_MARKER = '@no-ffmpeg';
-const STARTS_FFMPEG = /\b(bootHarness|generateSources|generateLongSource|generateSubtitleSources|generateHdrBitmapSource)\b|\b(?:run|execFile)\(\s*'(?:ffmpeg|ffprobe)'/;
+const STARTS_FFMPEG =
+  /\b(bootHarness|generateSources|generateLongSource|generateSubtitleSources|generateHdrBitmapSource)\b|\b(?:run|execFile)\(\s*'(?:ffmpeg|ffprobe)'/;
 
 describe('GPU test grouping', () => {
   it('keeps every test that starts ffmpeg in the sequential gpu project', () => {
@@ -39,14 +42,21 @@ describe('GPU test grouping', () => {
   });
 
   it('lists only gpu globs that match existing test files', () => {
-    const tests = listTests(path.join(serverRoot, 'test')).map((file) => path.relative(serverRoot, file).replaceAll('\\', '/'));
-    for (const glob of GPU_TEST_GLOBS) expect(tests.some((t) => matchesGlob(glob, t)), glob).toBe(true);
+    const tests = listTests(path.join(serverRoot, 'test')).map((file) =>
+      path.relative(serverRoot, file).replaceAll('\\', '/'),
+    );
+    for (const glob of GPU_TEST_GLOBS)
+      expect(
+        tests.some((t) => matchesGlob(glob, t)),
+        glob,
+      ).toBe(true);
   });
 });
 
 describe('killChildProcesses', () => {
   it('kills matching children of this process and leaves the rest alone', async () => {
-    const sleeper = () => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore', windowsHide: true });
+    const sleeper = () =>
+      spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore', windowsHide: true });
     const victim = sleeper();
     const bystander = spawn('cmd.exe', ['/c', 'ping -n 60 127.0.0.1 > nul'], { stdio: 'ignore', windowsHide: true });
     try {

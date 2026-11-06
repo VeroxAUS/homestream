@@ -1,4 +1,10 @@
-import { HEALTH_CHECK_IDS, type HealthCheck, type HealthCheckId, type HealthResponse, type HealthStatus } from '@homestream/shared';
+import {
+  HEALTH_CHECK_IDS,
+  type HealthCheck,
+  type HealthCheckId,
+  type HealthResponse,
+  type HealthStatus,
+} from '@homestream/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
@@ -207,7 +213,12 @@ export class HealthService {
           level: check.status === 'ok' ? 'info' : check.status,
           source: EVENT_SOURCE[check.id],
           message: recovered ? `${check.name} is ok again: ${check.message}` : `${check.name}: ${check.message}`,
-          details: { check: check.id, status: check.status, previous: before ?? null, ...(check.hint ? { hint: check.hint } : {}) },
+          details: {
+            check: check.id,
+            status: check.status,
+            previous: before ?? null,
+            ...(check.hint ? { hint: check.hint } : {}),
+          },
         },
       );
     } catch (error) {
@@ -225,7 +236,8 @@ export class HealthService {
       checkedAt,
       details: outcome.details,
     };
-    if (outcome.status !== 'ok') check.hint = outcome.hint ?? 'Run the check again; if it keeps failing, look at the server log.';
+    if (outcome.status !== 'ok')
+      check.hint = outcome.hint ?? 'Run the check again; if it keeps failing, look at the server log.';
     return redactDeep(check);
   }
 
@@ -279,7 +291,9 @@ export class HealthService {
       // The test encode uses the GPU; while a session is encoding the last result stays until the sessions end.
       if (age < FFMPEG_CACHE_MS || this.deps.playback.activity().length > 0) return cached.check;
     }
-    const check = await this.measure('ffmpeg', () => checkFfmpeg({ config: this.deps.config, run: this.run_, now: this.now }));
+    const check = await this.measure('ffmpeg', () =>
+      checkFfmpeg({ config: this.deps.config, run: this.run_, now: this.now }),
+    );
     this.ffmpegCache = check.status === 'error' ? null : { atMs: this.now(), check };
     return check;
   }

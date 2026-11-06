@@ -24,7 +24,14 @@ describe('networkSnapshot on a real app', () => {
   it('shows the configured cap and window, idle and without sessions', async () => {
     const app = await boot({ MAX_DOWNLOAD_MBPS: '45', READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: '150' });
     const snapshot = networkSnapshot(app.ctx);
-    expect(snapshot).toEqual({ rateMbps: 0, capMbps: 45, readAheadSec: 240, resumeSec: 150, limitedForSec: 0, sessions: [] });
+    expect(snapshot).toEqual({
+      rateMbps: 0,
+      capMbps: 45,
+      readAheadSec: 240,
+      resumeSec: 150,
+      limitedForSec: 0,
+      sessions: [],
+    });
     const check = buildNetworkCheck(snapshot, { nowMs: Date.now() });
     expect(check).toMatchObject({ id: 'network', status: 'ok', message: 'Downloading 0.0 of 45 Mbps.' });
   });

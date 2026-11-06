@@ -18,7 +18,10 @@ const API_BASE = 'https://api.themoviedb.org/3';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_MS = 300;
 
-export type FetchLike = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>;
+export type FetchLike = (
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal },
+) => Promise<Response>;
 
 export interface TmdbServiceOptions {
   config: Pick<Config, 'tmdbReadToken' | 'configFile'>;
@@ -83,9 +86,14 @@ export class TmdbService {
   async recommendations(type: MediaType, tmdbId: number): Promise<MediaSummary[]> {
     const images = await this.images();
     try {
-      const raw = await this.cached(`recommendations:${type}:${tmdbId}`, TTL_MS.recommendations, `/${type}/${tmdbId}/recommendations`, {
-        page: '1',
-      });
+      const raw = await this.cached(
+        `recommendations:${type}:${tmdbId}`,
+        TTL_MS.recommendations,
+        `/${type}/${tmdbId}/recommendations`,
+        {
+          page: '1',
+        },
+      );
       return normalizeList(raw, type, images);
     } catch (error) {
       if (error instanceof TmdbNotFound) return [];

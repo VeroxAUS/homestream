@@ -3,20 +3,18 @@ import { existsSync, statSync } from 'node:fs';
 import { AppError } from '../errors.js';
 import type { ProbeResult } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
-import { RANK_ENCODER, RANK_EXTRACTOR, RANK_PREFETCH, type DownloadGate, type Priority } from '../network/downloadGate.js';
+import {
+  RANK_ENCODER,
+  RANK_EXTRACTOR,
+  RANK_PREFETCH,
+  type DownloadGate,
+  type Priority,
+} from '../network/downloadGate.js';
 import { RateMeter } from '../network/rateMeter.js';
 import { ReadAheadWindow, type ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
-import type {
-  UpstreamClient} from './upstream.js';
-import {
-  isAbort,
-  needsNewLink,
-  rangeInfo,
-  readInto,
-  UpstreamNetworkError,
-  UpstreamStatusError,
-} from './upstream.js';
+import type { UpstreamClient } from './upstream.js';
+import { isAbort, needsNewLink, rangeInfo, readInto, UpstreamNetworkError, UpstreamStatusError } from './upstream.js';
 
 /** Owner id of the prefetch holder of a source; sessions use their session id. */
 export const PREFETCH_OWNER = 'prefetch';
@@ -241,7 +239,10 @@ export class SourceEntry implements BlockOwner {
 
   private priority(consumer: Consumer): Priority {
     if (consumer === 'extractor') return { rank: RANK_EXTRACTOR, lead: this.lead };
-    const prefetchOnly = this.refs.size > 0 ? [...this.refs].every((owner) => owner === PREFETCH_OWNER) : this.firstOwner === PREFETCH_OWNER;
+    const prefetchOnly =
+      this.refs.size > 0
+        ? [...this.refs].every((owner) => owner === PREFETCH_OWNER)
+        : this.firstOwner === PREFETCH_OWNER;
     return { rank: prefetchOnly ? RANK_PREFETCH : RANK_ENCODER, lead: this.lead };
   }
 
@@ -254,7 +255,10 @@ export class SourceEntry implements BlockOwner {
 
   /** Resolves once the tail download has produced byte `pos` (or `pos` lies before the tail), or has stopped. */
   tailHas(pos: number): Promise<void> {
-    return this.waitFor(() => this.tailSettled || (this.tail !== null && (pos < this.tailStart || pos - this.tailStart < this.tailFilled)));
+    return this.waitFor(
+      () =>
+        this.tailSettled || (this.tail !== null && (pos < this.tailStart || pos - this.tailStart < this.tailFilled)),
+    );
   }
 
   private waitFor(done: () => boolean): Promise<void> {
@@ -321,11 +325,16 @@ export class SourceEntry implements BlockOwner {
       learnSize(info.total);
       const target = Buffer.allocUnsafe(Math.min(HEAD_BYTES, info.total));
       this.head = target;
-      await readInto(response, target, (filled) => {
-        if (this.closed) throw new Error('source released');
-        this.headFilled = filled;
-        this.notifyFill();
-      }, (bytes) => this.download(bytes, 'main'));
+      await readInto(
+        response,
+        target,
+        (filled) => {
+          if (this.closed) throw new Error('source released');
+          this.headFilled = filled;
+          this.notifyFill();
+        },
+        (bytes) => this.download(bytes, 'main'),
+      );
     });
     const tail = this.open(`bytes=-${TAIL_BYTES}`).then(async (response) => {
       const info = rangeInfo(response);
@@ -338,22 +347,31 @@ export class SourceEntry implements BlockOwner {
       const target = Buffer.allocUnsafe(Math.min(TAIL_BYTES, info.total - info.start));
       this.tailStart = info.start;
       this.tail = target;
-      await readInto(response, target, (filled) => {
-        if (this.closed) throw new Error('source released');
-        this.tailFilled = filled;
-        this.notifyFill();
-      }, (bytes) => this.download(bytes, 'main'));
+      await readInto(
+        response,
+        target,
+        (filled) => {
+          if (this.closed) throw new Error('source released');
+          this.tailFilled = filled;
+          this.notifyFill();
+        },
+        (bytes) => this.download(bytes, 'main'),
+      );
     });
 
     // Bytes that arrived before a failure stay servable, the rest is read on demand.
-    this.headReady = head.catch(() => undefined).then(() => {
-      this.headSettled = true;
-      this.notifyFill();
-    });
-    this.tailReady = tail.catch(() => undefined).then(() => {
-      this.tailSettled = true;
-      this.notifyFill();
-    });
+    this.headReady = head
+      .catch(() => undefined)
+      .then(() => {
+        this.headSettled = true;
+        this.notifyFill();
+      });
+    this.tailReady = tail
+      .catch(() => undefined)
+      .then(() => {
+        this.tailSettled = true;
+        this.notifyFill();
+      });
     void Promise.allSettled([head, tail]).then(() => {
       if (this.size === 0) sizeFailed(unavailable());
     });
@@ -377,7 +395,8 @@ export class SourceEntry implements BlockOwner {
           refreshed = true;
           continue;
         }
-        const transient = error instanceof UpstreamNetworkError || (error instanceof UpstreamStatusError && error.status >= 429);
+        const transient =
+          error instanceof UpstreamNetworkError || (error instanceof UpstreamStatusError && error.status >= 429);
         if (!transient) throw error;
         if (attempt >= 1 && !refreshed) {
           await this.refresh(generation).catch(() => undefined);

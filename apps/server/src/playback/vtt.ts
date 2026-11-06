@@ -34,7 +34,10 @@ export function parseCueBlock(block: string): Cue | null {
   const startMs = parseVttTime(match[1] as string);
   const endMs = parseVttTime(match[2] as string);
   if (startMs === null || endMs === null) return null;
-  const text = lines.slice(timing + 1).join('\n').trim();
+  const text = lines
+    .slice(timing + 1)
+    .join('\n')
+    .trim();
   if (text === '') return null;
   return { startMs, endMs, text, settings: (match[3] ?? '').trim() };
 }

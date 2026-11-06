@@ -30,7 +30,8 @@ export class SubtitleStore {
     readonly durationSec: number,
     trackIndices: readonly number[],
   ) {
-    for (const index of trackIndices) this.tracks.set(index, { cues: [], seen: new Set(), sorted: true, maxLengthMs: 0 });
+    for (const index of trackIndices)
+      this.tracks.set(index, { cues: [], seen: new Set(), sorted: true, maxLengthMs: 0 });
   }
 
   get trackIndices(): number[] {

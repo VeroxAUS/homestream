@@ -11,7 +11,12 @@ import {
 } from '../../src/playback/playlist.js';
 import type { SubtitleTrackInfo } from '../../src/playback/probe.js';
 import { MAX_TEXT_SUBTITLES, selectTextTracks } from '../../src/playback/subtitleExtractor.js';
-import { EXTRACTOR_MARKER, buildExtractArgs, parseCoverHead, parseCoverTimebase } from '../../src/playback/subtitleRun.js';
+import {
+  EXTRACTOR_MARKER,
+  buildExtractArgs,
+  parseCoverHead,
+  parseCoverTimebase,
+} from '../../src/playback/subtitleRun.js';
 import { SubtitleStore } from '../../src/playback/subtitleStore.js';
 import {
   formatVttTime,
@@ -23,7 +28,12 @@ import {
   type Cue,
 } from '../../src/playback/vtt.js';
 
-const cue = (startMs: number, endMs: number, text = 'Hello', settings = ''): Cue => ({ startMs, endMs, text, settings });
+const cue = (startMs: number, endMs: number, text = 'Hello', settings = ''): Cue => ({
+  startMs,
+  endMs,
+  text,
+  settings,
+});
 
 describe('WebVTT time', () => {
   it('parses both the short and the long form', () => {
@@ -99,7 +109,9 @@ describe('renderSegment', () => {
   });
 
   it('keeps cue settings', () => {
-    expect(renderSegment([cue(0, 1000, 'x', 'line:10%')], 0, 4000)).toContain('00:00:00.000 --> 00:00:01.000 line:10%\nx');
+    expect(renderSegment([cue(0, 1000, 'x', 'line:10%')], 0, 4000)).toContain(
+      '00:00:00.000 --> 00:00:01.000 line:10%\nx',
+    );
   });
 
   it('full file keeps original times and is HH:MM:SS.mmm', () => {
@@ -109,18 +121,36 @@ describe('renderSegment', () => {
 
 describe('intervals', () => {
   it('merges touching and overlapping ranges', () => {
-    expect(mergeIntervals([{ start: 10, end: 20 }, { start: 0, end: 10 }, { start: 30, end: 40 }, { start: 35, end: 50 }])).toEqual([
+    expect(
+      mergeIntervals([
+        { start: 10, end: 20 },
+        { start: 0, end: 10 },
+        { start: 30, end: 40 },
+        { start: 35, end: 50 },
+      ]),
+    ).toEqual([
       { start: 0, end: 20 },
       { start: 30, end: 50 },
     ]);
   });
 
   it('covers and finds the first gap', () => {
-    const merged = [{ start: 5, end: 20 }, { start: 30, end: 100 }];
+    const merged = [
+      { start: 5, end: 20 },
+      { start: 30, end: 100 },
+    ];
     expect(covers(merged, 8, 12)).toBe(true);
     expect(covers(merged, 18, 24)).toBe(false);
     expect(firstGap(merged, 100)).toEqual({ start: 0, end: 5 });
-    expect(firstGap([{ start: 0, end: 20 }, { start: 30, end: 100 }], 100)).toEqual({ start: 20, end: 30 });
+    expect(
+      firstGap(
+        [
+          { start: 0, end: 20 },
+          { start: 30, end: 100 },
+        ],
+        100,
+      ),
+    ).toEqual({ start: 20, end: 30 });
     expect(firstGap([{ start: 0, end: 100 }], 100)).toBeNull();
     expect(firstGap([{ start: 0, end: 90 }], 100)).toEqual({ start: 90, end: 100 });
   });
@@ -195,7 +225,9 @@ describe('master and rendition playlists', () => {
   it('marks only the default rendition DEFAULT=YES,AUTOSELECT=YES, with FORCED=YES when forced', () => {
     const tracks = [track(3, 'English'), track(4, 'English Forced', 'eng', true), track(5, '', 'por')];
     const media = (defaultTrack: { index: number; forced: boolean } | null) =>
-      generateMasterPlaylist({ decision, fps: 24, tracks, defaultTrack }).split('\n').filter((line) => line.startsWith('#EXT-X-MEDIA:'));
+      generateMasterPlaylist({ decision, fps: 24, tracks, defaultTrack })
+        .split('\n')
+        .filter((line) => line.startsWith('#EXT-X-MEDIA:'));
 
     const forced = media({ index: 4, forced: true });
     expect(forced.filter((line) => line.includes('DEFAULT=YES'))).toHaveLength(1);
@@ -237,7 +269,8 @@ describe('master and rendition playlists', () => {
 
   it('parses file names strictly', () => {
     expect(parseSubtitleSegmentName('seg-12.vtt')).toBe(12);
-    for (const name of ['seg-1.ts', 'seg-.vtt', '../seg-1.vtt', 'seg-1.vtt.part']) expect(parseSubtitleSegmentName(name)).toBeNull();
+    for (const name of ['seg-1.ts', 'seg-.vtt', '../seg-1.vtt', 'seg-1.vtt.part'])
+      expect(parseSubtitleSegmentName(name)).toBeNull();
     expect(parseSubtitleFullName('4.vtt')).toBe(4);
     for (const name of ['4.srt', '../4.vtt', '4.vtt.part', 'x.vtt']) expect(parseSubtitleFullName(name)).toBeNull();
     expect(parseHlsFileName('index.m3u8')).toEqual({ kind: 'master' });
@@ -247,11 +280,19 @@ describe('master and rendition playlists', () => {
 
 describe('selectTextTracks', () => {
   const info = (index: number, language: string, kind: 'text' | 'bitmap' = 'text'): SubtitleTrackInfo => ({
-    index, codec: 'subrip', language, title: '', kind, forced: false, default: false,
+    index,
+    codec: 'subrip',
+    language,
+    title: '',
+    kind,
+    forced: false,
+    default: false,
   });
 
   it('keeps text tracks only', () => {
-    expect(selectTextTracks({ subtitles: [info(1, 'eng'), info(2, 'eng', 'bitmap')] }).map((track) => track.index)).toEqual([1]);
+    expect(
+      selectTextTracks({ subtitles: [info(1, 'eng'), info(2, 'eng', 'bitmap')] }).map((track) => track.index),
+    ).toEqual([1]);
   });
 
   it('prefers English past the maximum and keeps the source order', () => {
@@ -272,22 +313,34 @@ describe('selectTextTracks', () => {
     const chosen = selectTextTracks({ subtitles: tracks }, 12).map((track) => track.index);
     expect(chosen).toHaveLength(MAX_TEXT_SUBTITLES);
     expect(chosen).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 12]);
-    expect(selectTextTracks({ subtitles: tracks }, 3).map((track) => track.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(selectTextTracks({ subtitles: tracks }, 3).map((track) => track.index)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
     expect(selectTextTracks({ subtitles: tracks }, 99)).toHaveLength(MAX_TEXT_SUBTITLES);
     expect(selectTextTracks({ subtitles: tracks.slice(0, 4) }, 2)).toHaveLength(4);
   });
 });
 
 describe('extractor command line', () => {
-  const job = { inputUrl: 'http://127.0.0.1:1/x', ss: 0, videoIndex: 0, tracks: [3, 7], outputDir: path.join('subs', 'run1') };
+  const job = {
+    inputUrl: 'http://127.0.0.1:1/x',
+    ss: 0,
+    videoIndex: 0,
+    tracks: [3, 7],
+    outputDir: path.join('subs', 'run1'),
+  };
 
   it('copies the video into a packet listing as the coverage clock and writes one flushed WebVTT file per track', () => {
     const joined = buildExtractArgs(job).join(' ');
     expect(joined).toContain('-copyts');
     expect(joined).not.toContain('-progress');
     expect(joined).toContain(`-map 0:0 -c copy -flush_packets 1 -f framecrc ${path.join('subs', 'run1', 'cover.txt')}`);
-    expect(joined).toContain(`-map 0:3 -c:s webvtt -flush_packets 1 -f ${EXTRACTOR_MARKER} ${path.join('subs', 'run1', '3.vtt')}`);
-    expect(joined).toContain(`-map 0:7 -c:s webvtt -flush_packets 1 -f ${EXTRACTOR_MARKER} ${path.join('subs', 'run1', '7.vtt')}`);
+    expect(joined).toContain(
+      `-map 0:3 -c:s webvtt -flush_packets 1 -f ${EXTRACTOR_MARKER} ${path.join('subs', 'run1', '3.vtt')}`,
+    );
+    expect(joined).toContain(
+      `-map 0:7 -c:s webvtt -flush_packets 1 -f ${EXTRACTOR_MARKER} ${path.join('subs', 'run1', '7.vtt')}`,
+    );
   });
 
   it('caps the decoder at 2 threads before the input', () => {
@@ -301,9 +354,12 @@ describe('extractor command line', () => {
     expect(parseCoverTimebase(header)).toBe(0.001);
     expect(parseCoverTimebase('#tb 0: 1/90000\n')).toBeCloseTo(1 / 90000, 12);
     expect(parseCoverTimebase('#format: frame checksums\n')).toBeNull();
-    const lines = '0,      10000,      10000,       41,    25896, 0x510cd466\n0,      10041,      10041,       41,    25896, 0x510c';
+    const lines =
+      '0,      10000,      10000,       41,    25896, 0x510cd466\n0,      10041,      10041,       41,    25896, 0x510c';
     expect(parseCoverHead(lines, 0.001)).toBe(10);
-    expect(parseCoverHead('0,   -83,   0,  41,  100, 0x1\n0,    5500,    5500,       41,    25896, 0x510cd466\n', 0.001)).toBe(5.5);
+    expect(
+      parseCoverHead('0,   -83,   0,  41,  100, 0x1\n0,    5500,    5500,       41,    25896, 0x510cd466\n', 0.001),
+    ).toBe(5.5);
     expect(parseCoverHead('#tb 0: 1/1000\n0,  ', 0.001)).toBeNull();
   });
 

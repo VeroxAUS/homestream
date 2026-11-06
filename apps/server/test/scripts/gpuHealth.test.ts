@@ -99,9 +99,14 @@ describe('filterNewer', () => {
       level: 'Information',
       message: `Event Name: LiveKernelEvent P1: 141 Attached files: \\\\?\\C:\\WINDOWS\\LiveKernelReports\\WATCHDOG\\${dump}`,
     });
-    const events = parseEvents(JSON.stringify([wer('WATCHDOG-20260903-0140.dmp'), wer('WATCHDOG-20261105-1820.dmp'), wer('no-stamp.dmp')]));
+    const events = parseEvents(
+      JSON.stringify([wer('WATCHDOG-20260903-0140.dmp'), wer('WATCHDOG-20261105-1820.dmp'), wer('no-stamp.dmp')]),
+    );
     const kept = filterNewer(events, new Date(2026, 10, 5, 18, 0).getTime());
-    expect(kept.map((e) => e.message.match(/[\w-]+\.dmp/)?.[0])).toEqual(['WATCHDOG-20261105-1820.dmp', 'no-stamp.dmp']);
+    expect(kept.map((e) => e.message.match(/[\w-]+\.dmp/)?.[0])).toEqual([
+      'WATCHDOG-20261105-1820.dmp',
+      'no-stamp.dmp',
+    ]);
   });
 });
 
@@ -148,7 +153,9 @@ describe('evaluate', () => {
   });
 
   it('honours a custom minimum', () => {
-    expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 6 }, minFreeGb: 8, errors: [] }).reasons[0]).toMatch(/^low_memory:.*8 GB/);
+    expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 6 }, minFreeGb: 8, errors: [] }).reasons[0]).toMatch(
+      /^low_memory:.*8 GB/,
+    );
     expect(evaluate({ events: [], gpu: cool, memory: { freeGb: 6 }, minFreeGb: 5, errors: [] }).ok).toBe(true);
   });
 
@@ -161,12 +168,22 @@ describe('evaluate', () => {
   });
 
   it('reports every failing check, not just the first', () => {
-    const result = evaluate({ events: parseEvents(JSON.stringify([FECS])), gpu: { tempC: 90 }, memory: { freeGb: 1 }, errors: [] });
+    const result = evaluate({
+      events: parseEvents(JSON.stringify([FECS])),
+      gpu: { tempC: 90 },
+      memory: { freeGb: 1 },
+      errors: [],
+    });
     expect(result.reasons).toHaveLength(3);
   });
 
   it('fails on any new nvlddmkm event', () => {
-    const result = evaluate({ events: parseEvents(JSON.stringify([FECS, GPUID])), gpu: cool, memory: roomy, errors: [] });
+    const result = evaluate({
+      events: parseEvents(JSON.stringify([FECS, GPUID])),
+      gpu: cool,
+      memory: roomy,
+      errors: [],
+    });
     expect(result.ok).toBe(false);
     expect(result.reasons[0]).toContain('2 new GPU driver');
   });
@@ -199,12 +216,23 @@ describe('--require-idle', () => {
   });
 
   it('passes below the limit and fails with gpu_busy at or above it, naming the GPU processes', () => {
-    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(24), errors: [] })).toEqual({ ok: true, reasons: [] });
-    const busy = evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(MAX_IDLE_UTIL_PCT, false, ['Wow.exe', 'explorer.exe']), errors: [] });
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(24), errors: [] })).toEqual({
+      ok: true,
+      reasons: [],
+    });
+    const busy = evaluate({
+      events: [],
+      gpu: cool,
+      memory: roomy,
+      idle: idleOf(MAX_IDLE_UTIL_PCT, false, ['Wow.exe', 'explorer.exe']),
+      errors: [],
+    });
     expect(busy.ok).toBe(false);
     expect(busy.reasons).toHaveLength(1);
     expect(busy.reasons[0]).toMatch(/^gpu_busy: .*25%.*Wow\.exe, explorer\.exe/);
-    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(99), errors: [] }).reasons[0]).toMatch(/^gpu_busy:/);
+    expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(99), errors: [] }).reasons[0]).toMatch(
+      /^gpu_busy:/,
+    );
   });
 
   it('ignores utilization while an ffmpeg is running', () => {
@@ -234,7 +262,13 @@ describe('--require-idle', () => {
 
   describe('transient spikes versus sustained load', () => {
     const verdict = (samples: Array<number | null>, ffmpegRunning: boolean | null = false) =>
-      evaluate({ events: [], gpu: cool, memory: roomy, idle: { ...summarizeIdle(samples), ffmpegRunning, processes: ['Discord.exe'] }, errors: [] });
+      evaluate({
+        events: [],
+        gpu: cool,
+        memory: roomy,
+        idle: { ...summarizeIdle(samples), ffmpegRunning, processes: ['Discord.exe'] },
+        errors: [],
+      });
 
     it('samples five times', () => {
       expect(IDLE_SAMPLES).toBe(5);
@@ -253,7 +287,11 @@ describe('--require-idle', () => {
     });
 
     it('fails when the median reaches the limit', () => {
-      for (const samples of [[30, 35, 3, 40, 2], [25, 25, 25, 1, 1], [25, 26, 27, 28, 29]]) {
+      for (const samples of [
+        [30, 35, 3, 40, 2],
+        [25, 25, 25, 1, 1],
+        [25, 26, 27, 28, 29],
+      ]) {
         const result = verdict(samples);
         expect(result.ok, samples.join(',')).toBe(false);
         expect(result.reasons[0]).toMatch(/^gpu_busy: median GPU utilization \d+(\.\d+)?% .*Discord\.exe/);
@@ -269,7 +307,12 @@ describe('--require-idle', () => {
     });
 
     it('fails every time for a game at 90-100%', () => {
-      for (const samples of [[90, 95, 100, 99, 92], [100, 100, 100, 100, 100], [98, 97, 99, 96, 100], [90, 3, 91, 4, 92]]) {
+      for (const samples of [
+        [90, 95, 100, 99, 92],
+        [100, 100, 100, 100, 100],
+        [98, 97, 99, 96, 100],
+        [90, 3, 91, 4, 92],
+      ]) {
         expect(verdict(samples).ok, samples.join(',')).toBe(false);
       }
     });
@@ -318,7 +361,15 @@ describe('parseSystemInfo (info only)', () => {
   });
 
   it('accepts several pagefiles, a missing queue counter and empty output', () => {
-    const info = parseSystemInfo(JSON.stringify({ pagefile: [{ name: 'a', usedMiB: 1, sizeMiB: 2 }, { name: 'b', usedMiB: 3, sizeMiB: 4 }], diskQueueD: null }));
+    const info = parseSystemInfo(
+      JSON.stringify({
+        pagefile: [
+          { name: 'a', usedMiB: 1, sizeMiB: 2 },
+          { name: 'b', usedMiB: 3, sizeMiB: 4 },
+        ],
+        diskQueueD: null,
+      }),
+    );
     expect(info.pagefile).toHaveLength(2);
     expect(info.diskQueueD).toBeNull();
     expect(parseSystemInfo('')).toEqual({ pagefile: [], diskQueueD: null });
@@ -344,7 +395,10 @@ describe('buildQueryScript', () => {
 describe('command line entry', () => {
   it('runs main() and fails closed on bad arguments, also when the repo path goes through a junction', () => {
     const script = fileURLToPath(new URL('../../../../scripts/gpu-health.mjs', import.meta.url));
-    const result = spawnSync(process.execPath, [script, '--since', 'not-a-date'], { encoding: 'utf8', windowsHide: true });
+    const result = spawnSync(process.execPath, [script, '--since', 'not-a-date'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: false });
   });

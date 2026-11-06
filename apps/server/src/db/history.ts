@@ -121,7 +121,12 @@ function where(filter: HistoryFilter): { sql: string; params: Array<string | num
 }
 
 /** Newest first; `id` breaks ties so pages never overlap. */
-export function queryHistory(db: Db, filter: HistoryFilter, limit: number, offset: number): { items: HistoryItem[]; total: number } {
+export function queryHistory(
+  db: Db,
+  filter: HistoryFilter,
+  limit: number,
+  offset: number,
+): { items: HistoryItem[]; total: number } {
   const { sql, params } = where(filter);
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM plays ${sql}`).get(...params) as { n: number }).n;
   const rows = db
@@ -131,7 +136,9 @@ export function queryHistory(db: Db, filter: HistoryFilter, limit: number, offse
 }
 
 export function playsStartedSince(db: Db, sinceMs: number): HistoryItem[] {
-  const rows = db.prepare('SELECT * FROM plays WHERE started_at >= ? ORDER BY started_at DESC, id DESC').all(sinceMs) as unknown as RawPlay[];
+  const rows = db
+    .prepare('SELECT * FROM plays WHERE started_at >= ? ORDER BY started_at DESC, id DESC')
+    .all(sinceMs) as unknown as RawPlay[];
   return rows.map(toHistoryItem);
 }
 
@@ -144,10 +151,15 @@ export interface WatchedBase {
 /** The movie or show of the most recent play with at least `minWatchedSec` watched, and every title that qualifies. */
 export function watchedTitles(db: Db, minWatchedSec: number): { latest: WatchedBase | null; played: Set<string> } {
   const newest = db
-    .prepare('SELECT type, tmdb_id, title, show_title FROM plays WHERE watched_sec >= ? ORDER BY started_at DESC, id DESC LIMIT 1')
-    .get(minWatchedSec) as { type: 'movie' | 'tv'; tmdb_id: number; title: string; show_title: string | null } | undefined;
+    .prepare(
+      'SELECT type, tmdb_id, title, show_title FROM plays WHERE watched_sec >= ? ORDER BY started_at DESC, id DESC LIMIT 1',
+    )
+    .get(minWatchedSec) as
+    { type: 'movie' | 'tv'; tmdb_id: number; title: string; show_title: string | null } | undefined;
   if (!newest) return { latest: null, played: new Set() };
-  const titles = db.prepare('SELECT DISTINCT type, tmdb_id FROM plays WHERE watched_sec >= ?').all(minWatchedSec) as unknown as Array<{
+  const titles = db
+    .prepare('SELECT DISTINCT type, tmdb_id FROM plays WHERE watched_sec >= ?')
+    .all(minWatchedSec) as unknown as Array<{
     type: 'movie' | 'tv';
     tmdb_id: number;
   }>;

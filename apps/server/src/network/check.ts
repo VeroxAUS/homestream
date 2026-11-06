@@ -21,7 +21,11 @@ export function buildNetworkCheck(
     ...snapshot,
     rateMbps: round(snapshot.rateMbps),
     limitedForSec: round(snapshot.limitedForSec, 1),
-    sessions: snapshot.sessions.map((session) => ({ ...session, rateMbps: round(session.rateMbps), leadSec: round(session.leadSec, 1) })),
+    sessions: snapshot.sessions.map((session) => ({
+      ...session,
+      rateMbps: round(session.rateMbps),
+      leadSec: round(session.leadSec, 1),
+    })),
   };
   const base = {
     id: 'network' as const,
@@ -38,5 +42,9 @@ export function buildNetworkCheck(
       hint: `The limit keeps the rest of the household's internet usable, so playback may start slower or seeks may take longer. To allow faster downloads, raise MAX_DOWNLOAD_MBPS${options.configPath ? ` in ${options.configPath}` : ''} and restart the server.`,
     };
   }
-  return { ...base, status: 'ok', message: `Downloading ${formatMbps(snapshot.rateMbps)} of ${snapshot.capMbps} Mbps.` };
+  return {
+    ...base,
+    status: 'ok',
+    message: `Downloading ${formatMbps(snapshot.rateMbps)} of ${snapshot.capMbps} Mbps.`,
+  };
 }

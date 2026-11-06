@@ -40,7 +40,8 @@ function assertRanked(streams: StreamOption[]): void {
     const cur = streams[i] as StreamOption;
     if (prev.cached !== cur.cached) continue;
     expect(RESOLUTION_RANK[prev.resolution]).toBeGreaterThanOrEqual(RESOLUTION_RANK[cur.resolution]);
-    if (prev.resolution === cur.resolution) expect(sourceRank(prev.source)).toBeGreaterThanOrEqual(sourceRank(cur.source));
+    if (prev.resolution === cur.resolution)
+      expect(sourceRank(prev.source)).toBeGreaterThanOrEqual(sourceRank(cur.source));
   }
 }
 

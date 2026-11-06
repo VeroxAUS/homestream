@@ -28,11 +28,18 @@ function audioIsEnglish(audio: AudioTrack | null, originalLanguage: string | nul
 
 /** Default-flagged first, then a non-SDH track, then the first in file order. */
 function bestOf(tracks: SubtitleTrackInfo[]): SubtitleTrackInfo | undefined {
-  return tracks.find((track) => track.default && !isSdhTitle(track.title)) ?? tracks.find((track) => track.default) ?? tracks.find((track) => !isSdhTitle(track.title)) ?? tracks[0];
+  return (
+    tracks.find((track) => track.default && !isSdhTitle(track.title)) ??
+    tracks.find((track) => track.default) ??
+    tracks.find((track) => !isSdhTitle(track.title)) ??
+    tracks[0]
+  );
 }
 
 function pick(tracks: SubtitleTrackInfo[]): SubtitleTrackInfo | undefined {
-  return bestOf(tracks.filter((track) => track.kind === 'text')) ?? bestOf(tracks.filter((track) => track.kind === 'bitmap'));
+  return (
+    bestOf(tracks.filter((track) => track.kind === 'text')) ?? bestOf(tracks.filter((track) => track.kind === 'bitmap'))
+  );
 }
 
 function result(track: SubtitleTrackInfo, kind: SubtitleDefault): DefaultSubtitle {

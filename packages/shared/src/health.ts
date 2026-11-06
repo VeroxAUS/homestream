@@ -5,7 +5,17 @@ export const HEALTH_STATUSES = ['ok', 'warn', 'error'] as const;
 export const HealthStatusSchema = z.enum(HEALTH_STATUSES);
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
 
-export const HEALTH_CHECK_IDS = ['config', 'gateway', 'torbox', 'tmdb', 'ffmpeg', 'gpu', 'disk', 'sessions', 'network'] as const;
+export const HEALTH_CHECK_IDS = [
+  'config',
+  'gateway',
+  'torbox',
+  'tmdb',
+  'ffmpeg',
+  'gpu',
+  'disk',
+  'sessions',
+  'network',
+] as const;
 export const HealthCheckIdSchema = z.enum(HEALTH_CHECK_IDS);
 export type HealthCheckId = z.infer<typeof HealthCheckIdSchema>;
 

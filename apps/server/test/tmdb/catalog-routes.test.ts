@@ -79,7 +79,10 @@ describe('catalog routes with a fake TMDB', () => {
     await app.inject('/api/home');
     await app.inject('/api/movie/278');
     await app.inject('/api/search?q=Breaking%20Bad');
-    const rows = app.ctx.db.prepare('SELECT key, expires_at FROM tmdb_cache').all() as { key: string; expires_at: number }[];
+    const rows = app.ctx.db.prepare('SELECT key, expires_at FROM tmdb_cache').all() as {
+      key: string;
+      expires_at: number;
+    }[];
     const ttl = (key: string) => rows.find((row) => row.key === key)!.expires_at - clock;
     expect(ttl('list:trending:movie')).toBe(3_600_000);
     expect(ttl('movie:278')).toBe(86_400_000);
@@ -121,7 +124,13 @@ describe('catalog routes with a fake TMDB', () => {
 
   it('movie details include imdbId, runtime and genres', async () => {
     const res = await app.inject('/api/movie/278');
-    expect(res.json()).toMatchObject({ type: 'movie', tmdbId: 278, imdbId: 'tt0111161', runtime: 142, genres: ['Drama', 'Crime'] });
+    expect(res.json()).toMatchObject({
+      type: 'movie',
+      tmdbId: 278,
+      imdbId: 'tt0111161',
+      runtime: 142,
+      genres: ['Drama', 'Crime'],
+    });
   });
 
   it('show details include seasons and imdbId; season lists episodes', async () => {

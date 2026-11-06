@@ -100,14 +100,18 @@ export function upsertProgress(db: Db, row: ProgressWrite): void {
  */
 export function listEligibleProgress(db: Db): ProgressRow[] {
   const rows = db
-    .prepare('SELECT * FROM progress WHERE hidden = 1 OR completed = 1 OR position_sec >= 60 ORDER BY updated_at DESC, media_key ASC')
+    .prepare(
+      'SELECT * FROM progress WHERE hidden = 1 OR completed = 1 OR position_sec >= 60 ORDER BY updated_at DESC, media_key ASC',
+    )
     .all() as unknown as RawRow[];
   return rows.map(toRow);
 }
 
 /** Returns false when no row has that key. */
 export function setProgressHidden(db: Db, mediaKey: string, hidden: boolean, now: number): boolean {
-  const result = db.prepare('UPDATE progress SET hidden = ?, updated_at = ? WHERE media_key = ? AND hidden != ?').run(hidden ? 1 : 0, now, mediaKey, hidden ? 1 : 0);
+  const result = db
+    .prepare('UPDATE progress SET hidden = ?, updated_at = ? WHERE media_key = ? AND hidden != ?')
+    .run(hidden ? 1 : 0, now, mediaKey, hidden ? 1 : 0);
   return Number(result.changes) > 0;
 }
 

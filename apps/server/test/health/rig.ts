@@ -50,7 +50,12 @@ export async function bootHealthRig(
 ): Promise<HealthRig> {
   const config = testConfig(root, { HEALTH_NVENC_TEST: '1', ...options.env }, options.envFile);
   const fakeTmdb = makeFakeTmdb();
-  const clock = { now: Date.now(), advance(ms: number) { this.now += ms; } };
+  const clock = {
+    now: Date.now(),
+    advance(ms: number) {
+      this.now += ms;
+    },
+  };
   const logger = createSilentLogger();
   const db = openDatabase(config.dataDir);
   const tmdb = new TmdbService({ config, db, logger, fetch: fakeTmdb.fetch });
@@ -73,13 +78,17 @@ export async function bootHealthRig(
 
   const fetchImpl: HealthFetch = async (url) => {
     fetched.push(url);
-    if (url.startsWith('https://api.torbox.app/')) return new Response(JSON.stringify(rig.torbox.body), { status: rig.torbox.status });
+    if (url.startsWith('https://api.torbox.app/'))
+      return new Response(JSON.stringify(rig.torbox.body), { status: rig.torbox.status });
     return rig.gateway.respond(url);
   };
   const run: CommandRunner = async (file, args) => {
     commands.push([file, ...args].join(' '));
     if (file === 'nvidia-smi') return rig.runResults.gpu;
-    if (args.includes('-version')) return file.includes('ffprobe') ? { code: 0, stdout: 'ffprobe version 9.0.2-full_build\n', stderr: '' } : rig.runResults.ffmpegVersion;
+    if (args.includes('-version'))
+      return file.includes('ffprobe')
+        ? { code: 0, stdout: 'ffprobe version 9.0.2-full_build\n', stderr: '' }
+        : rig.runResults.ffmpegVersion;
     if (args.includes('-encoders')) return { code: 0, stdout: ENCODERS, stderr: '' };
     return rig.runResults.encode;
   };
@@ -92,7 +101,10 @@ export async function bootHealthRig(
       fetch: fetchImpl,
       run,
       now: () => clock.now,
-      diskProbe: async (dir) => ({ freeBytes: (dir === config.transcodeDir ? rig.freeGb.transcode : rig.freeGb.data) * GIB, totalBytes: 1000 * GIB }),
+      diskProbe: async (dir) => ({
+        freeBytes: (dir === config.transcodeDir ? rig.freeGb.transcode : rig.freeGb.data) * GIB,
+        totalBytes: 1000 * GIB,
+      }),
     },
     ...options.app,
   });

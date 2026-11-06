@@ -20,10 +20,10 @@ When it runs:
 
 ## Secrets and settings
 
-| Name | Required | Purpose |
-| --- | --- | --- |
-| `FACTORY_API_KEY` | yes | Repository secret that lets `droid exec` run `/wiki`. |
-| `FACTORY_WIKI_PR_TOKEN` | no | Fine-grained token with `contents: write` and `pull-requests: write` on this repository. Use it when the wiki pull request must trigger other workflows (required checks). Pull requests created with the built-in `GITHUB_TOKEN` do not trigger workflows. |
+| Name                    | Required | Purpose                                                                                                                                                                                                                                                     |
+| ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FACTORY_API_KEY`       | yes      | Repository secret that lets `droid exec` run `/wiki`.                                                                                                                                                                                                       |
+| `FACTORY_WIKI_PR_TOKEN` | no       | Fine-grained token with `contents: write` and `pull-requests: write` on this repository. Use it when the wiki pull request must trigger other workflows (required checks). Pull requests created with the built-in `GITHUB_TOKEN` do not trigger workflows. |
 
 Under Settings, Actions, General, "Allow GitHub Actions to create and approve pull requests" must be on (and "Allow auto-merge" if main has required checks).
 

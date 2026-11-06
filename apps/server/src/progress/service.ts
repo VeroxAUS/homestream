@@ -1,7 +1,13 @@
 import type { ContinueWatchingItem } from '@homestream/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '../db/index.js';
-import { getProgress, insertHiddenMarker, listEligibleProgress, setProgressHidden, type ProgressRow } from '../db/progress.js';
+import {
+  getProgress,
+  insertHiddenMarker,
+  listEligibleProgress,
+  setProgressHidden,
+  type ProgressRow,
+} from '../db/progress.js';
 import { mediaKeyFor } from '../db/plays.js';
 import { selectEntries } from './entries.js';
 import { findNextEpisode, localDay, type NextEpisode, type SeasonSource } from './upNext.js';
@@ -47,7 +53,13 @@ export class ContinueWatchingService {
     if (!match) return null;
     const upNext = (await this.list()).find((item) => item.upNext && item.mediaKey === mediaKey);
     if (!upNext) return null;
-    insertHiddenMarker(db, { mediaKey, tmdbId: Number(match[1]), season: Number(match[2]), episode: Number(match[3]), now: this.now() });
+    insertHiddenMarker(db, {
+      mediaKey,
+      tmdbId: Number(match[1]),
+      season: Number(match[2]),
+      episode: Number(match[3]),
+      now: this.now(),
+    });
     return { removed: true };
   }
 

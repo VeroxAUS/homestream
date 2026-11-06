@@ -27,7 +27,11 @@ export function makeWebDir(root: string): string {
   return webDir;
 }
 
-export function testConfig(root: string, overrides: Record<string, string> = {}, fileContent = DEFAULT_ENV_FILE): Config {
+export function testConfig(
+  root: string,
+  overrides: Record<string, string> = {},
+  fileContent = DEFAULT_ENV_FILE,
+): Config {
   const envFile = path.join(root, 'test.env');
   writeFileSync(envFile, fileContent);
   return loadConfig({

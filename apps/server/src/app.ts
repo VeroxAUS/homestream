@@ -42,7 +42,16 @@ export interface BuildAppOptions {
   tmdb?: TmdbService;
   gateway?: GatewayClient;
   /** Test seams for the playback pipeline (ffprobe, CDN link resolution, segment wait). */
-  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'firstSegmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'createEncoder' | 'idleTimeoutMs' | 'monitorTickMs'> & {
+  playback?: Pick<
+    PlaybackManagerOptions,
+    | 'segmentWaitMs'
+    | 'firstSegmentWaitMs'
+    | 'subtitleHoldMs'
+    | 'maxSessions'
+    | 'createEncoder'
+    | 'idleTimeoutMs'
+    | 'monitorTickMs'
+  > & {
     probe?: ProbeRunner;
     resolveUrl?: UrlResolver;
   };
@@ -62,7 +71,14 @@ export interface BuildAppOptions {
   /** Test seams for the TorBox poller: HTTP calls, clock and time limits. */
   downloads?: Pick<DownloadServiceOptions, 'torboxFetch' | 'now' | 'limits'>;
   /** Test seams for the health checks: network, child processes, disk space and timing. */
-  health?: { fetch?: HealthFetch; run?: CommandRunner; diskProbe?: DiskProbe; now?: () => number; intervalMs?: number; liveIntervalMs?: number };
+  health?: {
+    fetch?: HealthFetch;
+    run?: CommandRunner;
+    diskProbe?: DiskProbe;
+    now?: () => number;
+    intervalMs?: number;
+    liveIntervalMs?: number;
+  };
   heartbeatMs?: number;
 }
 
@@ -95,12 +111,47 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     ...options.sourceProxy,
   });
   const downloads = new DownloadService({ config, db, bus, logger, gateway, streams, ...options.downloads });
-  const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, downloads, proxy: sourceProxy, ...playbackOptions });
+  const playback = new PlaybackManager({
+    config,
+    db,
+    bus,
+    logger,
+    tmdb,
+    streams,
+    downloads,
+    proxy: sourceProxy,
+    ...playbackOptions,
+  });
   const prefetch = new PrefetchService({ tmdb, streams, proxy: sourceProxy, db, bus, logger, ...options.prefetch });
   const continueWatching = new ContinueWatchingService({ db, tmdb, logger });
   const home = new HomeService({ db, tmdb, continueWatching, logger });
-  const health = new HealthService({ config, db, bus, logger, gateway, tmdb, playback, sourceProxy, ...options.health });
-  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, downloads, sourceProxy, prefetch, continueWatching, home, health };
+  const health = new HealthService({
+    config,
+    db,
+    bus,
+    logger,
+    gateway,
+    tmdb,
+    playback,
+    sourceProxy,
+    ...options.health,
+  });
+  const ctx: AppContext = {
+    config,
+    db,
+    bus,
+    logger,
+    tmdb,
+    gateway,
+    streams,
+    playback,
+    downloads,
+    sourceProxy,
+    prefetch,
+    continueWatching,
+    home,
+    health,
+  };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -121,7 +172,13 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     }
     return reply
       .code(404)
-      .send(errorBody('not_found', `No route for ${request.method} ${request.url.split('?')[0]}.`, 'Check the URL and HTTP method.'));
+      .send(
+        errorBody(
+          'not_found',
+          `No route for ${request.method} ${request.url.split('?')[0]}.`,
+          'Check the URL and HTTP method.',
+        ),
+      );
   });
 
   app.setErrorHandler((error: FastifyError | AppError, request, reply) => {
@@ -137,9 +194,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
         .code(500)
         .send(errorBody('internal_error', 'Something went wrong on the server.', 'Check the server log for details.'));
     }
-    return reply
-      .code(status)
-      .send(errorBody(codeForStatus(status), error.message, 'Check the request and try again.'));
+    return reply.code(status).send(errorBody(codeForStatus(status), error.message, 'Check the request and try again.'));
   });
 
   registerInfoRoutes(app, ctx);

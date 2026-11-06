@@ -16,8 +16,7 @@ export class TmdbCache {
 
   get(key: string): unknown | undefined {
     const row = this.db.prepare('SELECT json, expires_at FROM tmdb_cache WHERE key = ?').get(key) as
-      | { json: string; expires_at: number }
-      | undefined;
+      { json: string; expires_at: number } | undefined;
     if (!row) return undefined;
     if (row.expires_at <= this.now()) {
       this.db.prepare('DELETE FROM tmdb_cache WHERE key = ?').run(key);

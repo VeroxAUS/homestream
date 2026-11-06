@@ -29,7 +29,12 @@ export interface PlayEnd {
   bytesServed?: number;
 }
 
-export function mediaKeyFor(type: 'movie' | 'tv', tmdbId: number, season?: number | null, episode?: number | null): string {
+export function mediaKeyFor(
+  type: 'movie' | 'tv',
+  tmdbId: number,
+  season?: number | null,
+  episode?: number | null,
+): string {
   return type === 'movie' ? `movie:${tmdbId}` : `tv:${tmdbId}:${season}:${episode}`;
 }
 

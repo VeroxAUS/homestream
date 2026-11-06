@@ -67,7 +67,10 @@ export class EncoderProcess implements EncoderHandle {
     });
     this.pid = this.child.pid;
     lowerPriority(this.pid);
-    const unwatch = this.pid !== undefined && options.watchdog ? options.watchdog.watch(this.pid, (hit) => this.onMemoryLimit(hit, options)) : undefined;
+    const unwatch =
+      this.pid !== undefined && options.watchdog
+        ? options.watchdog.watch(this.pid, (hit) => this.onMemoryLimit(hit, options))
+        : undefined;
 
     this.child.stdin?.on('error', () => undefined);
     this.child.stdout?.setEncoding('utf8');

@@ -6,7 +6,10 @@ export interface Interval {
 
 /** Union of the ranges, sorted; ranges that touch or overlap (within `gap` seconds) become one. */
 export function mergeIntervals(intervals: readonly Interval[], gap = 0): Interval[] {
-  const sorted = intervals.filter((item) => item.end > item.start).map((item) => ({ ...item })).sort((a, b) => a.start - b.start);
+  const sorted = intervals
+    .filter((item) => item.end > item.start)
+    .map((item) => ({ ...item }))
+    .sort((a, b) => a.start - b.start);
   const merged: Interval[] = [];
   for (const item of sorted) {
     const last = merged.at(-1);

@@ -19,8 +19,12 @@ describe('buildNetworkCheck', () => {
   });
 
   it('puts the rate and the cap into the line the dashboard shows', () => {
-    expect(buildNetworkCheck(snapshot({ rateMbps: 41.234, capMbps: 150 }), { nowMs: NOW }).message).toBe('Downloading 41.2 of 150 Mbps.');
-    expect(buildNetworkCheck(snapshot({ rateMbps: 148.6, capMbps: 150 }), { nowMs: NOW }).message).toBe('Downloading 149 of 150 Mbps.');
+    expect(buildNetworkCheck(snapshot({ rateMbps: 41.234, capMbps: 150 }), { nowMs: NOW }).message).toBe(
+      'Downloading 41.2 of 150 Mbps.',
+    );
+    expect(buildNetworkCheck(snapshot({ rateMbps: 148.6, capMbps: 150 }), { nowMs: NOW }).message).toBe(
+      'Downloading 149 of 150 Mbps.',
+    );
   });
 
   it('lists sessions with their own rate, state and lead, rounded', () => {
@@ -41,8 +45,13 @@ describe('buildNetworkCheck', () => {
   });
 
   it('stays ok up to 30 s at the cap and warns after that, with a hint about MAX_DOWNLOAD_MBPS', () => {
-    expect(buildNetworkCheck(snapshot({ rateMbps: 59, limitedForSec: WARN_AFTER_LIMITED_SEC }), { nowMs: NOW }).status).toBe('ok');
-    const warn = buildNetworkCheck(snapshot({ rateMbps: 59, limitedForSec: 31 }), { nowMs: NOW, configPath: 'C:\\x\\config.env' });
+    expect(
+      buildNetworkCheck(snapshot({ rateMbps: 59, limitedForSec: WARN_AFTER_LIMITED_SEC }), { nowMs: NOW }).status,
+    ).toBe('ok');
+    const warn = buildNetworkCheck(snapshot({ rateMbps: 59, limitedForSec: 31 }), {
+      nowMs: NOW,
+      configPath: 'C:\\x\\config.env',
+    });
     expect(warn.status).toBe('warn');
     expect(warn.message).toContain('60 Mbps');
     expect(warn.hint).toContain('MAX_DOWNLOAD_MBPS');

@@ -24,7 +24,9 @@ export function needsNewLink(error: unknown): boolean {
 }
 
 export function isAbort(error: unknown): boolean {
-  return error instanceof Error && (error.name === 'AbortError' || (error as NodeJS.ErrnoException).code === 'ABORT_ERR');
+  return (
+    error instanceof Error && (error.name === 'AbortError' || (error as NodeJS.ErrnoException).code === 'ABORT_ERR')
+  );
 }
 
 /**
@@ -67,7 +69,9 @@ export class UpstreamClient {
         { method: 'GET', agent: secure ? this.httpsAgent : this.httpAgent, headers: { Range: range }, signal },
         resolve,
       );
-      request.setTimeout(SOCKET_IDLE_TIMEOUT_MS, () => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+      request.setTimeout(SOCKET_IDLE_TIMEOUT_MS, () =>
+        request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })),
+      );
       request.on('error', (error: NodeJS.ErrnoException) => {
         if (isAbort(error)) reject(error);
         else reject(new UpstreamNetworkError(error.code ?? 'ERROR'));

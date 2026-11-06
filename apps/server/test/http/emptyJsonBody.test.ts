@@ -41,7 +41,12 @@ describe('application/json with an empty body', () => {
   });
 
   it('still parses a normal JSON body', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/sessions', headers: json, payload: { mediaType: 'music' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      headers: json,
+      payload: { mediaType: 'music' },
+    });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('invalid_request');
   });

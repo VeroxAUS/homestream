@@ -83,12 +83,16 @@ describe('DownloadGate', () => {
     const limit = mbpsToBytesPerSec(capMbps) * 5 * 1.05;
     let worst = 0;
     for (let start = 0; start <= 25_000; start += 250) {
-      const sum = log.filter((entry) => entry.at >= start && entry.at < start + 5000).reduce((total, entry) => total + entry.bytes, 0);
+      const sum = log
+        .filter((entry) => entry.at >= start && entry.at < start + 5000)
+        .reduce((total, entry) => total + entry.bytes, 0);
       worst = Math.max(worst, sum);
     }
     expect(worst).toBeLessThanOrEqual(limit);
     // And it is actually used: the cap is reached, not merely respected.
-    const steady = log.filter((entry) => entry.at >= 5000 && entry.at < 30_000).reduce((total, entry) => total + entry.bytes, 0);
+    const steady = log
+      .filter((entry) => entry.at >= 5000 && entry.at < 30_000)
+      .reduce((total, entry) => total + entry.bytes, 0);
     expect((steady * 8) / 1_000_000 / 25).toBeGreaterThan(capMbps * 0.97);
     expect(BUCKET_DEPTH_SEC).toBeLessThanOrEqual(0.2);
   });

@@ -26,7 +26,10 @@ export const MOVIE_DETAILS = {
   ...movieRow(278),
   runtime: 142,
   original_language: 'en',
-  genres: [{ id: 18, name: 'Drama' }, { id: 80, name: 'Crime' }],
+  genres: [
+    { id: 18, name: 'Drama' },
+    { id: 80, name: 'Crime' },
+  ],
   external_ids: { imdb_id: 'tt0111161' },
 };
 
@@ -46,7 +49,14 @@ export const SEASON_ONE = {
   season_number: 1,
   name: 'Season 1',
   episodes: [
-    { episode_number: 2, name: 'Cat in the Bag', overview: 'Two.', still_path: '/e2.jpg', runtime: 48, air_date: '2008-01-27' },
+    {
+      episode_number: 2,
+      name: 'Cat in the Bag',
+      overview: 'Two.',
+      still_path: '/e2.jpg',
+      runtime: 48,
+      air_date: '2008-01-27',
+    },
     { episode_number: 1, name: 'Pilot', overview: 'One.', still_path: null, runtime: 0, air_date: '' },
   ],
 };
@@ -79,7 +89,8 @@ export function makeFakeTmdb(): FakeTmdb {
       if (fake.failWith === 'network') throw new TypeError('fetch failed');
       if (fake.failWith) return json({}, fake.failWith.status);
       const path = parsed.pathname.replace(/^\/3/, '');
-      const list = (row: (id: number) => unknown) => json({ results: Array.from({ length: 12 }, (_, i) => row(i + 1)) });
+      const list = (row: (id: number) => unknown) =>
+        json({ results: Array.from({ length: 12 }, (_, i) => row(i + 1)) });
       if (path === '/configuration') return json(CONFIGURATION);
       if (path === '/trending/movie/week' || path === '/movie/popular') return list(movieRow);
       if (path === '/trending/tv/week' || path === '/tv/popular') return list(tvRow);

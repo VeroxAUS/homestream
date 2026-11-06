@@ -6,22 +6,22 @@
       "entry": ["scripts/*.mjs", "vitest.shared.ts"],
       "project": ["scripts/**/*.{mjs,mts}", "*.{ts,mjs,cjs}"],
       // Type declarations for scripts/*.mjs; TypeScript resolves them when tests import the scripts, knip does not follow that.
-      "ignore": ["scripts/**/*.d.mts"]
+      "ignore": ["scripts/**/*.d.mts"],
     },
     "apps/server": {
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],
       // The tests start the system ffmpeg on PATH; they are not npm packages.
-      "ignoreBinaries": ["ffmpeg"]
+      "ignoreBinaries": ["ffmpeg"],
     },
     "apps/web": {
       "project": ["src/**/*.{ts,tsx}"],
       // Web screens import the shared schemas; the alias and tsconfig paths are already wired, no screen uses it yet.
-      "ignoreDependencies": ["@homestream/shared"]
+      "ignoreDependencies": ["@homestream/shared"],
     },
     "packages/shared": {
       "entry": ["test/**/*.test.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
-    }
-  }
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+    },
+  },
 }

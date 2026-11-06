@@ -30,7 +30,10 @@ export function mergeVitestJson(reports) {
 function mergeReports(reportsDir) {
   const read = (name) => PACKAGES.map((pkg) => readIf(path.join(reportsDir, pkg, name))).filter(Boolean);
   writeFileSync(path.join(reportsDir, 'junit.xml'), mergeJunit(read('junit.xml')));
-  writeFileSync(path.join(reportsDir, 'vitest.json'), `${JSON.stringify(mergeVitestJson(read('vitest.json').map((text) => JSON.parse(text))), null, 2)}\n`);
+  writeFileSync(
+    path.join(reportsDir, 'vitest.json'),
+    `${JSON.stringify(mergeVitestJson(read('vitest.json').map((text) => JSON.parse(text))), null, 2)}\n`,
+  );
   const flaky = read('flaky.json').flatMap((text) => JSON.parse(text).flaky);
   writeFileSync(path.join(reportsDir, 'flaky.json'), `${JSON.stringify({ flaky }, null, 2)}\n`);
 }

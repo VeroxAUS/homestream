@@ -40,7 +40,8 @@ describe('checkConfig', () => {
     ]);
     expect(outcome.details.configFile).toBe(config.configFile.path);
     const text = JSON.stringify(outcome);
-    for (const secret of ['tmdb-test-token-123456', 'torbox-secret-key-123456', 'aaaa1111', 'gw.example.test']) expect(text).not.toContain(secret);
+    for (const secret of ['tmdb-test-token-123456', 'torbox-secret-key-123456', 'aaaa1111', 'gw.example.test'])
+      expect(text).not.toContain(secret);
   });
 
   it('is an error naming every missing required key and the config file to edit', () => {
@@ -64,7 +65,10 @@ describe('checkConfig', () => {
 
 describe('checkGateway', () => {
   const stats = { requests: 4, errors: 1, lastLatencyMs: 5200, lastLookupAt: NOW - 1000, lastError: null };
-  const config = { gatewayManifestUrl: 'https://abc.example.test/stremio/u1/tok2/manifest.json', configFile: CONFIG_FILE };
+  const config = {
+    gatewayManifestUrl: 'https://abc.example.test/stremio/u1/tok2/manifest.json',
+    configFile: CONFIG_FILE,
+  };
 
   it('reads the manifest only and reports addon, redacted label and lookup counters', async () => {
     const urls: string[] = [];
@@ -96,8 +100,16 @@ describe('checkGateway', () => {
   });
 
   it.each([
-    ['connection refused', () => Promise.reject(new TypeError('fetch failed: getaddrinfo ENOTFOUND abc.example.test')), /unreachable/i],
-    ['timeout', () => Promise.reject(Object.assign(new Error('timed out abc.example.test'), { name: 'TimeoutError' })), /slow or down/i],
+    [
+      'connection refused',
+      () => Promise.reject(new TypeError('fetch failed: getaddrinfo ENOTFOUND abc.example.test')),
+      /unreachable/i,
+    ],
+    [
+      'timeout',
+      () => Promise.reject(Object.assign(new Error('timed out abc.example.test'), { name: 'TimeoutError' })),
+      /slow or down/i,
+    ],
   ])('is an error with a plain hint and no host when the request fails (%s)', async (_name, fail, hint) => {
     const outcome = await checkGateway({ config, stats, fetch: fail });
     expect(outcome.status).toBe('error');
@@ -120,7 +132,11 @@ describe('checkGateway', () => {
   });
 
   it('is an error naming the missing key when no gateway is configured', async () => {
-    const outcome = await checkGateway({ config: { gatewayManifestUrl: null, configFile: CONFIG_FILE }, stats, fetch: async () => json({}) });
+    const outcome = await checkGateway({
+      config: { gatewayManifestUrl: null, configFile: CONFIG_FILE },
+      stats,
+      fetch: async () => json({}),
+    });
     expect(outcome.status).toBe('error');
     expect(outcome.hint).toContain('GATEWAY_MANIFEST_URL');
     expect(outcome.hint).toContain(CONFIG_FILE.path);
@@ -178,8 +194,16 @@ describe('checkTorbox', () => {
   });
 
   it('is an error with a renew hint when the subscription ended or is not active', async () => {
-    const expired = await checkTorbox({ config, nowMs: NOW, fetch: async () => json(account({ premium_expires_at: new Date(NOW - DAY).toISOString() })) });
-    const inactive = await checkTorbox({ config, nowMs: NOW, fetch: async () => json(account({ is_subscribed: false })) });
+    const expired = await checkTorbox({
+      config,
+      nowMs: NOW,
+      fetch: async () => json(account({ premium_expires_at: new Date(NOW - DAY).toISOString() })),
+    });
+    const inactive = await checkTorbox({
+      config,
+      nowMs: NOW,
+      fetch: async () => json(account({ is_subscribed: false })),
+    });
     for (const outcome of [expired, inactive]) {
       expect(outcome.status).toBe('error');
       expect(outcome.hint).toMatch(/renew it at torbox\.app/i);
@@ -198,7 +222,11 @@ describe('checkTorbox', () => {
     const down = await checkTorbox({ config, nowMs: NOW, fetch: () => Promise.reject(new TypeError('fetch failed')) });
     expect(down.status).toBe('error');
     expect(down.hint).toMatch(/internet/i);
-    const none = await checkTorbox({ config: { torboxApiKey: null, configFile: CONFIG_FILE }, nowMs: NOW, fetch: async () => json({}) });
+    const none = await checkTorbox({
+      config: { torboxApiKey: null, configFile: CONFIG_FILE },
+      nowMs: NOW,
+      fetch: async () => json({}),
+    });
     expect(none).toMatchObject({ status: 'warn', hint: expect.stringContaining('TORBOX_API_KEY') });
   });
 });
@@ -242,13 +270,16 @@ describe('checkTmdb', () => {
 
 describe('ffmpeg parsing', () => {
   it('reads the version number from the banner', () => {
-    expect(parseVersion('ffmpeg version 9.0.2-full_build-www.gyan.dev Copyright (c) 2000-2026\nbuilt with')).toBe('9.0.2');
+    expect(parseVersion('ffmpeg version 9.0.2-full_build-www.gyan.dev Copyright (c) 2000-2026\nbuilt with')).toBe(
+      '9.0.2',
+    );
     expect(parseVersion('ffprobe version n8.1 Copyright')).toBe('8.1');
     expect(parseVersion('')).toBeNull();
   });
 
   it('finds video encoders by exact name', () => {
-    const list = ' V....D h264_nvenc           NVIDIA NVENC H.264 encoder\n V....D hevc_nvenc_x         other\n A....D aac AAC\n';
+    const list =
+      ' V....D h264_nvenc           NVIDIA NVENC H.264 encoder\n V....D hevc_nvenc_x         other\n A....D aac AAC\n';
     expect(parseEncoders(list, ['h264_nvenc', 'hevc_nvenc'])).toEqual({ h264_nvenc: true, hevc_nvenc: false });
   });
 });
@@ -258,7 +289,9 @@ describe('checkFfmpeg', () => {
   const ok = (stdout = ''): CommandResult => ({ code: 0, stdout, stderr: '' });
   const ENCODERS = ' V....D h264_nvenc NVENC\n V....D hevc_nvenc NVENC\n';
 
-  function runner(overrides: { encode?: CommandResult; encoders?: string; ffmpeg?: CommandResult; ffprobe?: CommandResult } = {}) {
+  function runner(
+    overrides: { encode?: CommandResult; encoders?: string; ffmpeg?: CommandResult; ffprobe?: CommandResult } = {},
+  ) {
     const calls: string[][] = [];
     const run: CommandRunner = async (file, args) => {
       calls.push([file, ...args]);
@@ -321,18 +354,25 @@ describe('checkFfmpeg', () => {
   });
 
   it('is an error with driver/GPU/path advice when the test encode fails, keeping the last stderr line', async () => {
-    const { run } = runner({ encode: { code: 1, stdout: '', stderr: 'noise\nOpenEncodeSessionEx failed: out of memory (10)\n' } });
+    const { run } = runner({
+      encode: { code: 1, stdout: '', stderr: 'noise\nOpenEncodeSessionEx failed: out of memory (10)\n' },
+    });
     const outcome = await checkFfmpeg({ config, run });
     expect(outcome.status).toBe('error');
     expect(outcome.hint).toMatch(/driver/i);
     expect(outcome.hint).toContain('FFMPEG_PATH');
-    expect(outcome.details.testEncode).toMatchObject({ ok: false, error: 'OpenEncodeSessionEx failed: out of memory (10)' });
+    expect(outcome.details.testEncode).toMatchObject({
+      ok: false,
+      error: 'OpenEncodeSessionEx failed: out of memory (10)',
+    });
   });
 });
 
 describe('GPU check', () => {
   const LINE = 'NVIDIA GeForce RTX 4080, 581.29, 12, 0, 2310, 16376, 48\n';
-  const runner = (stdout: string, extra: Partial<CommandResult> = {}): CommandRunner => async () => ({ code: 0, stdout, stderr: '', ...extra });
+  const runner =
+    (stdout: string, extra: Partial<CommandResult> = {}): CommandRunner =>
+    async () => ({ code: 0, stdout, stderr: '', ...extra });
 
   it('parses the nvidia-smi CSV, turning [N/A] into null', () => {
     expect(parseGpuCsv(LINE)).toEqual({
@@ -352,7 +392,12 @@ describe('GPU check', () => {
   it('is ok with the metrics in the details', async () => {
     const outcome = await checkGpu({ run: runner(LINE) });
     expect(outcome.status).toBe('ok');
-    expect(outcome.details).toMatchObject({ name: 'NVIDIA GeForce RTX 4080', temperatureC: 48, memoryTotalMb: 16376, encoderUtilizationPct: 0 });
+    expect(outcome.details).toMatchObject({
+      name: 'NVIDIA GeForce RTX 4080',
+      temperatureC: 48,
+      memoryTotalMb: 16376,
+      encoderUtilizationPct: 0,
+    });
   });
 
   it.each([
@@ -414,7 +459,11 @@ describe('checkDisk', () => {
   });
 
   it('warns when the transcode cache is over its cap', async () => {
-    const outcome = await checkDisk({ config, probe: space({}), usage: () => ({ bytes: 21 * GIB, capBytes: 20 * GIB }) });
+    const outcome = await checkDisk({
+      config,
+      probe: space({}),
+      usage: () => ({ bytes: 21 * GIB, capBytes: 20 * GIB }),
+    });
     expect(outcome.status).toBe('warn');
   });
 
@@ -425,24 +474,53 @@ describe('checkDisk', () => {
 });
 
 describe('checkSessions', () => {
-  const event = { id: 1, ts: NOW, level: 'error' as const, source: 'ffmpeg' as const, message: 'Encoder stopped', sessionId: 's1' };
+  const event = {
+    id: 1,
+    ts: NOW,
+    level: 'error' as const,
+    source: 'ffmpeg' as const,
+    message: 'Encoder stopped',
+    sessionId: 's1',
+  };
 
   it('is ok with the active count when nothing is wrong', () => {
-    const outcome = checkSessions({ active: () => 2, fallingBehind: () => [], recentErrors: () => ({ count: 0, latest: [] }) });
-    expect(outcome).toMatchObject({ status: 'ok', message: '2 active sessions', details: { active: 2, errorsLast15Min: 0, fallingBehind: [] } });
+    const outcome = checkSessions({
+      active: () => 2,
+      fallingBehind: () => [],
+      recentErrors: () => ({ count: 0, latest: [] }),
+    });
+    expect(outcome).toMatchObject({
+      status: 'ok',
+      message: '2 active sessions',
+      details: { active: 2, errorsLast15Min: 0, fallingBehind: [] },
+    });
   });
 
   it('warns about recent errors and lists them', () => {
-    const outcome = checkSessions({ active: () => 0, fallingBehind: () => [], recentErrors: () => ({ count: 1, latest: [event] }) });
+    const outcome = checkSessions({
+      active: () => 0,
+      fallingBehind: () => [],
+      recentErrors: () => ({ count: 1, latest: [event] }),
+    });
     expect(outcome.status).toBe('warn');
     expect(outcome.hint).toBeTruthy();
-    expect(outcome.details.recentErrors).toEqual([{ ts: NOW, source: 'ffmpeg', message: 'Encoder stopped', sessionId: 's1' }]);
+    expect(outcome.details.recentErrors).toEqual([
+      { ts: NOW, source: 'ffmpeg', message: 'Encoder stopped', sessionId: 's1' },
+    ]);
   });
 
   it('warns only for sessions the manager reports as falling behind', () => {
-    const behind = checkSessions({ active: () => 1, fallingBehind: () => ['s1'], recentErrors: () => ({ count: 0, latest: [] }) });
+    const behind = checkSessions({
+      active: () => 1,
+      fallingBehind: () => ['s1'],
+      recentErrors: () => ({ count: 0, latest: [] }),
+    });
     expect(behind).toMatchObject({ status: 'warn', details: { fallingBehind: ['s1'] } });
-    const waiting = checkSessions({ active: () => 1, fallingBehind: () => [], recentErrors: () => ({ count: 0, latest: [] }) });
+    const waiting = checkSessions({
+      active: () => 1,
+      fallingBehind: () => [],
+      recentErrors: () => ({ count: 0, latest: [] }),
+    });
     expect(waiting.status).toBe('ok');
   });
 });

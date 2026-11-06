@@ -54,7 +54,10 @@ function readEntries(file: string): PidEntry[] {
     if (!Array.isArray(parsed.pids)) return [];
     return parsed.pids.filter(
       (item): item is PidEntry =>
-        !!item && typeof item === 'object' && Number.isInteger((item as PidEntry).pid) && typeof (item as PidEntry).sessionId === 'string',
+        !!item &&
+        typeof item === 'object' &&
+        Number.isInteger((item as PidEntry).pid) &&
+        typeof (item as PidEntry).sessionId === 'string',
     );
   } catch {
     return [];
@@ -63,7 +66,9 @@ function readEntries(file: string): PidEntry[] {
 
 function execText(command: string, args: string[]): Promise<string> {
   return new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true, timeout: 15_000, maxBuffer: 8 * 1024 * 1024 }, (_error, stdout) => resolve(stdout ?? ''));
+    execFile(command, args, { windowsHide: true, timeout: 15_000, maxBuffer: 8 * 1024 * 1024 }, (_error, stdout) =>
+      resolve(stdout ?? ''),
+    );
   });
 }
 

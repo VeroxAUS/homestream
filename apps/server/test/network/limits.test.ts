@@ -8,7 +8,10 @@ import {
   resolveDownloadLimits,
 } from '../../src/network/limits.js';
 
-function resolve(raw: Parameters<typeof resolveDownloadLimits>[0]): { limits: ReturnType<typeof resolveDownloadLimits>; warnings: string[] } {
+function resolve(raw: Parameters<typeof resolveDownloadLimits>[0]): {
+  limits: ReturnType<typeof resolveDownloadLimits>;
+  warnings: string[];
+} {
   const warnings: string[] = [];
   return { limits: resolveDownloadLimits(raw, warnings), warnings };
 }
@@ -24,7 +27,11 @@ describe('resolveDownloadLimits', () => {
   });
 
   it('accepts valid values without warning', () => {
-    const { limits, warnings } = resolve({ MAX_DOWNLOAD_MBPS: '45', READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: '150' });
+    const { limits, warnings } = resolve({
+      MAX_DOWNLOAD_MBPS: '45',
+      READ_AHEAD_SEC: '240',
+      READ_AHEAD_RESUME_SEC: '150',
+    });
     expect(limits).toEqual({ maxDownloadMbps: 45, readAheadSec: 240, readAheadResumeSec: 150 });
     expect(warnings).toEqual([]);
   });
@@ -34,14 +41,17 @@ describe('resolveDownloadLimits', () => {
     expect(resolve({ MAX_DOWNLOAD_MBPS: '7.5' }).limits.maxDownloadMbps).toBe(7.5);
   });
 
-  it.each(['abc', '0', '-10', '2', '4.99', ''])('rejects MAX_DOWNLOAD_MBPS=%j with a warning naming the key and the default, never clamping', (value) => {
-    const { limits, warnings } = resolve({ MAX_DOWNLOAD_MBPS: value });
-    expect(limits.maxDownloadMbps).toBe(150);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('MAX_DOWNLOAD_MBPS');
-    expect(warnings[0]).toContain('invalid');
-    expect(warnings[0]).toContain('default 150');
-  });
+  it.each(['abc', '0', '-10', '2', '4.99', ''])(
+    'rejects MAX_DOWNLOAD_MBPS=%j with a warning naming the key and the default, never clamping',
+    (value) => {
+      const { limits, warnings } = resolve({ MAX_DOWNLOAD_MBPS: value });
+      expect(limits.maxDownloadMbps).toBe(150);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('MAX_DOWNLOAD_MBPS');
+      expect(warnings[0]).toContain('invalid');
+      expect(warnings[0]).toContain('default 150');
+    },
+  );
 
   it.each(['fast', '0', '-5'])('rejects READ_AHEAD_SEC=%j and falls back to 180', (value) => {
     const { limits, warnings } = resolve({ READ_AHEAD_SEC: value });
@@ -67,18 +77,28 @@ describe('resolveDownloadLimits', () => {
     expect(warnings[0]).toContain('READ_AHEAD_RESUME_SEC');
     expect(warnings[0]).toContain('READ_AHEAD_SEC');
 
-    expect(resolve({ READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: '240' }).limits).toMatchObject({ readAheadSec: 180, readAheadResumeSec: 120 });
+    expect(resolve({ READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: '240' }).limits).toMatchObject({
+      readAheadSec: 180,
+      readAheadResumeSec: 120,
+    });
   });
 
   it('judges a lone resume value against the default window', () => {
-    expect(resolve({ READ_AHEAD_RESUME_SEC: '150' }).limits).toMatchObject({ readAheadSec: 180, readAheadResumeSec: 150 });
+    expect(resolve({ READ_AHEAD_RESUME_SEC: '150' }).limits).toMatchObject({
+      readAheadSec: 180,
+      readAheadResumeSec: 150,
+    });
     const { limits, warnings } = resolve({ READ_AHEAD_RESUME_SEC: '200' });
     expect(limits).toMatchObject({ readAheadSec: 180, readAheadResumeSec: 120 });
     expect(warnings).toHaveLength(1);
   });
 
   it('warns for every invalid key when several are wrong', () => {
-    const { limits, warnings } = resolve({ MAX_DOWNLOAD_MBPS: 'abc', READ_AHEAD_SEC: 'fast', READ_AHEAD_RESUME_SEC: '-1' });
+    const { limits, warnings } = resolve({
+      MAX_DOWNLOAD_MBPS: 'abc',
+      READ_AHEAD_SEC: 'fast',
+      READ_AHEAD_RESUME_SEC: '-1',
+    });
     expect(limits).toEqual({ maxDownloadMbps: 150, readAheadSec: 180, readAheadResumeSec: 120 });
     expect(warnings).toHaveLength(3);
   });

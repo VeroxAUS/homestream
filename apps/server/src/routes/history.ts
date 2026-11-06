@@ -16,7 +16,12 @@ function bound(name: 'from' | 'to', raw: string | undefined): number | undefined
   if (raw === undefined) return undefined;
   const parsed = parseTimeBound(raw, name);
   if (parsed === null) {
-    throw new AppError(400, 'invalid_request', `${name}: "${raw.slice(0, 40)}" is not a time.`, 'Use epoch milliseconds, an ISO timestamp or a day like 2026-11-06.');
+    throw new AppError(
+      400,
+      'invalid_request',
+      `${name}: "${raw.slice(0, 40)}" is not a time.`,
+      'Use epoch milliseconds, an ISO timestamp or a day like 2026-11-06.',
+    );
   }
   return parsed;
 }

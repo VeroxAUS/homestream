@@ -21,7 +21,8 @@ beforeAll(async () => {
     ['error', 'torbox', 'key rejected'],
     ['warn', 'gateway', 'busy'],
   ];
-  for (const [level, source, message] of seed) logEvent(deps, { level, source, message, sessionId: source === 'ffmpeg' ? 'sess-1' : null });
+  for (const [level, source, message] of seed)
+    logEvent(deps, { level, source, message, sessionId: source === 'ffmpeg' ? 'sess-1' : null });
 });
 afterAll(async () => {
   await rig.close();
@@ -48,7 +49,10 @@ describe('GET /api/logs', () => {
 
   it('filters by level, by source and by both', async () => {
     expect((await logs('?level=error')).body.events.map((e) => e.message)).toEqual(['key rejected', 'encoder crashed']);
-    expect((await logs('?source=ffmpeg')).body.events.map((e) => e.message)).toEqual(['encoder crashed', 'slow encoder']);
+    expect((await logs('?source=ffmpeg')).body.events.map((e) => e.message)).toEqual([
+      'encoder crashed',
+      'slow encoder',
+    ]);
     const both = (await logs('?level=error&source=ffmpeg')).body.events;
     expect(both).toEqual([expect.objectContaining({ message: 'encoder crashed', sessionId: 'sess-1' })]);
     expect((await logs('?level=info&source=torbox')).body.events).toEqual([]);
@@ -62,14 +66,24 @@ describe('GET /api/logs', () => {
     expect((await logs('?limit=abc')).status).toBe(400);
   });
 
-  it.each(['?level=fatal', '?level=', '?source=nope', '?level=ERROR'])('rejects %s with 400 and the standard error shape', async (query) => {
-    const { status, body } = await logs(query);
-    expect(status).toBe(400);
-    expect(ErrorResponseSchema.parse(body).error).toMatchObject({ code: 'invalid_request', message: expect.any(String), hint: expect.any(String) });
-  });
+  it.each(['?level=fatal', '?level=', '?source=nope', '?level=ERROR'])(
+    'rejects %s with 400 and the standard error shape',
+    async (query) => {
+      const { status, body } = await logs(query);
+      expect(status).toBe(400);
+      expect(ErrorResponseSchema.parse(body).error).toMatchObject({
+        code: 'invalid_request',
+        message: expect.any(String),
+        hint: expect.any(String),
+      });
+    },
+  );
 
   it('redacts rows even when the secret was only registered after the row was written', async () => {
-    logEvent({ db: rig.app.ctx.db, bus: rig.app.ctx.bus }, { level: 'info', source: 'server', message: 'late-secret-value-777 seen' });
+    logEvent(
+      { db: rig.app.ctx.db, bus: rig.app.ctx.bus },
+      { level: 'info', source: 'server', message: 'late-secret-value-777 seen' },
+    );
     registerSecret('late-secret-value-777');
     const text = (await rig.app.inject('/api/logs?limit=1000')).body;
     expect(text).not.toContain('late-secret-value-777');
@@ -77,7 +91,11 @@ describe('GET /api/logs', () => {
   });
 });
 
-async function capture(path: string, until: (text: string) => boolean, timeoutMs = 4000): Promise<{ text: string; type: string | null }> {
+async function capture(
+  path: string,
+  until: (text: string) => boolean,
+  timeoutMs = 4000,
+): Promise<{ text: string; type: string | null }> {
   const controller = new AbortController();
   const res = await fetch(`${base}${path}`, { signal: controller.signal });
   const reader = (res.body as ReadableStream<Uint8Array>).getReader();
@@ -85,7 +103,10 @@ async function capture(path: string, until: (text: string) => boolean, timeoutMs
   let text = '';
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline && !until(text)) {
-    const chunk = await Promise.race([reader.read(), new Promise<null>((resolve) => setTimeout(() => resolve(null), deadline - Date.now()))]);
+    const chunk = await Promise.race([
+      reader.read(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), deadline - Date.now())),
+    ]);
     if (!chunk || chunk.done) break;
     text += decoder.decode(chunk.value, { stream: true });
   }
@@ -97,15 +118,27 @@ const eventNames = (text: string): string[] => [...text.matchAll(/^event: (.+)$/
 
 describe('SSE /api/events', () => {
   it('delivers heartbeat, health (after POST /run), session.* and log events to two clients at once', async () => {
-    const wanted = (text: string): boolean => ['heartbeat', 'health', 'session.start', 'session.update', 'session.end', 'log'].every((name) => eventNames(text).includes(name));
+    const wanted = (text: string): boolean =>
+      ['heartbeat', 'health', 'session.start', 'session.update', 'session.end', 'log'].every((name) =>
+        eventNames(text).includes(name),
+      );
     const a = capture('/api/events', wanted);
     const b = capture('/api/events', wanted);
     await new Promise((resolve) => setTimeout(resolve, 150));
     await rig.run();
     rig.app.ctx.bus.emit('session.start', { sessionId: 's1', state: 'starting' });
-    rig.app.ctx.bus.emit('session.update', { sessionId: 's1', state: 'playing', positionSec: 4, decision: {}, encoder: { fps: 60, speed: 2.1 } });
+    rig.app.ctx.bus.emit('session.update', {
+      sessionId: 's1',
+      state: 'playing',
+      positionSec: 4,
+      decision: {},
+      encoder: { fps: 60, speed: 2.1 },
+    });
     rig.app.ctx.bus.emit('session.end', { sessionId: 's1' });
-    logEvent({ db: rig.app.ctx.db, bus: rig.app.ctx.bus }, { level: 'warn', source: 'server', message: 'rejected request' });
+    logEvent(
+      { db: rig.app.ctx.db, bus: rig.app.ctx.bus },
+      { level: 'warn', source: 'server', message: 'rejected request' },
+    );
     const [first, second] = await Promise.all([a, b]);
 
     for (const result of [first, second]) {
@@ -116,13 +149,18 @@ describe('SSE /api/events', () => {
     const snapshot = JSON.parse(health) as { overall: string; checks: { id: string }[] };
     expect(snapshot.checks.map((check) => check.id)).toContain('network');
     expect(first.text).toContain('"encoder":{"fps":60,"speed":2.1}');
-    expect(first.text).toMatch(/event: log\ndata: \{"id":\d+,"ts":\d+,"level":"warn","source":"server","message":"rejected request"/);
+    expect(first.text).toMatch(
+      /event: log\ndata: \{"id":\d+,"ts":\d+,"level":"warn","source":"server","message":"rejected request"/,
+    );
   });
 
   it('lets a client reconnect and read the current snapshots after another one left', async () => {
     const gone = await capture('/api/events', (text) => text.includes('event: heartbeat'));
     expect(gone.text).toContain('event: heartbeat');
-    const again = await capture('/api/events', (text) => eventNames(text).filter((name) => name === 'heartbeat').length >= 2);
+    const again = await capture(
+      '/api/events',
+      (text) => eventNames(text).filter((name) => name === 'heartbeat').length >= 2,
+    );
     expect(eventNames(again.text).filter((name) => name === 'heartbeat').length).toBeGreaterThanOrEqual(2);
     expect((await rig.app.inject('/api/health')).statusCode).toBe(200);
     expect((await rig.app.inject('/api/activity')).statusCode).toBe(200);

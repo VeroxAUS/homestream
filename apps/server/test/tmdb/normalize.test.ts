@@ -67,7 +67,11 @@ describe('normalizeSummary', () => {
   });
 
   it('defaults rating and overview when absent', () => {
-    expect(normalizeSummary({ id: 1, title: 'T' }, 'movie', images)).toMatchObject({ rating: 0, overview: '', year: null });
+    expect(normalizeSummary({ id: 1, title: 'T' }, 'movie', images)).toMatchObject({
+      rating: 0,
+      overview: '',
+      year: null,
+    });
   });
 });
 

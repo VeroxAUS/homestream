@@ -107,7 +107,10 @@ export class SourceProxy {
   private lastRefreshFailureAt = 0;
 
   constructor(private readonly options: SourceProxyOptions) {
-    this.cache = new BlockCache(options.globalCapBytes ?? GLOBAL_CAP_BYTES, options.perSourceCapBytes ?? PER_SOURCE_CAP_BYTES);
+    this.cache = new BlockCache(
+      options.globalCapBytes ?? GLOBAL_CAP_BYTES,
+      options.perSourceCapBytes ?? PER_SOURCE_CAP_BYTES,
+    );
     this.gate = new DownloadGate(options.maxDownloadMbps ?? DEFAULT_MAX_DOWNLOAD_MBPS);
     this.server = http.createServer((req, res) => void this.handle(req, res));
     this.server.keepAliveTimeout = 60_000;
@@ -209,18 +212,23 @@ export class SourceProxy {
 
   private async create(rawUrl: string, owner: string): Promise<SourceEntry> {
     const resolved = await this.options.resolveUrl(rawUrl);
-    const entry = new SourceEntry(rawUrl, resolved, { main: newKey(), extractor: newKey() }, {
-      upstream: this.upstream,
-      resolve: this.options.resolveUrl,
-      onRefresh: () => {
-        this.counters.linkRefreshes += 1;
-        this.options.logger.info('Stream link refreshed after it stopped working');
+    const entry = new SourceEntry(
+      rawUrl,
+      resolved,
+      { main: newKey(), extractor: newKey() },
+      {
+        upstream: this.upstream,
+        resolve: this.options.resolveUrl,
+        onRefresh: () => {
+          this.counters.linkRefreshes += 1;
+          this.options.logger.info('Stream link refreshed after it stopped working');
+        },
+        onRefreshFailed: () => this.reportRefreshFailure(),
+        gate: this.gate,
+        readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
+        resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
       },
-      onRefreshFailed: () => this.reportRefreshFailure(),
-      gate: this.gate,
-      readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
-      resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
-    });
+    );
     entry.firstOwner = owner;
     try {
       await entry.warm();
@@ -324,7 +332,15 @@ export class SourceProxy {
     if (!target) return fail(404);
     const run = /(?:^|&)run=(\d{1,9})(?:&|$)/.exec(query);
     try {
-      await serveSource(req, res, target.entry, target.consumer, run ? Number(run[1]) : null, this.cache, this.counters);
+      await serveSource(
+        req,
+        res,
+        target.entry,
+        target.consumer,
+        run ? Number(run[1]) : null,
+        this.cache,
+        this.counters,
+      );
     } catch {
       if (!res.headersSent) fail(502);
       else res.destroy();

@@ -31,7 +31,9 @@ export function main(argv, cwd = repoRoot()) {
   const whole = argv.includes('--all');
   const offenders = findLargeFiles(whole ? treeEntries(cwd) : stagedEntries(cwd));
   for (const { file, bytes } of offenders) {
-    console.error(`[large-files] ${file} is ${(bytes / 1024 / 1024).toFixed(2)} MB, over the ${LIMIT_BYTES / 1024 / 1024} MB limit`);
+    console.error(
+      `[large-files] ${file} is ${(bytes / 1024 / 1024).toFixed(2)} MB, over the ${LIMIT_BYTES / 1024 / 1024} MB limit`,
+    );
   }
   if (offenders.length > 0) {
     console.error('[large-files] Keep large binaries out of git (generate them, or download them in a setup script).');

@@ -11,7 +11,12 @@ import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 export const MARKERS = ['TODO', 'FIXME', 'HACK'];
 const SOURCE_EXTENSIONS = /\.(ts|tsx|mts|cts|js|mjs|cjs|kt|kts|css|html)$/;
 /** Generated output, vendored docs and this tool's own sources (which spell out the marker words). */
-const SKIP_PATHS = [/^droid-wiki\//, /^\.factory\//, /^scripts\/techdebt\.mjs$/, /^apps\/server\/test\/scripts\/techdebt\.test\.ts$/];
+const SKIP_PATHS = [
+  /^droid-wiki\//,
+  /^\.factory\//,
+  /^scripts\/techdebt\.mjs$/,
+  /^apps\/server\/test\/scripts\/techdebt\.test\.ts$/,
+];
 const MARKER_REGEX = new RegExp(`\\b(${MARKERS.join('|')})\\b`, 'g');
 
 export function packageOf(file) {
@@ -31,7 +36,9 @@ export function countMarkers(files) {
 }
 
 export function totals(counts) {
-  return Object.fromEntries(MARKERS.map((marker) => [marker, Object.values(counts).reduce((sum, c) => sum + c[marker], 0)]));
+  return Object.fromEntries(
+    MARKERS.map((marker) => [marker, Object.values(counts).reduce((sum, c) => sum + c[marker], 0)]),
+  );
 }
 
 export function overBudget(total, budget) {
@@ -63,8 +70,10 @@ export function main(root = repoRoot()) {
   console.log(`  ${'total'.padEnd(18)} ${MARKERS.map((m) => `${m} ${total[m]}`).join('  ')}`);
 
   const exceeded = overBudget(total, budget);
-  for (const marker of exceeded) console.error(`[techdebt] ${marker} count ${total[marker]} is over the budget of ${budget[marker] ?? 0}`);
-  if (exceeded.length > 0) console.error('[techdebt] Resolve the markers or record the debt in docs/TECH_DEBT.md and agree a new budget.');
+  for (const marker of exceeded)
+    console.error(`[techdebt] ${marker} count ${total[marker]} is over the budget of ${budget[marker] ?? 0}`);
+  if (exceeded.length > 0)
+    console.error('[techdebt] Resolve the markers or record the debt in docs/TECH_DEBT.md and agree a new budget.');
   return exceeded.length > 0 ? 1 : 0;
 }
 

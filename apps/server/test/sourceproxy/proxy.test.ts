@@ -30,7 +30,10 @@ interface Rig {
   probes: string[];
 }
 
-function rig(options: Partial<ConstructorParameters<typeof SourceProxy>[0]> = {}, target: () => string = () => cdn.url): Rig {
+function rig(
+  options: Partial<ConstructorParameters<typeof SourceProxy>[0]> = {},
+  target: () => string = () => cdn.url,
+): Rig {
   const resolves: string[] = [];
   const probes: string[] = [];
   const proxy = new SourceProxy({
@@ -50,7 +53,10 @@ function rig(options: Partial<ConstructorParameters<typeof SourceProxy>[0]> = {}
   return { proxy, resolves, probes };
 }
 
-async function read(url: string, range?: string): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
+async function read(
+  url: string,
+  range?: string,
+): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
   return new Promise((resolve, reject) => {
     http
       .get(url, { headers: range ? { Range: range } : {}, agent: false }, (res) => {
@@ -360,7 +366,9 @@ describe('expired links', () => {
     const dead = await startStubCdn({ size: 1 * MB });
     await dead.close();
     const { proxy } = rig({}, () => dead.url);
-    const error = await proxy.acquire('gw://dead', 'session-1').catch((e: unknown) => e as { code: string; message: string });
+    const error = await proxy
+      .acquire('gw://dead', 'session-1')
+      .catch((e: unknown) => e as { code: string; message: string });
     expect(error).toMatchObject({ code: 'stream_unavailable' });
     expect(JSON.stringify(error)).not.toContain('127.0.0.1');
     expect(proxy.stats().sources).toBe(0);
@@ -370,7 +378,10 @@ describe('expired links', () => {
 describe('lifetime', () => {
   it('shares one entry per gateway link and one probe, and drops it with the last owner', async () => {
     const { proxy, resolves, probes } = rig();
-    const [a, b] = await Promise.all([proxy.acquire('gw://shared', 'prefetch'), proxy.acquire('gw://shared', 'session-1')]);
+    const [a, b] = await Promise.all([
+      proxy.acquire('gw://shared', 'prefetch'),
+      proxy.acquire('gw://shared', 'session-1'),
+    ]);
     expect(a.url).toBe(b.url);
     expect(resolves).toHaveLength(1);
 
@@ -407,7 +418,9 @@ describe('lifetime', () => {
     const idle = await proxy.acquire('gw://idle', PREFETCH_OWNER);
     const playing = await proxy.acquire('gw://playing', PREFETCH_OWNER);
     await proxy.acquire('gw://playing', 'session-1');
-    await expect.poll(async () => (await read(idle.url, 'bytes=0-0')).status, { timeout: 5_000, interval: 200 }).toBe(404);
+    await expect
+      .poll(async () => (await read(idle.url, 'bytes=0-0')).status, { timeout: 5_000, interval: 200 })
+      .toBe(404);
     expect((await read(playing.url, 'bytes=0-0')).status).toBe(206);
   });
 

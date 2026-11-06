@@ -3,7 +3,10 @@ import { IDLE_EVICT_MS, KEEP_BEHIND, planDiskCap, type DiskSession } from '../..
 
 const MB = 1_000_000;
 
-function session(id: string, overrides: Partial<DiskSession> & { segments?: number[]; segmentBytes?: number } = {}): DiskSession {
+function session(
+  id: string,
+  overrides: Partial<DiskSession> & { segments?: number[]; segmentBytes?: number } = {},
+): DiskSession {
   const { segments = [], segmentBytes = MB, ...rest } = overrides;
   return {
     id,
@@ -62,8 +65,19 @@ describe('planDiskCap', () => {
   });
 
   it('stops the oldest idle session when the cap is still exceeded, but never the last one', () => {
-    const busy = session('busy', { segments: range(50, 59), segmentBytes: 10 * MB, playerSegment: 59, lastActivity: NOW });
-    const idle = session('idle', { segments: range(50, 59), segmentBytes: 10 * MB, playerSegment: 59, lastActivity: NOW - IDLE_EVICT_MS - 1, encoderRunning: false });
+    const busy = session('busy', {
+      segments: range(50, 59),
+      segmentBytes: 10 * MB,
+      playerSegment: 59,
+      lastActivity: NOW,
+    });
+    const idle = session('idle', {
+      segments: range(50, 59),
+      segmentBytes: 10 * MB,
+      playerSegment: 59,
+      lastActivity: NOW - IDLE_EVICT_MS - 1,
+      encoderRunning: false,
+    });
     const two = planDiskCap({ capBytes: 70 * MB, sessions: [busy, idle], now: NOW });
     expect(two.stopIdle).toEqual(['idle']);
     const alone = planDiskCap({ capBytes: 30 * MB, sessions: [idle], now: NOW });

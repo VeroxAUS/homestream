@@ -1,9 +1,26 @@
-import type { DeviceStat, HistoryItem, KeyedBucket, MostWatched, StatsGraphsResponse, StatsSummaryResponse } from '@homestream/shared';
+import type {
+  DeviceStat,
+  HistoryItem,
+  KeyedBucket,
+  MostWatched,
+  StatsGraphsResponse,
+  StatsSummaryResponse,
+} from '@homestream/shared';
 
 /** The columns of a play record the statistics read. */
 export type StatsPlay = Pick<
   HistoryItem,
-  'type' | 'tmdbId' | 'title' | 'showTitle' | 'deviceId' | 'deviceName' | 'deviceKind' | 'startedAt' | 'watchedSec' | 'bytesServed' | 'decision'
+  | 'type'
+  | 'tmdbId'
+  | 'title'
+  | 'showTitle'
+  | 'deviceId'
+  | 'deviceName'
+  | 'deviceKind'
+  | 'startedAt'
+  | 'watchedSec'
+  | 'bytesServed'
+  | 'decision'
 >;
 
 const TOP_LIMIT = 10;
@@ -42,7 +59,9 @@ function mostWatched(plays: StatsPlay[], type: 'movie' | 'tv'): MostWatched[] {
     add(group, play);
     groups.set(play.tmdbId, group);
   }
-  return [...groups.values()].sort((a, b) => byPlaysThenWatch(a, b) || a.title.localeCompare(b.title)).slice(0, TOP_LIMIT);
+  return [...groups.values()]
+    .sort((a, b) => byPlaysThenWatch(a, b) || a.title.localeCompare(b.title))
+    .slice(0, TOP_LIMIT);
 }
 
 function deviceStats(plays: StatsPlay[]): DeviceStat[] {
@@ -71,7 +90,9 @@ export function summarize(plays: StatsPlay[], days: number, now: number): StatsS
     bytesServed: inRange.reduce((sum, play) => sum + play.bytesServed, 0),
     mostWatchedMovies: mostWatched(inRange, 'movie'),
     mostWatchedShows: mostWatched(inRange, 'tv'),
-    topDevices: deviceStats(inRange).sort((a, b) => b.watchSec - a.watchSec || b.plays - a.plays || a.deviceId.localeCompare(b.deviceId)).slice(0, TOP_LIMIT),
+    topDevices: deviceStats(inRange)
+      .sort((a, b) => b.watchSec - a.watchSec || b.plays - a.plays || a.deviceId.localeCompare(b.deviceId))
+      .slice(0, TOP_LIMIT),
   };
 }
 
@@ -81,7 +102,11 @@ function dayKey(date: Date): string {
 }
 
 /** What the stored decision says about the output: dynamic range (tone-mapped wins over sdr), codec and resolution. */
-export function decisionKeys(decision: StatsPlay['decision']): { dynamicRange: string; codec: string; resolution: string } {
+export function decisionKeys(decision: StatsPlay['decision']): {
+  dynamicRange: string;
+  codec: string;
+  resolution: string;
+} {
   const range = decision?.toneMapped ? 'tone-mapped' : decision?.dynamicRange;
   return {
     dynamicRange: range || 'unknown',
@@ -102,7 +127,9 @@ function keyed(plays: StatsPlay[], pick: (play: StatsPlay) => string, order: rea
     const index = order.indexOf(key);
     return index < 0 ? order.length : index;
   };
-  return [...groups.values()].sort((a, b) => rank(a.key) - rank(b.key) || byPlaysThenWatch(a, b) || a.key.localeCompare(b.key));
+  return [...groups.values()].sort(
+    (a, b) => rank(a.key) - rank(b.key) || byPlaysThenWatch(a, b) || a.key.localeCompare(b.key),
+  );
 }
 
 function resolutionHeight(key: string): number {

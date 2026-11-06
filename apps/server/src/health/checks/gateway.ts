@@ -5,9 +5,13 @@ import { failure, type CheckOutcome } from './types.js';
 
 export const GATEWAY_CHECK_TIMEOUT_MS = 10_000;
 
-export type HealthFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>;
+export type HealthFetch = (
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal },
+) => Promise<Response>;
 
-const UNREACHABLE_HINT = 'Gateway unreachable - check your internet connection or the AIOStreams instance, then run the check again.';
+const UNREACHABLE_HINT =
+  'Gateway unreachable - check your internet connection or the AIOStreams instance, then run the check again.';
 
 export interface GatewayCheckDeps {
   config: Pick<Config, 'gatewayManifestUrl' | 'configFile'>;
@@ -43,12 +47,17 @@ export async function checkGateway(deps: GatewayCheckDeps): Promise<CheckOutcome
 
   let response: Response;
   try {
-    response = await deps.fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(deps.timeoutMs ?? GATEWAY_CHECK_TIMEOUT_MS) });
+    response = await deps.fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(deps.timeoutMs ?? GATEWAY_CHECK_TIMEOUT_MS),
+    });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
     return failure(
       timedOut ? 'The gateway did not answer within 10 seconds.' : 'The gateway could not be reached.',
-      timedOut ? 'The AIOStreams instance is slow or down. Check that it is running, then run the check again.' : UNREACHABLE_HINT,
+      timedOut
+        ? 'The AIOStreams instance is slow or down. Check that it is running, then run the check again.'
+        : UNREACHABLE_HINT,
       base,
     );
   }

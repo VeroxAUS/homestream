@@ -56,7 +56,15 @@ describe('parseHlsFileName', () => {
     expect(parseHlsFileName('init.mp4')).toEqual({ kind: 'init' });
     expect(parseHlsFileName('seg-12.m4s')).toEqual({ kind: 'segment', index: 12, extension: 'm4s' });
     expect(parseHlsFileName('seg-0.ts')).toEqual({ kind: 'segment', index: 0, extension: 'ts' });
-    for (const bad of ['../index.m3u8', 'seg-1.mp4', 'seg-.ts', 'seg-1.ts.tmp', 'enc.m3u8', 'init-ready.mp4', 'seg-99999999.ts']) {
+    for (const bad of [
+      '../index.m3u8',
+      'seg-1.mp4',
+      'seg-.ts',
+      'seg-1.ts.tmp',
+      'enc.m3u8',
+      'init-ready.mp4',
+      'seg-99999999.ts',
+    ]) {
       expect(parseHlsFileName(bad)).toBeNull();
     }
   });

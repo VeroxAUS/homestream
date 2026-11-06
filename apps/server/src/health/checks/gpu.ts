@@ -45,7 +45,9 @@ export async function checkGpu(deps: { run: CommandRunner; command?: string }): 
   if (!reading) {
     const missing = result.failure === 'ENOENT';
     return failure(
-      missing ? 'nvidia-smi was not found, so the GPU cannot be read.' : 'The GPU could not be read (nvidia-smi failed).',
+      missing
+        ? 'nvidia-smi was not found, so the GPU cannot be read.'
+        : 'The GPU could not be read (nvidia-smi failed).',
       'Install or repair the NVIDIA driver and restart the PC if the driver was just updated. Without the GPU, HomeStream cannot encode video.',
       { available: false },
     );

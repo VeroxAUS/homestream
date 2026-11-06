@@ -15,7 +15,10 @@ const download = {
 describe('download schemas', () => {
   it('accepts a pending movie download and an episode with season and episode', () => {
     expect(DownloadSchema.parse(download)).toEqual(download);
-    expect(DownloadSchema.parse({ ...download, mediaType: 'tv', season: 1, episode: 2 })).toMatchObject({ season: 1, episode: 2 });
+    expect(DownloadSchema.parse({ ...download, mediaType: 'tv', season: 1, episode: 2 })).toMatchObject({
+      season: 1,
+      episode: 2,
+    });
   });
 
   it('rejects out-of-range progress and unknown states', () => {

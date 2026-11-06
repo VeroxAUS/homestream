@@ -82,7 +82,17 @@ function toRow(raw: RawRow): DownloadRow {
 
 export type NewDownload = Pick<
   DownloadRow,
-  'id' | 'mediaKey' | 'mediaType' | 'tmdbId' | 'season' | 'episode' | 'queryKey' | 'title' | 'infoHash' | 'createdAt' | 'nextPollAt'
+  | 'id'
+  | 'mediaKey'
+  | 'mediaType'
+  | 'tmdbId'
+  | 'season'
+  | 'episode'
+  | 'queryKey'
+  | 'title'
+  | 'infoHash'
+  | 'createdAt'
+  | 'nextPollAt'
 >;
 
 export type DownloadPatch = Partial<
@@ -183,7 +193,9 @@ export class DownloadStore {
 
   unnotifiedReady(): DownloadRow[] {
     const rows = this.db
-      .prepare(`SELECT ${COLUMNS} FROM pending_downloads WHERE status = 'ready' AND notified_at IS NULL ORDER BY created_at ASC`)
+      .prepare(
+        `SELECT ${COLUMNS} FROM pending_downloads WHERE status = 'ready' AND notified_at IS NULL ORDER BY created_at ASC`,
+      )
       .all() as unknown as RawRow[];
     return rows.map(toRow);
   }
@@ -203,6 +215,8 @@ export class DownloadStore {
   }
 
   pruneFinished(now: number): void {
-    this.db.prepare(`DELETE FROM pending_downloads WHERE status != 'pending' AND updated_at < ?`).run(now - KEEP_FINISHED_MS);
+    this.db
+      .prepare(`DELETE FROM pending_downloads WHERE status != 'pending' AND updated_at < ?`)
+      .run(now - KEEP_FINISHED_MS);
   }
 }

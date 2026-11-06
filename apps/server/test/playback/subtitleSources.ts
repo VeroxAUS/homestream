@@ -30,7 +30,9 @@ function srtTime(sec: number): string {
 }
 
 export function toSrt(cues: Cue[]): string {
-  return cues.map((cue, i) => `${i + 1}\n${srtTime(cue.startSec)} --> ${srtTime(cue.endSec)}\n${cue.text}\n`).join('\n');
+  return cues
+    .map((cue, i) => `${i + 1}\n${srtTime(cue.startSec)} --> ${srtTime(cue.endSec)}\n${cue.text}\n`)
+    .join('\n');
 }
 
 interface Bitmap {
@@ -46,8 +48,21 @@ async function renderText(text: string, dir: string): Promise<Bitmap> {
   const raw = path.join(dir, 'glyphs.raw');
   const filter = `drawtext=fontfile='${FONT}':text='${text}':fontsize=34:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2`;
   await run('ffmpeg', [
-    '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=c=gray:s=${width}x${height}:d=1,${filter}`,
-    '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', raw,
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    `color=c=gray:s=${width}x${height}:d=1,${filter}`,
+    '-frames:v',
+    '1',
+    '-f',
+    'rawvideo',
+    '-pix_fmt',
+    'gray',
+    raw,
   ]);
   const gray = readFileSync(raw);
   const pixels = new Uint8Array(width * height);
@@ -85,12 +100,20 @@ function encodeField(bitmap: Bitmap, firstLine: number): Buffer {
     if (nibbles.length % 2 === 1) nibbles.push(0);
   }
   const bytes = Buffer.alloc(nibbles.length / 2);
-  for (let i = 0; i < bytes.length; i += 1) bytes[i] = ((nibbles[2 * i] as number) << 4) | (nibbles[2 * i + 1] as number);
+  for (let i = 0; i < bytes.length; i += 1)
+    bytes[i] = ((nibbles[2 * i] as number) << 4) | (nibbles[2 * i + 1] as number);
   return bytes;
 }
 
 function area(x1: number, x2: number, y1: number, y2: number): Buffer {
-  return Buffer.from([x1 >> 4, ((x1 & 0xf) << 4) | (x2 >> 8), x2 & 0xff, y1 >> 4, ((y1 & 0xf) << 4) | (y2 >> 8), y2 & 0xff]);
+  return Buffer.from([
+    x1 >> 4,
+    ((x1 & 0xf) << 4) | (x2 >> 8),
+    x2 & 0xff,
+    y1 >> 4,
+    ((y1 & 0xf) << 4) | (y2 >> 8),
+    y2 & 0xff,
+  ]);
 }
 
 function spuPacket(bitmap: Bitmap, durationMs: number): Buffer {
@@ -154,7 +177,9 @@ export async function writeVobsub(dir: string, name: string, cues: Cue[], langua
   for (const cue of cues) {
     const bitmap = await renderText(cue.text, dir);
     const startMs = Math.round(cue.startSec * 1000);
-    stamps.push(`timestamp: ${new Date(startMs).toISOString().slice(11, 19)}:${String(startMs % 1000).padStart(3, '0')}, filepos: ${(sectors.length * SECTOR).toString(16).padStart(9, '0')}`);
+    stamps.push(
+      `timestamp: ${new Date(startMs).toISOString().slice(11, 19)}:${String(startMs % 1000).padStart(3, '0')}, filepos: ${(sectors.length * SECTOR).toString(16).padStart(9, '0')}`,
+    );
     sectors.push(sector(spuPacket(bitmap, (cue.endSec - cue.startSec) * 1000), startMs));
   }
   const palette = ['000000', '000000', 'ffffff', 'ff0000', ...Array<string>(12).fill('000000')].join(', ');
@@ -187,12 +212,45 @@ export async function generateHdrBitmapSource(dir: string): Promise<string> {
   const idx = await writeVobsub(dir, 'bitmap-hdr', BITMAP_CUES.slice(0, 1), 'en');
   const file = path.join(dir, 'source-hdr-bitmap.mkv');
   await run('ffmpeg', [
-    '-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=24,format=p010le',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', idx, '-t', '12',
-    '-map', '0:v', '-map', '1:a', '-map', '2:s',
-    '-c:v', 'hevc_nvenc', '-profile:v', 'main10', '-pix_fmt', 'p010le', '-tag:v', 'hvc1',
-    '-bsf:v', 'hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9',
-    '-c:a', 'ac3', '-ac', '6', '-c:s', 'copy', file,
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=3840x2160:rate=24,format=p010le',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000',
+    '-i',
+    idx,
+    '-t',
+    '12',
+    '-map',
+    '0:v',
+    '-map',
+    '1:a',
+    '-map',
+    '2:s',
+    '-c:v',
+    'hevc_nvenc',
+    '-profile:v',
+    'main10',
+    '-pix_fmt',
+    'p010le',
+    '-tag:v',
+    'hvc1',
+    '-bsf:v',
+    'hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9',
+    '-c:a',
+    'ac3',
+    '-ac',
+    '6',
+    '-c:s',
+    'copy',
+    file,
   ]);
   return file;
 }
@@ -207,23 +265,100 @@ export async function generateSubtitleSources(dir: string): Promise<SubtitleSour
 
   const multi = path.join(dir, 'source-subs.mkv');
   await run('ffmpeg', [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-f', 'lavfi', '-i', `testsrc2=size=${CANVAS.width}x${CANVAS.height}:rate=24`,
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
-    '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000',
-    '-f', 'lavfi', '-i', 'sine=frequency=1320:sample_rate=48000',
-    '-i', textSrt, '-i', textPor, '-i', idx,
-    '-t', '600',
-    '-map', '0:v', '-map', '1:a', '-map', '2:a', '-map', '3:a', '-map', '4:s', '-map', '5:s', '-map', '6:s',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '48',
-    '-c:a:0', 'aac', '-ac:a:0', '2', '-c:a:1', 'ac3', '-ac:a:1', '6', '-c:a:2', 'aac', '-ac:a:2', '2',
-    '-c:s:0', 'copy', '-c:s:1', 'copy', '-c:s:2', 'copy',
-    '-metadata:s:a:0', 'language=por', '-metadata:s:a:1', 'language=eng', '-metadata:s:a:2', 'language=fra',
-    '-metadata:s:a:1', 'title=English 5.1',
-    '-metadata:s:s:0', 'language=eng', '-metadata:s:s:0', 'title=English',
-    '-metadata:s:s:1', 'language=por', '-metadata:s:s:1', 'title=Portuguese',
-    '-metadata:s:s:2', 'language=eng', '-metadata:s:s:2', 'title=English (bitmap)',
-    '-disposition:a', '0', '-disposition:a:0', 'default', '-disposition:s', '0',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    `testsrc2=size=${CANVAS.width}x${CANVAS.height}:rate=24`,
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=880:sample_rate=48000',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=1320:sample_rate=48000',
+    '-i',
+    textSrt,
+    '-i',
+    textPor,
+    '-i',
+    idx,
+    '-t',
+    '600',
+    '-map',
+    '0:v',
+    '-map',
+    '1:a',
+    '-map',
+    '2:a',
+    '-map',
+    '3:a',
+    '-map',
+    '4:s',
+    '-map',
+    '5:s',
+    '-map',
+    '6:s',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'ultrafast',
+    '-pix_fmt',
+    'yuv420p',
+    '-g',
+    '48',
+    '-c:a:0',
+    'aac',
+    '-ac:a:0',
+    '2',
+    '-c:a:1',
+    'ac3',
+    '-ac:a:1',
+    '6',
+    '-c:a:2',
+    'aac',
+    '-ac:a:2',
+    '2',
+    '-c:s:0',
+    'copy',
+    '-c:s:1',
+    'copy',
+    '-c:s:2',
+    'copy',
+    '-metadata:s:a:0',
+    'language=por',
+    '-metadata:s:a:1',
+    'language=eng',
+    '-metadata:s:a:2',
+    'language=fra',
+    '-metadata:s:a:1',
+    'title=English 5.1',
+    '-metadata:s:s:0',
+    'language=eng',
+    '-metadata:s:s:0',
+    'title=English',
+    '-metadata:s:s:1',
+    'language=por',
+    '-metadata:s:s:1',
+    'title=Portuguese',
+    '-metadata:s:s:2',
+    'language=eng',
+    '-metadata:s:s:2',
+    'title=English (bitmap)',
+    '-disposition:a',
+    '0',
+    '-disposition:a:0',
+    'default',
+    '-disposition:s',
+    '0',
     multi,
   ]);
   return { multi };

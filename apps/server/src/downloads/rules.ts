@@ -86,7 +86,12 @@ export function judgeItem(
   if (STALLED_STATE.test(item.downloadState) && stalledFor >= limits.stallGiveUpMs) {
     return { kind: 'failed', reason: 'stalled' };
   }
-  return { kind: 'active', progress: Math.min(1, Math.max(0, item.progress)), etaSec: item.etaSec, state: item.downloadState };
+  return {
+    kind: 'active',
+    progress: Math.min(1, Math.max(0, item.progress)),
+    etaSec: item.etaSec,
+    state: item.downloadState,
+  };
 }
 
 export function matchesHash(item: TorboxItem, infoHash: string): boolean {

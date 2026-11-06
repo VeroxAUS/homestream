@@ -27,7 +27,12 @@ function round(value: number, digits = 1): number {
 
 async function volume(dir: string, probe: DiskProbe): Promise<Volume> {
   const space = await probe(dir);
-  return { dir, drive: path.parse(path.resolve(dir)).root.replace(/[\\/]+$/, ''), freeGb: round(space.freeBytes / GIB, 2), totalGb: round(space.totalBytes / GIB) };
+  return {
+    dir,
+    drive: path.parse(path.resolve(dir)).root.replace(/[\\/]+$/, ''),
+    freeGb: round(space.freeBytes / GIB, 2),
+    totalGb: round(space.totalBytes / GIB),
+  };
 }
 
 export async function checkDisk({ config, probe, usage }: DiskCheckDeps): Promise<CheckOutcome> {
@@ -54,7 +59,9 @@ export async function checkDisk({ config, probe, usage }: DiskCheckDeps): Promis
     thresholds: { warnFreeGb: DISK_WARN_FREE_GB, errorFreeGb: DISK_ERROR_FREE_GB },
   };
 
-  const tight = [transcode, ...(data.drive === transcode.drive ? [] : [data])].sort((a, b) => a.freeGb - b.freeGb)[0] as Volume;
+  const tight = [transcode, ...(data.drive === transcode.drive ? [] : [data])].sort(
+    (a, b) => a.freeGb - b.freeGb,
+  )[0] as Volume;
   const summary = `${tight.freeGb} GB free on ${tight.drive}; transcode cache ${details.transcodeUsageGb} of ${config.transcodeMaxGb} GB.`;
   const where = `${tight.drive} (${tight.dir === transcode.dir ? 'TRANSCODE_DIR' : 'DATA_DIR'})`;
   if (tight.freeGb < DISK_ERROR_FREE_GB) {

@@ -74,7 +74,8 @@ export const HistoryItemSchema = z.object({
 });
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
-const blankToUndefined = (value: unknown): unknown => (typeof value === 'string' && value.trim() === '' ? undefined : value);
+const blankToUndefined = (value: unknown): unknown =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 /** `from`/`to`: epoch ms, an ISO timestamp, or a `YYYY-MM-DD` day (local time; `to` then includes that whole day). */
 const TimeBoundSchema = z.preprocess(blankToUndefined, z.string().trim().max(40).optional());
@@ -136,7 +137,15 @@ export const StatsSummaryResponseSchema = z.object({
 });
 export type StatsSummaryResponse = z.infer<typeof StatsSummaryResponseSchema>;
 
-export const DAY_OF_WEEK_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+export const DAY_OF_WEEK_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
 
 export const PlaysBucketSchema = z.object({ plays: z.number().int(), watchSec: z.number() });
 export const KeyedBucketSchema = PlaysBucketSchema.extend({ key: z.string() });

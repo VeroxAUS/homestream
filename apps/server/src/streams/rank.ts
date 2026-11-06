@@ -52,7 +52,11 @@ export function deviceMaxRank(profile: Pick<CapabilityProfile, 'maxWidth' | 'max
  * When none fits, the first-ranked cached streams of the lowest resolution. When nothing is cached, only the recommended
  * stream (an uncached one is never retried).
  */
-export function startCandidates(ranked: StreamOption[], maxRank: number | null, limit: number): { streams: StreamOption[]; cached: boolean } {
+export function startCandidates(
+  ranked: StreamOption[],
+  maxRank: number | null,
+  limit: number,
+): { streams: StreamOption[]; cached: boolean } {
   const cached = ranked.filter((option) => option.cached);
   if (cached.length === 0) {
     const first = recommendStream(ranked, maxRank);
@@ -61,7 +65,10 @@ export function startCandidates(ranked: StreamOption[], maxRank: number | null, 
   const fitting = maxRank === null ? cached : cached.filter((option) => RESOLUTION_RANK[option.resolution] <= maxRank);
   if (fitting.length > 0) return { streams: fitting.slice(0, limit), cached: true };
   const lowest = Math.min(...cached.map((option) => RESOLUTION_RANK[option.resolution]));
-  return { streams: cached.filter((option) => RESOLUTION_RANK[option.resolution] === lowest).slice(0, limit), cached: true };
+  return {
+    streams: cached.filter((option) => RESOLUTION_RANK[option.resolution] === lowest).slice(0, limit),
+    cached: true,
+  };
 }
 
 /**

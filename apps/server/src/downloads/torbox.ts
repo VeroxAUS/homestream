@@ -2,7 +2,10 @@ import type { TorboxItem } from './rules.js';
 
 export const TORBOX_LIST_TIMEOUT_MS = 30_000;
 
-export type TorboxFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>;
+export type TorboxFetch = (
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal },
+) => Promise<Response>;
 
 /** `auth`: the key was refused. `unavailable`: network failure, rate limit, TorBox error or an unreadable answer. */
 export class TorboxError extends Error {
@@ -24,7 +27,9 @@ function toItem(raw: unknown): TorboxItem | null {
   const alternatives = Array.isArray(item.alternative_hashes) ? item.alternative_hashes : [];
   return {
     hash: item.hash.toLowerCase(),
-    alternativeHashes: alternatives.filter((hash): hash is string => typeof hash === 'string').map((hash) => hash.toLowerCase()),
+    alternativeHashes: alternatives
+      .filter((hash): hash is string => typeof hash === 'string')
+      .map((hash) => hash.toLowerCase()),
     name: typeof item.name === 'string' ? item.name : '',
     downloadState: typeof item.download_state === 'string' ? item.download_state : '',
     progress: Number.isFinite(progress) ? progress : 0,
@@ -65,7 +70,8 @@ export class TorboxClient {
     } catch {
       throw new TorboxError('unavailable', 'TorBox did not answer');
     }
-    if (response.status === 401 || response.status === 403) throw new TorboxError('auth', `TorBox refused the API key (HTTP ${response.status})`);
+    if (response.status === 401 || response.status === 403)
+      throw new TorboxError('auth', `TorBox refused the API key (HTTP ${response.status})`);
     if (!response.ok) throw new TorboxError('unavailable', `TorBox answered HTTP ${response.status}`);
     try {
       return parseMylist(await response.json());

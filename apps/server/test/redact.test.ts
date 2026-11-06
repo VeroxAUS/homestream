@@ -15,7 +15,9 @@ afterEach(() => clearSecrets());
 describe('redact', () => {
   it('hides the gateway path segments of a registered URL', () => {
     registerSecretUrl(GATEWAY);
-    const out = redact(`fetching ${GATEWAY} and https://gw.example.test/stremio/aaaa1111-uuid/ZZsecretBlob987654/stream/movie/tt1.json`);
+    const out = redact(
+      `fetching ${GATEWAY} and https://gw.example.test/stremio/aaaa1111-uuid/ZZsecretBlob987654/stream/movie/tt1.json`,
+    );
     expect(out).not.toContain('aaaa1111-uuid');
     expect(out).not.toContain('ZZsecretBlob987654');
     expect(out).toContain('<redacted>');
@@ -73,7 +75,9 @@ describe('redact', () => {
   it('keeps loopback addresses readable when the gateway itself is a local stub', () => {
     registerSecretUrl('http://127.0.0.1:9000/stremio/stubuser1/stubtoken22/manifest.json');
     expect(redact('proxy at http://127.0.0.1:8650/src/key')).toBe('proxy at http://127.0.0.1:8650/src/key');
-    expect(redact('http://127.0.0.1:9000/stremio/stubuser1/stubtoken22/stream/movie/tt1.json')).not.toContain('stubtoken22');
+    expect(redact('http://127.0.0.1:9000/stremio/stubuser1/stubtoken22/stream/movie/tt1.json')).not.toContain(
+      'stubtoken22',
+    );
   });
 
   it('leaves ordinary text alone', () => {
@@ -105,7 +109,8 @@ describe('displayGatewayUrl', () => {
   it('shows only a redacted host class, never host, path or id', () => {
     const label = displayGatewayUrl(GATEWAY);
     expect(label).toBe('aiostreams (redacted)');
-    for (const needle of ['gw.example.test', 'stremio', 'aaaa1111', 'ZZsecretBlob987654', 'manifest.json']) expect(label).not.toContain(needle);
+    for (const needle of ['gw.example.test', 'stremio', 'aaaa1111', 'ZZsecretBlob987654', 'manifest.json'])
+      expect(label).not.toContain(needle);
     expect(displayGatewayUrl(null)).toBeNull();
     expect(displayGatewayUrl('  ')).toBeNull();
   });

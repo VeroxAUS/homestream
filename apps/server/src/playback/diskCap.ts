@@ -65,7 +65,9 @@ export function planDiskCap(input: DiskPlanInput): DiskPlan {
   if (total > PARK_RATIO * capBytes) {
     const byAge = [...sessions].sort((a, b) => a.lastActivity - b.lastActivity);
     for (const session of byAge) {
-      const behind = [...session.sizes.keys()].filter((index) => index < session.playerSegment - KEEP_BEHIND).sort((a, b) => a - b);
+      const behind = [...session.sizes.keys()]
+        .filter((index) => index < session.playerSegment - KEEP_BEHIND)
+        .sort((a, b) => a - b);
       for (const index of behind) {
         if (total <= LOW_WATER_RATIO * capBytes) break;
         evictIndex(session, index);
@@ -94,12 +96,16 @@ export function planDiskCap(input: DiskPlanInput): DiskPlan {
 
   if (total > capBytes) {
     const stopped = new Set(plan.stopIdle);
-    const ranked = sessions.filter((session) => !stopped.has(session.id)).sort((a, b) => (bytes.get(b.id) ?? 0) - (bytes.get(a.id) ?? 0));
+    const ranked = sessions
+      .filter((session) => !stopped.has(session.id))
+      .sort((a, b) => (bytes.get(b.id) ?? 0) - (bytes.get(a.id) ?? 0));
     for (const session of ranked) {
       const taken = evicted.get(session.id) as Set<number>;
       const protectedIndex = (index: number): boolean =>
         (index >= session.playerSegment && index <= session.playerSegment + 5) || index >= session.headSegment - 2;
-      const candidates = [...session.sizes.keys()].filter((index) => !taken.has(index) && !protectedIndex(index)).sort((a, b) => a - b);
+      const candidates = [...session.sizes.keys()]
+        .filter((index) => !taken.has(index) && !protectedIndex(index))
+        .sort((a, b) => a - b);
       for (const index of candidates) {
         if (total <= LOW_WATER_RATIO * capBytes) break;
         evictIndex(session, index);
@@ -108,12 +114,17 @@ export function planDiskCap(input: DiskPlanInput): DiskPlan {
   }
 
   for (const [id, indices] of evicted) {
-    if (indices.size > 0) plan.evict.set(id, [...indices].sort((a, b) => a - b));
+    if (indices.size > 0)
+      plan.evict.set(
+        id,
+        [...indices].sort((a, b) => a - b),
+      );
   }
 
   if (total < RESUME_RATIO * capBytes) {
     for (const session of sessions) {
-      if (!session.encoderRunning && session.headSegment - session.playerSegment < RESUME_LEAD) plan.resume.push(session.id);
+      if (!session.encoderRunning && session.headSegment - session.playerSegment < RESUME_LEAD)
+        plan.resume.push(session.id);
     }
   }
   return plan;

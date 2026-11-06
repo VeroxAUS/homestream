@@ -1,4 +1,12 @@
-import type { Episode, MediaSummary, MediaType, MovieDetails, Season, SeasonSummary, ShowDetails } from '@homestream/shared';
+import type {
+  Episode,
+  MediaSummary,
+  MediaType,
+  MovieDetails,
+  Season,
+  SeasonSummary,
+  ShowDetails,
+} from '@homestream/shared';
 
 export const IMAGE_SIZES = { poster: 'w342', backdrop: 'w1280', still: 'w300' } as const;
 
@@ -127,7 +135,14 @@ export function normalizeShow(raw: unknown, config: ImageConfig): ShowDetails | 
     .flatMap((season) => normalizeSeasonSummary(season, config) ?? [])
     .filter((season) => season.seasonNumber > 0)
     .sort((a, b) => a.seasonNumber - b.seasonNumber);
-  return { ...summary, type: 'tv', genres: genreNames(item), imdbId: imdbIdOf(item), originalLanguage: originalLanguageOf(item), seasons };
+  return {
+    ...summary,
+    type: 'tv',
+    genres: genreNames(item),
+    imdbId: imdbIdOf(item),
+    originalLanguage: originalLanguageOf(item),
+    seasons,
+  };
 }
 
 function normalizeEpisode(raw: Json, config: ImageConfig): Episode | null {

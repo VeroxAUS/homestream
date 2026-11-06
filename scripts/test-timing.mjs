@@ -39,7 +39,10 @@ export function main(argv, cwd = process.cwd()) {
   const reportsDir = path.join(cwd, argv[0] ?? 'reports');
   const files = findJsonReports(reportsDir);
   const perPackage = files.filter((file) => path.dirname(file) !== reportsDir);
-  const reports = (perPackage.length > 0 ? perPackage : files).map((file) => ({ file, json: JSON.parse(readFileSync(file, 'utf8')) }));
+  const reports = (perPackage.length > 0 ? perPackage : files).map((file) => ({
+    file,
+    json: JSON.parse(readFileSync(file, 'utf8')),
+  }));
   if (reports.length === 0) {
     console.error(`[test-timing] no vitest.json under ${reportsDir}. Run pnpm test:report first.`);
     return 1;

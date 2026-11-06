@@ -77,15 +77,25 @@ function isHeldBack(priority: Priority, guard: Guard | null): boolean {
  * Picks the waiter to serve next. Pure so the order can be tested without time passing. With a guard, encoders that
  * are not at risk of stalling are skipped, aging included, so the session about to stall gets the tokens first.
  */
-export function pickNext<T extends { since: number; seq: number; priority: PriorityInput }>(waiters: readonly T[], nowMs: number, guard: Guard | null = null): T | undefined {
+export function pickNext<T extends { since: number; seq: number; priority: PriorityInput }>(
+  waiters: readonly T[],
+  nowMs: number,
+  guard: Guard | null = null,
+): T | undefined {
   let best: T | undefined;
   let bestKey: [number, number, number] = [0, 0, 0];
   for (const waiter of waiters) {
     const priority = resolvePriority(waiter.priority);
     if (isHeldBack(priority, guard)) continue;
     const aged = nowMs - waiter.since >= AGING_MS;
-    const key: [number, number, number] = aged ? [-1, waiter.since, waiter.seq] : [priority.rank, priority.lead, waiter.seq];
-    if (!best || key[0] < bestKey[0] || (key[0] === bestKey[0] && (key[1] < bestKey[1] || (key[1] === bestKey[1] && key[2] < bestKey[2])))) {
+    const key: [number, number, number] = aged
+      ? [-1, waiter.since, waiter.seq]
+      : [priority.rank, priority.lead, waiter.seq];
+    if (
+      !best ||
+      key[0] < bestKey[0] ||
+      (key[0] === bestKey[0] && (key[1] < bestKey[1] || (key[1] === bestKey[1] && key[2] < bestKey[2])))
+    ) {
       best = waiter;
       bestKey = key;
     }
@@ -134,7 +144,15 @@ export class DownloadGate {
     this.markLimited(now);
     if (isAtRisk(resolved)) this.atRiskAt = now;
     return new Promise<void>((resolve) => {
-      const waiter: Waiter = { bytes, priority, since: now, seq: (this.seq += 1), grant: resolve, onAbort: null, signal };
+      const waiter: Waiter = {
+        bytes,
+        priority,
+        since: now,
+        seq: (this.seq += 1),
+        grant: resolve,
+        onAbort: null,
+        signal,
+      };
       if (signal) {
         waiter.onAbort = () => {
           const at = this.waiters.indexOf(waiter);
@@ -207,7 +225,10 @@ export class DownloadGate {
       if (!next) {
         // Everyone waiting is held back for a session about to stall: look again when it has been quiet long enough or the reserve is full.
         const quiet = this.atRiskAt + LOW_LEAD_MEMORY_MS - now + 1;
-        const wait = guard && !guard.surplus ? Math.min(quiet, Math.ceil(this.bucket.msUntilAvailable(now, this.reserveBytes))) : quiet;
+        const wait =
+          guard && !guard.surplus
+            ? Math.min(quiet, Math.ceil(this.bucket.msUntilAvailable(now, this.reserveBytes)))
+            : quiet;
         this.timer = this.clock.setTimer(Math.max(1, wait), () => this.pump());
         this.guardTimer = true;
         return;

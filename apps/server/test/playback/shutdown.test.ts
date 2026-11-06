@@ -14,7 +14,17 @@ const MB = 1024 * 1024;
 const SHUTDOWN_LIMIT_MS = 10_000;
 const PROBE: ProbeResult = {
   durationSec: 3600,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [],
 };
@@ -33,11 +43,15 @@ class ReadingEncoder implements EncoderHandle {
     });
     const arg = (name: string): string | undefined => options.args[options.args.indexOf(name) + 1];
     const extension = path.extname(arg('-hls_segment_filename') ?? 'seg-%d.ts');
-    this.request = http.get(arg('-i') as string, { headers: { Range: 'bytes=0-' }, agent: new http.Agent({ keepAlive: true }) }, (res) => {
-      res.on('data', () => undefined);
-      res.on('error', () => undefined);
-      writeFileSync(path.join(options.cwd, `seg-${arg('-start_number') ?? '0'}${extension}`), 'segment');
-    });
+    this.request = http.get(
+      arg('-i') as string,
+      { headers: { Range: 'bytes=0-' }, agent: new http.Agent({ keepAlive: true }) },
+      (res) => {
+        res.on('data', () => undefined);
+        res.on('error', () => undefined);
+        writeFileSync(path.join(options.cwd, `seg-${arg('-start_number') ?? '0'}${extension}`), 'segment');
+      },
+    );
     this.request.on('error', () => undefined);
   }
 
@@ -91,13 +105,23 @@ async function boot(): Promise<Rig> {
   const call: Rig['call'] = (method, url, body) =>
     new Promise((resolve, reject) => {
       const request = http.request(
-        { host: '127.0.0.1', port, path: url, method, agent, headers: body ? { 'content-type': 'application/json' } : {} },
+        {
+          host: '127.0.0.1',
+          port,
+          path: url,
+          method,
+          agent,
+          headers: body ? { 'content-type': 'application/json' } : {},
+        },
         (res) => {
           const chunks: Buffer[] = [];
           res.on('data', (chunk: Buffer) => chunks.push(chunk));
           res.on('end', () => {
             const text = Buffer.concat(chunks).toString();
-            resolve({ status: res.statusCode ?? 0, body: text.startsWith('{') ? (JSON.parse(text) as Record<string, unknown>) : {} });
+            resolve({
+              status: res.statusCode ?? 0,
+              body: text.startsWith('{') ? (JSON.parse(text) as Record<string, unknown>) : {},
+            });
           });
         },
       );

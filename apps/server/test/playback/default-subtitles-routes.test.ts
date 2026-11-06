@@ -26,11 +26,28 @@ const sub = (index: number, language: string, options: TrackOptions = {}): Subti
   default: options.default ?? false,
 });
 
-const audioTrack = (index: number, language: string) => ({ index, codec: 'eac3', channels: 6, language, title: '', default: index === 1 });
+const audioTrack = (index: number, language: string) => ({
+  index,
+  codec: 'eac3',
+  channels: 6,
+  language,
+  title: '',
+  default: index === 1,
+});
 
 const probeOf = (audio: ProbeResult['audio'], subtitles: SubtitleTrackInfo[]): ProbeResult => ({
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio,
   subtitles,
 });
@@ -61,7 +78,11 @@ async function boot(probe: ProbeResult): Promise<{ harness: Harness; encoders: F
   return { harness, encoders };
 }
 
-const SESSION_FIELDS = (body: SessionResponse) => ({ selected: body.selectedSubtitle, default: body.subtitleDefault, burn: body.decision.subtitleBurnIn });
+const SESSION_FIELDS = (body: SessionResponse) => ({
+  selected: body.selectedSubtitle,
+  default: body.subtitleDefault,
+  burn: body.decision.subtitleBurnIn,
+});
 
 async function master(harness: Harness, id: string): Promise<string> {
   const res = await fetchHls(harness, id, 'index.m3u8');
@@ -78,14 +99,21 @@ async function patch(harness: Harness, id: string, payload: object) {
   return { status: res.statusCode, body: res.json() as SessionResponse };
 }
 
-const ENGLISH_WITH_FORCED = probeOf([audioTrack(1, 'eng')], [sub(3, 'eng', { default: true }), sub(4, 'eng', { forced: true, title: 'English Forced' }), sub(5, 'fra')]);
+const ENGLISH_WITH_FORCED = probeOf(
+  [audioTrack(1, 'eng')],
+  [sub(3, 'eng', { default: true }), sub(4, 'eng', { forced: true, title: 'English Forced' }), sub(5, 'fra')],
+);
 
 describe('English audio with a forced English text track', () => {
   it('starts with it selected, reports forced-english and marks only that rendition DEFAULT/AUTOSELECT/FORCED', async () => {
     const { harness, encoders } = await boot(ENGLISH_WITH_FORCED);
     const { status, body } = await startSession(harness, 'movie', 'desktop');
     expect(status).toBe(201);
-    expect(SESSION_FIELDS(body)).toEqual({ selected: { index: 4, mode: 'sidecar' }, default: 'forced-english', burn: false });
+    expect(SESSION_FIELDS(body)).toEqual({
+      selected: { index: 4, mode: 'sidecar' },
+      default: 'forced-english',
+      burn: false,
+    });
     expect(encoders.started).toBe(1);
 
     const lines = mediaLines(await master(harness, body.sessionId));
@@ -94,7 +122,9 @@ describe('English audio with a forced English text track', () => {
     expect(byIndex(4)).toContain('DEFAULT=YES,AUTOSELECT=YES,FORCED=YES');
     expect(byIndex(3)).toContain('DEFAULT=NO,AUTOSELECT=NO,FORCED=NO');
     expect(byIndex(5)).toContain('DEFAULT=NO,AUTOSELECT=NO,FORCED=NO');
-    expect(body.subtitleTracks.find((track) => track.index === 4)?.url).toBe(`/hls/${body.sessionId}/subs/4/index.m3u8`);
+    expect(body.subtitleTracks.find((track) => track.index === 4)?.url).toBe(
+      `/hls/${body.sessionId}/subs/4/index.m3u8`,
+    );
   });
 
   it('subtitle:null is an explicit Off and an explicit text track is not a default', async () => {
@@ -105,26 +135,39 @@ describe('English audio with a forced English text track', () => {
     await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${off.body.sessionId}` });
 
     const chosen = await startSession(harness, 'movie', 'p720', { subtitle: { index: 3, mode: 'sidecar' } });
-    expect(SESSION_FIELDS(chosen.body)).toEqual({ selected: { index: 3, mode: 'sidecar' }, default: null, burn: false });
+    expect(SESSION_FIELDS(chosen.body)).toEqual({
+      selected: { index: 3, mode: 'sidecar' },
+      default: null,
+      burn: false,
+    });
     expect(defaultLines(await master(harness, chosen.body.sessionId))).toEqual([]);
   });
 
   it('the default is also listed by GET /api/sessions/:id and /api/activity until a client chooses a subtitle', async () => {
     const { harness } = await boot(ENGLISH_WITH_FORCED);
     const { body } = await startSession(harness, 'movie', 'desktop');
-    const activity = async () => ((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions[0]?.subtitleDefault;
+    const activity = async () =>
+      ((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions[0]?.subtitleDefault;
     expect(await activity()).toBe('forced-english');
 
     const switched = await patch(harness, body.sessionId, { subtitle: { index: 3, mode: 'sidecar' } });
     expect(switched.status).toBe(200);
-    expect(SESSION_FIELDS(switched.body)).toEqual({ selected: { index: 3, mode: 'sidecar' }, default: null, burn: false });
-    expect(((await harness.app.inject(`/api/sessions/${body.sessionId}`)).json() as SessionResponse).subtitleDefault).toBeNull();
+    expect(SESSION_FIELDS(switched.body)).toEqual({
+      selected: { index: 3, mode: 'sidecar' },
+      default: null,
+      burn: false,
+    });
+    expect(
+      ((await harness.app.inject(`/api/sessions/${body.sessionId}`)).json() as SessionResponse).subtitleDefault,
+    ).toBeNull();
     expect(await activity()).toBeNull();
     expect(defaultLines(await master(harness, body.sessionId))).toEqual([]);
   });
 
   it('PATCH subtitle:null turns it off for good: a later audio PATCH does not re-apply the default', async () => {
-    const { harness } = await boot(probeOf([audioTrack(1, 'eng'), audioTrack(2, 'fra')], ENGLISH_WITH_FORCED.subtitles));
+    const { harness } = await boot(
+      probeOf([audioTrack(1, 'eng'), audioTrack(2, 'fra')], ENGLISH_WITH_FORCED.subtitles),
+    );
     const { body } = await startSession(harness, 'movie', 'desktop');
     const off = await patch(harness, body.sessionId, { subtitle: null });
     expect(SESSION_FIELDS(off.body)).toEqual({ selected: null, default: null, burn: false });
@@ -136,7 +179,12 @@ describe('English audio with a forced English text track', () => {
 
 describe('English audio without a forced English track', () => {
   it('starts with subtitles Off and no DEFAULT/AUTOSELECT rendition, tracks still listed', async () => {
-    const { harness } = await boot(probeOf([audioTrack(1, 'eng')], [sub(3, 'eng', { default: true }), sub(4, 'eng', { title: 'SDH' }), sub(5, 'fra', { forced: true })]));
+    const { harness } = await boot(
+      probeOf(
+        [audioTrack(1, 'eng')],
+        [sub(3, 'eng', { default: true }), sub(4, 'eng', { title: 'SDH' }), sub(5, 'fra', { forced: true })],
+      ),
+    );
     const { status, body } = await startSession(harness, 'movie', 'desktop');
     expect(status).toBe(201);
     expect(SESSION_FIELDS(body)).toEqual({ selected: null, default: null, burn: false });
@@ -150,7 +198,12 @@ describe('English audio without a forced English track', () => {
 describe('non-English starting audio', () => {
   const FOREIGN = probeOf(
     [audioTrack(1, 'fra'), audioTrack(2, 'eng')],
-    [sub(3, 'fra'), sub(4, 'eng', { title: 'English SDH' }), sub(5, 'eng', { default: true, title: 'English' }), sub(6, 'eng', { forced: true })],
+    [
+      sub(3, 'fra'),
+      sub(4, 'eng', { title: 'English SDH' }),
+      sub(5, 'eng', { default: true, title: 'English' }),
+      sub(6, 'eng', { forced: true }),
+    ],
   );
 
   it('selects the default-flagged full English track and keeps it across an audio PATCH', async () => {
@@ -165,7 +218,11 @@ describe('non-English starting audio', () => {
     const audio = await patch(harness, body.sessionId, { audioIndex: 2 });
     expect(audio.status).toBe(200);
     expect(audio.body.selectedAudioIndex).toBe(2);
-    expect(SESSION_FIELDS(audio.body)).toEqual({ selected: { index: 5, mode: 'sidecar' }, default: 'english', burn: false });
+    expect(SESSION_FIELDS(audio.body)).toEqual({
+      selected: { index: 5, mode: 'sidecar' },
+      default: 'english',
+      burn: false,
+    });
     expect(audio.body.playlistUrl).toBe(body.playlistUrl);
     expect(md5(await master(harness, body.sessionId))).toBe(md5(before));
     expect(encoders.started).toBe(2);
@@ -175,7 +232,11 @@ describe('non-English starting audio', () => {
     const { harness } = await boot(FOREIGN);
     const { body } = await startSession(harness, 'movie', 'desktop');
     expect(body.selectedAudioIndex).toBe(2);
-    expect(SESSION_FIELDS(body)).toEqual({ selected: { index: 6, mode: 'sidecar' }, default: 'forced-english', burn: false });
+    expect(SESSION_FIELDS(body)).toEqual({
+      selected: { index: 6, mode: 'sidecar' },
+      default: 'forced-english',
+      burn: false,
+    });
   });
 
   it('subtitle:null stays Off for the same source and audio', async () => {
@@ -194,7 +255,11 @@ describe('non-English starting audio', () => {
   it('undetermined audio follows the TMDB original language (English here, so the English rule applies)', async () => {
     const { harness } = await boot(probeOf([audioTrack(1, 'und')], [sub(3, 'eng'), sub(4, 'eng', { forced: true })]));
     const { body } = await startSession(harness, 'movie', 'desktop');
-    expect(SESSION_FIELDS(body)).toEqual({ selected: { index: 4, mode: 'sidecar' }, default: 'forced-english', burn: false });
+    expect(SESSION_FIELDS(body)).toEqual({
+      selected: { index: 4, mode: 'sidecar' },
+      default: 'forced-english',
+      burn: false,
+    });
   });
 });
 
@@ -222,7 +287,9 @@ describe('bitmap-only English default', () => {
   });
 
   it('a full English text track wins over a bitmap one: no burn-in', async () => {
-    const { harness } = await boot(probeOf([audioTrack(1, 'kor')], [sub(4, 'eng', { kind: 'bitmap', default: true }), sub(5, 'eng')]));
+    const { harness } = await boot(
+      probeOf([audioTrack(1, 'kor')], [sub(4, 'eng', { kind: 'bitmap', default: true }), sub(5, 'eng')]),
+    );
     const { body } = await startSession(harness, 'movie', 'desktop');
     expect(SESSION_FIELDS(body)).toEqual({ selected: { index: 5, mode: 'sidecar' }, default: 'english', burn: false });
   });
@@ -236,9 +303,15 @@ describe('more than ten text tracks', () => {
     ];
     const { harness } = await boot(probeOf([audioTrack(1, 'eng')], tracks));
     const { body } = await startSession(harness, 'movie', 'desktop');
-    expect(SESSION_FIELDS(body)).toEqual({ selected: { index: 12, mode: 'sidecar' }, default: 'forced-english', burn: false });
+    expect(SESSION_FIELDS(body)).toEqual({
+      selected: { index: 12, mode: 'sidecar' },
+      default: 'forced-english',
+      burn: false,
+    });
     expect(body.subtitleTracks.filter((track) => track.url)).toHaveLength(10);
-    expect(body.subtitleTracks.find((track) => track.index === 12)?.url).toBe(`/hls/${body.sessionId}/subs/12/index.m3u8`);
+    expect(body.subtitleTracks.find((track) => track.index === 12)?.url).toBe(
+      `/hls/${body.sessionId}/subs/12/index.m3u8`,
+    );
 
     const lines = mediaLines(await master(harness, body.sessionId));
     expect(lines).toHaveLength(10);

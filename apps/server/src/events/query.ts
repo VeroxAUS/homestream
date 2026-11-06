@@ -17,14 +17,22 @@ function parseDetails(json: string | null): Record<string, unknown> | undefined 
   if (!json) return undefined;
   try {
     const parsed: unknown = JSON.parse(json);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (redactDeep(parsed) as Record<string, unknown>) : undefined;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (redactDeep(parsed) as Record<string, unknown>)
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
 function toLogEvent(row: EventDbRow): LogEvent {
-  const event: LogEvent = { id: row.id, ts: row.ts, level: row.level, source: row.source, message: redact(row.message) };
+  const event: LogEvent = {
+    id: row.id,
+    ts: row.ts,
+    level: row.level,
+    source: row.source,
+    message: redact(row.message),
+  };
   const details = parseDetails(row.details_json);
   if (details) event.details = details;
   if (row.session_id) event.sessionId = row.session_id;

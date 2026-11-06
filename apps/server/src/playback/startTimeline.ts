@@ -30,6 +30,9 @@ export class StartTimeline {
   mark(step: StartStep, sessionId?: string): void {
     if (this.logged.has(step)) return;
     this.logged.add(step);
-    this.logger.debug({ source: 'playback', step, sessionId, sinceStartMs: Date.now() - this.requestAt }, `Start timing: ${step}`);
+    this.logger.debug(
+      { source: 'playback', step, sessionId, sinceStartMs: Date.now() - this.requestAt },
+      `Start timing: ${step}`,
+    );
   }
 }

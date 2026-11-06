@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { HomeResponseSchema, MovieDetailsSchema, SearchQuerySchema, SeasonSchema, ShowDetailsSchema } from '../src/index.js';
+import {
+  HomeResponseSchema,
+  MovieDetailsSchema,
+  SearchQuerySchema,
+  SeasonSchema,
+  ShowDetailsSchema,
+} from '../src/index.js';
 
 const summary = {
   tmdbId: 1,
@@ -13,7 +19,16 @@ const summary = {
 
 describe('catalog schemas', () => {
   it('accepts movie and show details', () => {
-    expect(MovieDetailsSchema.safeParse({ ...summary, type: 'movie', runtime: 90, genres: ['Drama'], imdbId: 'tt1', originalLanguage: 'en' }).success).toBe(true);
+    expect(
+      MovieDetailsSchema.safeParse({
+        ...summary,
+        type: 'movie',
+        runtime: 90,
+        genres: ['Drama'],
+        imdbId: 'tt1',
+        originalLanguage: 'en',
+      }).success,
+    ).toBe(true);
     expect(
       ShowDetailsSchema.safeParse({
         ...summary,
@@ -27,13 +42,22 @@ describe('catalog schemas', () => {
   });
 
   it('rejects a movie typed as tv', () => {
-    expect(MovieDetailsSchema.safeParse({ ...summary, type: 'tv', runtime: 1, genres: [], imdbId: null }).success).toBe(false);
+    expect(MovieDetailsSchema.safeParse({ ...summary, type: 'tv', runtime: 1, genres: [], imdbId: null }).success).toBe(
+      false,
+    );
   });
 
   it('accepts a season with episodes and a home response', () => {
     const episode = { episodeNumber: 1, name: 'Pilot', overview: '', stillUrl: null, runtime: null, airDate: null };
     expect(SeasonSchema.safeParse({ seasonNumber: 1, name: 'S1', episodes: [episode] }).success).toBe(true);
-    const empty = { continueWatching: [], featured: [], trendingMovies: [], trendingShows: [], popularMovies: [], popularShows: [] };
+    const empty = {
+      continueWatching: [],
+      featured: [],
+      trendingMovies: [],
+      trendingShows: [],
+      popularMovies: [],
+      popularShows: [],
+    };
     expect(HomeResponseSchema.safeParse(empty).success).toBe(true);
   });
 

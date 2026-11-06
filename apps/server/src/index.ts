@@ -45,7 +45,12 @@ async function main(): Promise<void> {
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : config.port;
   logger.info(
-    { port, sourceProxyPort: proxyPort, config: config.configFile.path, gateway: displayGatewayUrl(config.gatewayManifestUrl) },
+    {
+      port,
+      sourceProxyPort: proxyPort,
+      config: config.configFile.path,
+      gateway: displayGatewayUrl(config.gatewayManifestUrl),
+    },
     `HomeStream server ${SERVER_VERSION} listening`,
   );
 

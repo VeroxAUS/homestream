@@ -43,7 +43,9 @@ export function registerProgressRoutes(app: FastifyInstance, ctx: AppContext): v
     };
   });
 
-  app.get('/api/continue-watching', async (): Promise<ContinueWatchingResponse> => ({ items: await continueWatching.list() }));
+  app.get('/api/continue-watching', async (): Promise<ContinueWatchingResponse> => ({
+    items: await continueWatching.list(),
+  }));
 
   app.delete<{ Params: { mediaKey: string } }>(
     '/api/continue-watching/:mediaKey',

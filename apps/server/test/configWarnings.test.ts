@@ -25,7 +25,9 @@ describe('recordConfigWarnings', () => {
     recordConfigWarnings({ db: app.ctx.db, bus: app.ctx.bus }, app.ctx.config.warnings);
     off();
 
-    const rows = app.ctx.db.prepare("SELECT level, source, message FROM events WHERE level = 'warn' ORDER BY id").all() as Array<{
+    const rows = app.ctx.db
+      .prepare("SELECT level, source, message FROM events WHERE level = 'warn' ORDER BY id")
+      .all() as Array<{
       level: string;
       source: string;
       message: string;

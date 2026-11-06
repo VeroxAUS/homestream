@@ -2,12 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { ProgressParser } from '../../src/playback/progress.js';
 
 const BLOCK = (fps: string, speed: string, outUs: string, bitrate = '8123.4kbits/s') =>
-  [`frame=100`, `fps=${fps}`, `bitrate=${bitrate}`, `out_time_us=${outUs}`, `out_time_ms=${outUs}`, `speed=${speed}`, 'progress=continue', ''].join('\n');
+  [
+    `frame=100`,
+    `fps=${fps}`,
+    `bitrate=${bitrate}`,
+    `out_time_us=${outUs}`,
+    `out_time_ms=${outUs}`,
+    `speed=${speed}`,
+    'progress=continue',
+    '',
+  ].join('\n');
 
 describe('ProgressParser', () => {
   it('turns a progress block into stats', () => {
     const parser = new ProgressParser();
-    expect(parser.push(BLOCK('96.5', '4.02x', '8000000'))).toEqual([{ fps: 96.5, speed: 4.02, bitrateKbps: 8123.4, outTimeSec: 8 }]);
+    expect(parser.push(BLOCK('96.5', '4.02x', '8000000'))).toEqual([
+      { fps: 96.5, speed: 4.02, bitrateKbps: 8123.4, outTimeSec: 8 },
+    ]);
   });
 
   it('handles chunks split mid-line and several blocks at once', () => {

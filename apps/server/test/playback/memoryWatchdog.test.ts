@@ -19,13 +19,18 @@ const children: ChildProcess[] = [];
 function hogScript(mb: number, quitOnQ: boolean): string {
   return [
     `const b = Buffer.alloc(${mb} * 1024 * 1024, 1); let s = 0; for (let i = 0; i < b.length; i += 4096) s += b[i];`,
-    quitOnQ ? `process.stdin.on('data', (d) => { if (String(d).includes('q')) process.exit(0); });` : `process.stdin.resume();`,
+    quitOnQ
+      ? `process.stdin.on('data', (d) => { if (String(d).includes('q')) process.exit(0); });`
+      : `process.stdin.resume();`,
     `setInterval(() => { s += b[0]; }, 1000);`,
   ].join('\n');
 }
 
 function startHog(mb: number): ChildProcess {
-  const child = spawn(process.execPath, ['-e', hogScript(mb, false)], { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
+  const child = spawn(process.execPath, ['-e', hogScript(mb, false)], {
+    stdio: ['pipe', 'ignore', 'ignore'],
+    windowsHide: true,
+  });
   children.push(child);
   return child;
 }
@@ -150,7 +155,11 @@ describe('MemoryWatchdog', () => {
 
   it('fires from its own timer', async () => {
     const hit = new Promise<number>((resolve) => {
-      const watchdog = new MemoryWatchdog({ limitMb: 10, intervalMs: 20, sample: async () => new Map([[5, 50 * MIB]]) });
+      const watchdog = new MemoryWatchdog({
+        limitMb: 10,
+        intervalMs: 20,
+        sample: async () => new Map([[5, 50 * MIB]]),
+      });
       watchdog.watch(5, (info) => {
         watchdog.close();
         resolve(info.pid);
@@ -222,7 +231,11 @@ describe('EncoderProcess with the watchdog', () => {
   }, 30_000);
 
   it('leaves a process under the limit alone and stops watching it when it exits', async () => {
-    const watchdog = new MemoryWatchdog({ limitMb: 4096, intervalMs: 100, sample: createWorkingSetSampler(NODE_IMAGE) });
+    const watchdog = new MemoryWatchdog({
+      limitMb: 4096,
+      intervalMs: 100,
+      sample: createWorkingSetSampler(NODE_IMAGE),
+    });
     const proc = new EncoderProcess({
       ffmpegPath: process.execPath,
       args: ['-e', 'setTimeout(() => process.exit(0), 600)'],

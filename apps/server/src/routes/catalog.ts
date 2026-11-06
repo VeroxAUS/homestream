@@ -44,12 +44,9 @@ export function registerCatalogRoutes(app: FastifyInstance, ctx: AppContext): vo
     return downloads.length > 0 ? { ...details, downloads } : details;
   });
 
-  app.get<{ Params: { tmdbId: string; n: string } }>(
-    '/api/tv/:tmdbId/season/:n',
-    async (request): Promise<Season> => {
-      const tmdbId = parseId(request.params.tmdbId, 'tmdbId', 1);
-      const seasonNumber = parseId(request.params.n, 'season number', 0);
-      return tmdb.season(tmdbId, seasonNumber);
-    },
-  );
+  app.get<{ Params: { tmdbId: string; n: string } }>('/api/tv/:tmdbId/season/:n', async (request): Promise<Season> => {
+    const tmdbId = parseId(request.params.tmdbId, 'tmdbId', 1);
+    const seasonNumber = parseId(request.params.n, 'season number', 0);
+    return tmdb.season(tmdbId, seasonNumber);
+  });
 }

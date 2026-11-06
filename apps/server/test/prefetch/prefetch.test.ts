@@ -7,7 +7,17 @@ import { bootHarness, listFfmpegCommandLines, PROFILES, type Harness } from '../
 
 const PROBE: ProbeResult = {
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [],
 };
@@ -38,14 +48,21 @@ afterAll(async () => {
   removeDir(root);
 });
 
-const body = (overrides: Record<string, unknown> = {}) => ({ mediaType: 'movie', tmdbId: 278, device: PROFILES.chromecast4k, ...overrides });
+const body = (overrides: Record<string, unknown> = {}) => ({
+  mediaType: 'movie',
+  tmdbId: 278,
+  device: PROFILES.chromecast4k,
+  ...overrides,
+});
 
 function post(payload: unknown) {
   return harness.app.inject({ method: 'POST', url: '/api/prefetch', payload: payload as object });
 }
 
 function prefetchEvents(): EventRow[] {
-  return harness.db.prepare("SELECT level, source, message, details_json FROM events WHERE source = 'prefetch' ORDER BY id").all() as unknown as EventRow[];
+  return harness.db
+    .prepare("SELECT level, source, message, details_json FROM events WHERE source = 'prefetch' ORDER BY id")
+    .all() as unknown as EventRow[];
 }
 
 describe('POST /api/prefetch', () => {
@@ -67,7 +84,11 @@ describe('POST /api/prefetch', () => {
     const events = prefetchEvents();
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ level: 'info', source: 'prefetch' });
-    expect(JSON.parse(events[0]?.details_json ?? '{}')).toMatchObject({ mediaKey: 'movie:278', deviceKind: 'tv', merged: false });
+    expect(JSON.parse(events[0]?.details_json ?? '{}')).toMatchObject({
+      mediaKey: 'movie:278',
+      deviceKind: 'tv',
+      merged: false,
+    });
   });
 
   it('merges a duplicate request into the running or finished warm-up', async () => {

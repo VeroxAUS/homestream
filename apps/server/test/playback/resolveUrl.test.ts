@@ -17,11 +17,14 @@ describe('createUrlResolver', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fetchImpl: FetchImpl = async (url, init) => {
       calls.push({ url, init });
-      if (url.startsWith('https://gw.example.test')) return response(307, { location: 'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc' });
+      if (url.startsWith('https://gw.example.test'))
+        return response(307, { location: 'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc' });
       return response(206);
     };
     const resolve = createUrlResolver(fetchImpl);
-    await expect(resolve('https://gw.example.test/playback/gw-secret-token/file')).resolves.toBe('https://store-001.wnam.tb-cdn.io/file.mkv?token=abc');
+    await expect(resolve('https://gw.example.test/playback/gw-secret-token/file')).resolves.toBe(
+      'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc',
+    );
     expect(calls).toHaveLength(2);
     expect(calls[0]?.init).toMatchObject({ method: 'GET', redirect: 'manual', headers: { Range: 'bytes=0-0' } });
   });
@@ -40,7 +43,10 @@ describe('createUrlResolver', () => {
   it('fails with a redacted, actionable error for HTTP errors', async () => {
     const resolve = createUrlResolver(async () => response(503));
     await expect(resolve('https://gw.example.test/gw-secret-token')).rejects.toMatchObject({
-      statusCode: 502, code: 'stream_unavailable', message: expect.stringContaining('HTTP 503'), hint: expect.stringContaining('TorBox account'),
+      statusCode: 502,
+      code: 'stream_unavailable',
+      message: expect.stringContaining('HTTP 503'),
+      hint: expect.stringContaining('TorBox account'),
     });
   });
 
@@ -60,7 +66,9 @@ describe('createUrlResolver', () => {
         urls.push(url);
         return response(307, { location: `/static/${name}.mp4` });
       });
-      const error = await resolve('https://gw.example.test/api/v1/debrid/playback/gw-secret-token/x').catch((e: unknown) => e);
+      const error = await resolve('https://gw.example.test/api/v1/debrid/playback/gw-secret-token/x').catch(
+        (e: unknown) => e,
+      );
       expect(error).toMatchObject({ statusCode: status, code, hint: expect.any(String) });
       expect(urls).toHaveLength(1);
       expect(JSON.stringify(error)).not.toContain('gw-secret-token');
@@ -87,7 +95,9 @@ describe('createUrlResolver', () => {
           ? response(307, { location: 'https://cdn.example.test/static/downloading.mp4' })
           : response(206),
       );
-      await expect(resolve('https://gw.example.test/a')).resolves.toBe('https://cdn.example.test/static/downloading.mp4');
+      await expect(resolve('https://gw.example.test/a')).resolves.toBe(
+        'https://cdn.example.test/static/downloading.mp4',
+      );
     });
 
     it('stops at the placeholder over real HTTP: the clip is never requested, a control path resolves to the file', async () => {
@@ -111,9 +121,17 @@ describe('createUrlResolver', () => {
         const resolve = createUrlResolver();
         const codes: Record<string, string> = {};
         for (const name of ['downloading', 'store', 'ratelimit', 'failed']) {
-          codes[name] = await resolve(`${base}/playback/${name}`).then(() => 'resolved', (error: AppError) => error.code);
+          codes[name] = await resolve(`${base}/playback/${name}`).then(
+            () => 'resolved',
+            (error: AppError) => error.code,
+          );
         }
-        expect(codes).toEqual({ downloading: 'stream_not_cached', store: 'torbox_slots_full', ratelimit: 'gateway_rate_limited', failed: 'stream_unavailable' });
+        expect(codes).toEqual({
+          downloading: 'stream_not_cached',
+          store: 'torbox_slots_full',
+          ratelimit: 'gateway_rate_limited',
+          failed: 'stream_unavailable',
+        });
         expect(requested.some((url) => url.startsWith('/static/'))).toBe(false);
         await expect(resolve(`${base}/playback/control`)).resolves.toBe(`${base}/cdn/movie.mkv`);
       } finally {
@@ -140,15 +158,25 @@ describe('createUrlResolver', () => {
 
   it('stops after too many redirects and on a redirect without a target', async () => {
     const loop = createUrlResolver(async () => response(302, { location: 'https://gw.example.test/loop' }));
-    await expect(loop('https://gw.example.test/a')).rejects.toMatchObject({ message: expect.stringContaining('too many redirects') });
+    await expect(loop('https://gw.example.test/a')).rejects.toMatchObject({
+      message: expect.stringContaining('too many redirects'),
+    });
     const bare = createUrlResolver(async () => response(302));
-    await expect(bare('https://gw.example.test/a')).rejects.toMatchObject({ message: expect.stringContaining('redirect without a target') });
+    await expect(bare('https://gw.example.test/a')).rejects.toMatchObject({
+      message: expect.stringContaining('redirect without a target'),
+    });
   });
 
   it('times out with a clear message', async () => {
-    const resolve = createUrlResolver((_url, init) => new Promise((_resolve, reject) => {
-      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-    }), 50);
-    await expect(resolve('https://gw.example.test/a')).rejects.toMatchObject({ message: expect.stringContaining('no answer within') });
+    const resolve = createUrlResolver(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+      50,
+    );
+    await expect(resolve('https://gw.example.test/a')).rejects.toMatchObject({
+      message: expect.stringContaining('no answer within'),
+    });
   });
 });

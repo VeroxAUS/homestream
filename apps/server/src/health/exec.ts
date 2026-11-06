@@ -22,16 +22,21 @@ export type DiskProbe = (dir: string) => Promise<DiskSpace>;
 
 export const runCommand: CommandRunner = (file, args, { timeoutMs }) =>
   new Promise((resolve) => {
-    execFile(file, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (!error) {
-        resolve({ code: 0, stdout, stderr });
-        return;
-      }
-      const err = error as NodeJS.ErrnoException & { killed?: boolean };
-      if (err.killed) resolve({ code: null, stdout, stderr, failure: 'timeout' });
-      else if (typeof err.code === 'number') resolve({ code: err.code, stdout, stderr });
-      else resolve({ code: null, stdout, stderr, failure: String(err.code ?? 'failed') });
-    });
+    execFile(
+      file,
+      args,
+      { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolve({ code: 0, stdout, stderr });
+          return;
+        }
+        const err = error as NodeJS.ErrnoException & { killed?: boolean };
+        if (err.killed) resolve({ code: null, stdout, stderr, failure: 'timeout' });
+        else if (typeof err.code === 'number') resolve({ code: err.code, stdout, stderr });
+        else resolve({ code: null, stdout, stderr, failure: String(err.code ?? 'failed') });
+      },
+    );
   });
 
 /** Free and total bytes of the volume holding `dir`; climbs to the nearest existing parent when the folder is not created yet. */
@@ -40,7 +45,10 @@ export const diskSpace: DiskProbe = async (dir) => {
   for (;;) {
     try {
       const stats = await statfs(current);
-      return { freeBytes: Number(stats.bavail) * Number(stats.bsize), totalBytes: Number(stats.blocks) * Number(stats.bsize) };
+      return {
+        freeBytes: Number(stats.bavail) * Number(stats.bsize),
+        totalBytes: Number(stats.blocks) * Number(stats.bsize),
+      };
     } catch (error) {
       const parent = path.dirname(current);
       if (parent === current) throw error;

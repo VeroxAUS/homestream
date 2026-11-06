@@ -17,7 +17,12 @@ export function checkSessions(deps: SessionsCheckDeps): CheckOutcome {
   const details = {
     active,
     errorsLast15Min: errors.count,
-    recentErrors: errors.latest.map((event) => ({ ts: event.ts, source: event.source, message: event.message, sessionId: event.sessionId ?? null })),
+    recentErrors: errors.latest.map((event) => ({
+      ts: event.ts,
+      source: event.source,
+      message: event.message,
+      sessionId: event.sessionId ?? null,
+    })),
     fallingBehind: slow,
   };
   const activeText = `${active} active session${active === 1 ? '' : 's'}`;

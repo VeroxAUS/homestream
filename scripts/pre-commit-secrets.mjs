@@ -110,7 +110,16 @@ function localEnvValues(root, env) {
 function runGitleaks(binary, root) {
   const result = spawnSync(
     binary,
-    ['git', '--staged', '--redact', '--no-banner', '--log-level', 'error', '--config', path.join(root, '.gitleaks.toml')],
+    [
+      'git',
+      '--staged',
+      '--redact',
+      '--no-banner',
+      '--log-level',
+      'error',
+      '--config',
+      path.join(root, '.gitleaks.toml'),
+    ],
     { cwd: root, encoding: 'utf8', windowsHide: true },
   );
   if (result.status === 0) return { ok: true };
@@ -125,13 +134,24 @@ function report(findings) {
   for (const { file, line, rule } of findings) {
     console.error(`[secrets] BLOCKED ${file}${line ? `:${line}` : ''} (${rule})`);
   }
-  console.error('[secrets] Remove the secret or, for a fake test value, shorten it or add "gitleaks:allow" to the line.');
+  console.error(
+    '[secrets] Remove the secret or, for a fake test value, shorten it or add "gitleaks:allow" to the line.',
+  );
 }
 
 export function main(cwd = process.cwd(), env = process.env) {
   const root = repoRoot(cwd);
   const staged = splitNul(git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'], { cwd: root }));
-  const diffArgs = ['-c', 'core.quotepath=off', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR'];
+  const diffArgs = [
+    '-c',
+    'core.quotepath=off',
+    'diff',
+    '--cached',
+    '-U0',
+    '--no-color',
+    '--no-ext-diff',
+    '--diff-filter=ACMR',
+  ];
   const lines = addedLines(git(diffArgs, { cwd: root }));
   const findings = [...scanPaths(staged), ...scanLiterals(lines, localEnvValues(root, env))];
 

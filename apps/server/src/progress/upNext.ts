@@ -38,7 +38,9 @@ export async function findNextEpisode(
   today: string,
 ): Promise<NextEpisode | null> {
   const current = await source.season(tmdbId, season);
-  const next = current.episodes.filter((item) => item.episodeNumber > episode).sort((a, b) => a.episodeNumber - b.episodeNumber)[0];
+  const next = current.episodes
+    .filter((item) => item.episodeNumber > episode)
+    .sort((a, b) => a.episodeNumber - b.episodeNumber)[0];
   if (next) return aired(asNext(season, next), next.airDate, today);
 
   const show = await source.show(tmdbId);

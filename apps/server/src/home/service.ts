@@ -27,7 +27,12 @@ export class HomeService {
     // Started first so the recommendations request runs alongside the list and continue-watching reads.
     const because = watched.latest ? this.recommendationsFor(watched.latest) : Promise.resolve(null);
     const [rows, items] = await Promise.all([tmdb.home(), continueWatching.list()]);
-    const featured = buildFeatured({ ...rows, continueWatching: items, because: await because, played: watched.played });
+    const featured = buildFeatured({
+      ...rows,
+      continueWatching: items,
+      because: await because,
+      played: watched.played,
+    });
     return { continueWatching: items, featured, ...rows };
   }
 
@@ -37,10 +42,16 @@ export class HomeService {
       timer = setTimeout(() => resolve(null), this.options.recommendationsBudgetMs ?? RECOMMENDATIONS_BUDGET_MS);
     });
     try {
-      const recommendations = await Promise.race([this.options.tmdb.recommendations(base.mediaType, base.tmdbId), timeout]);
+      const recommendations = await Promise.race([
+        this.options.tmdb.recommendations(base.mediaType, base.tmdbId),
+        timeout,
+      ]);
       return recommendations ? { base, recommendations } : null;
     } catch (error) {
-      this.options.logger.debug({ err: error, tmdbId: base.tmdbId }, 'Recommendations unavailable; the banner goes without them');
+      this.options.logger.debug(
+        { err: error, tmdbId: base.tmdbId },
+        'Recommendations unavailable; the banner goes without them',
+      );
       return null;
     } finally {
       clearTimeout(timer);

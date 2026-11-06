@@ -39,13 +39,39 @@ describe('database', () => {
     const columns = (table: string): string[] =>
       (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
     expect(columns('progress')).toEqual(
-      expect.arrayContaining(['media_key', 'tmdb_id', 'type', 'season', 'episode', 'position_sec', 'duration_sec', 'updated_at', 'completed', 'meta_json']),
+      expect.arrayContaining([
+        'media_key',
+        'tmdb_id',
+        'type',
+        'season',
+        'episode',
+        'position_sec',
+        'duration_sec',
+        'updated_at',
+        'completed',
+        'meta_json',
+      ]),
     );
     expect(columns('plays')).toEqual(
       expect.arrayContaining([
-        'id', 'session_id', 'media_key', 'device_id', 'client_ip', 'started_at', 'ended_at', 'watched_sec',
-        'last_position_sec', 'duration_sec', 'completed', 'stream_filename', 'decision_json', 'avg_bitrate_kbps',
-        'avg_speed', 'bytes_served', 'status', 'error_message',
+        'id',
+        'session_id',
+        'media_key',
+        'device_id',
+        'client_ip',
+        'started_at',
+        'ended_at',
+        'watched_sec',
+        'last_position_sec',
+        'duration_sec',
+        'completed',
+        'stream_filename',
+        'decision_json',
+        'avg_bitrate_kbps',
+        'avg_speed',
+        'bytes_served',
+        'status',
+        'error_message',
       ]),
     );
     expect(columns('devices')).toEqual(['id', 'name', 'kind', 'capabilities', 'last_ip', 'last_seen']);
@@ -79,7 +105,18 @@ describe('database', () => {
     const db = openDatabase(':memory:');
     db.prepare("INSERT INTO events (ts, level, source, message) VALUES (1, 'info', 'downloads', 'x')").run();
     const columns = (db.prepare('PRAGMA table_info(pending_downloads)').all() as { name: string }[]).map((c) => c.name);
-    expect(columns).toEqual(expect.arrayContaining(['id', 'media_key', 'query_key', 'info_hash', 'status', 'progress', 'created_at', 'next_poll_at']));
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        'id',
+        'media_key',
+        'query_key',
+        'info_hash',
+        'status',
+        'progress',
+        'created_at',
+        'next_poll_at',
+      ]),
+    );
     const insert = (id: string, status: string): void => {
       db.prepare(
         `INSERT INTO pending_downloads (id, media_key, media_type, tmdb_id, query_key, title, status, state, created_at, updated_at, next_poll_at, progress_changed_at)

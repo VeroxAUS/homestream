@@ -40,12 +40,42 @@ export interface ExtractJob {
  * (forced or signs) track would hold it back for minutes. `-copyts` keeps all times absolute.
  */
 export function buildExtractArgs(job: ExtractJob): string[] {
-  const args = ['-hide_banner', '-loglevel', 'error', '-nostats', '-y', '-threads', '2', ...PROBE_LIMIT_ARGS, '-copyts'];
+  const args = [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-nostats',
+    '-y',
+    '-threads',
+    '2',
+    ...PROBE_LIMIT_ARGS,
+    '-copyts',
+  ];
   if (job.ss > 0) args.push('-ss', String(job.ss));
   args.push('-i', job.inputUrl);
-  args.push('-map', `0:${job.videoIndex}`, '-c', 'copy', '-flush_packets', '1', '-f', 'framecrc', path.join(job.outputDir, COVER_FILE));
+  args.push(
+    '-map',
+    `0:${job.videoIndex}`,
+    '-c',
+    'copy',
+    '-flush_packets',
+    '1',
+    '-f',
+    'framecrc',
+    path.join(job.outputDir, COVER_FILE),
+  );
   for (const track of job.tracks) {
-    args.push('-map', `0:${track}`, '-c:s', 'webvtt', '-flush_packets', '1', '-f', EXTRACTOR_MARKER, path.join(job.outputDir, `${track}.vtt`));
+    args.push(
+      '-map',
+      `0:${track}`,
+      '-c:s',
+      'webvtt',
+      '-flush_packets',
+      '1',
+      '-f',
+      EXTRACTOR_MARKER,
+      path.join(job.outputDir, `${track}.vtt`),
+    );
   }
   return args;
 }

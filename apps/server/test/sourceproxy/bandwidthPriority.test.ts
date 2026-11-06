@@ -28,4 +28,3 @@ describe('download priority', () => {
     expect(extractor.received).toBeGreaterThan(0);
   }, 60_000);
 });
-

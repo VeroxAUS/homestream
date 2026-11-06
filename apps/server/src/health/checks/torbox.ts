@@ -46,7 +46,10 @@ export async function checkTorbox(deps: TorboxCheckDeps): Promise<CheckOutcome> 
   }
 
   if (response.status === 401 || response.status === 403) {
-    return failure('TorBox rejected the API key.', KEY_HINT(config.configFile.path), { configured: true, httpStatus: response.status });
+    return failure('TorBox rejected the API key.', KEY_HINT(config.configFile.path), {
+      configured: true,
+      httpStatus: response.status,
+    });
   }
   if (!response.ok) {
     return failure(
@@ -65,13 +68,16 @@ export async function checkTorbox(deps: TorboxCheckDeps): Promise<CheckOutcome> 
     data = null;
   }
   if (!data) {
-    return failure('TorBox answered, but the reply could not be understood.', KEY_HINT(deps.config.configFile.path), { configured: true });
+    return failure('TorBox answered, but the reply could not be understood.', KEY_HINT(deps.config.configFile.path), {
+      configured: true,
+    });
   }
 
   const planId = typeof data.plan === 'number' ? data.plan : null;
   const plan = planId === null ? 'unknown' : (PLAN_NAMES[planId] ?? `plan ${planId}`);
   const isSubscribed = data.is_subscribed === true;
-  const expiresAt = typeof data.premium_expires_at === 'string' && data.premium_expires_at ? data.premium_expires_at : null;
+  const expiresAt =
+    typeof data.premium_expires_at === 'string' && data.premium_expires_at ? data.premium_expires_at : null;
   const expiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
   const daysLeft = Number.isFinite(expiresMs) ? Math.floor((expiresMs - deps.nowMs) / DAY_MS) : null;
   const details = {

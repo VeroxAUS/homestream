@@ -53,7 +53,9 @@ function reviewPackage(root, dir) {
   const next = ratchet(current, measured);
   for (const metric of METRICS) {
     const note = next[metric] > current[metric] ? ` -> ${next[metric]} (raise)` : '';
-    console.log(`${name.padEnd(16)} ${metric.padEnd(11)} threshold ${String(current[metric]).padStart(3)}  measured ${measured[metric].pct}${note}`);
+    console.log(
+      `${name.padEnd(16)} ${metric.padEnd(11)} threshold ${String(current[metric]).padStart(3)}  measured ${measured[metric].pct}${note}`,
+    );
   }
   return { current, next };
 }
@@ -71,10 +73,16 @@ export function main(argv, root = repoRoot()) {
     if (!review) return 1;
     const changed = METRICS.filter((metric) => review.next[metric] > review.current[metric]).length;
     raised += changed;
-    if (changed > 0 && !check) writeFileSync(path.join(dir, 'coverage-thresholds.json'), `${JSON.stringify(review.next, null, 2)}\n`);
+    if (changed > 0 && !check)
+      writeFileSync(path.join(dir, 'coverage-thresholds.json'), `${JSON.stringify(review.next, null, 2)}\n`);
   }
   if (raised === 0) console.log('Thresholds are up to date.');
-  else console.log(check ? `${raised} threshold(s) can be raised: run pnpm coverage:ratchet.` : `${raised} threshold(s) raised. Commit the change.`);
+  else
+    console.log(
+      check
+        ? `${raised} threshold(s) can be raised: run pnpm coverage:ratchet.`
+        : `${raised} threshold(s) raised. Commit the change.`,
+    );
   return check && raised > 0 ? 1 : 0;
 }
 

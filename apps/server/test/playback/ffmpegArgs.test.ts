@@ -4,8 +4,14 @@ import { buildFfmpegArgs, buildVideoFilter, canHwDecode, type EncodeJob } from '
 
 function decision(overrides: Partial<Decision> = {}): Decision {
   return {
-    videoCodec: 'hevc', width: 3840, height: 2160, dynamicRange: 'hdr10', toneMapped: false, audioCodec: 'aac',
-    audioChannels: 6, subtitleBurnIn: false,
+    videoCodec: 'hevc',
+    width: 3840,
+    height: 2160,
+    dynamicRange: 'hdr10',
+    toneMapped: false,
+    audioCodec: 'aac',
+    audioChannels: 6,
+    subtitleBurnIn: false,
     sourceVideo: { codec: 'hevc', width: 3840, height: 2160, hdr: 'hdr10' },
     sourceAudio: { codec: 'dts', channels: 6 },
     ...overrides,
@@ -37,7 +43,14 @@ describe('buildFfmpegArgs: shared structure', () => {
   });
 
   it('adds reconnect flags for http inputs only', () => {
-    expect(args).toEqual(expect.arrayContaining(['-reconnect', '-reconnect_streamed', '-reconnect_on_network_error', '-reconnect_delay_max']));
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-reconnect',
+        '-reconnect_streamed',
+        '-reconnect_on_network_error',
+        '-reconnect_delay_max',
+      ]),
+    );
     expect(buildFfmpegArgs(job({ inputUrl: 'D:\\local\\file.mkv' }))).not.toContain('-reconnect');
   });
 
@@ -63,14 +76,25 @@ describe('buildFfmpegArgs: shared structure', () => {
 
   it('keeps fMP4 fragment times absolute across restarts (frag_discont) and not for MPEG-TS', () => {
     expect(valueAfter(args, '-hls_segment_options')).toBe('movflags=+frag_discont');
-    const ts = buildFfmpegArgs(job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', audioChannels: 2 }) }));
+    const ts = buildFfmpegArgs(
+      job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', audioChannels: 2 }) }),
+    );
     expect(ts).not.toContain('-hls_segment_options');
   });
 
   it('derives the GOP from the source frame rate', () => {
-    expect(valueAfter(buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 23.976 } })), '-g')).toBe('96');
-    expect(valueAfter(buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 29.97 } })), '-g')).toBe('120');
-    expect(valueAfter(buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 25 } })), '-g')).toBe('100');
+    expect(
+      valueAfter(
+        buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 23.976 } })),
+        '-g',
+      ),
+    ).toBe('96');
+    expect(
+      valueAfter(buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 29.97 } })), '-g'),
+    ).toBe('120');
+    expect(
+      valueAfter(buildFfmpegArgs(job({ video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 25 } })), '-g'),
+    ).toBe('100');
   });
 
   it('uses CUDA decode and keeps frames on the GPU', () => {
@@ -102,7 +126,9 @@ describe('buildFfmpegArgs: encoders', () => {
     expect(valueAfter(args, '-c:v')).toBe('hevc_nvenc');
     expect(valueAfter(args, '-profile:v')).toBe('main10');
     expect(valueAfter(args, '-tag:v')).toBe('hvc1');
-    expect(valueAfter(args, '-bsf:v')).toBe('hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9');
+    expect(valueAfter(args, '-bsf:v')).toBe(
+      'hevc_metadata=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9',
+    );
     expect(valueAfter(args, '-vf')).toBe('scale_cuda=w=3840:h=2160:format=p010le');
     expect(args).not.toContain('-pix_fmt');
     expect(valueAfter(args, '-b:v')).toBe('20000k');
@@ -119,7 +145,9 @@ describe('buildFfmpegArgs: encoders', () => {
   });
 
   it('H.264 uses MPEG-TS, drops the init file and removes the MPEG-TS mux delay', () => {
-    const args = buildFfmpegArgs(job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', audioChannels: 2 }) }));
+    const args = buildFfmpegArgs(
+      job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', audioChannels: 2 }) }),
+    );
     expect(valueAfter(args, '-c:v')).toBe('h264_nvenc');
     expect(valueAfter(args, '-profile:v')).toBe('high');
     expect(args).not.toContain('-tag:v');
@@ -154,7 +182,9 @@ describe('tone mapping filters', () => {
     );
     const args = buildFfmpegArgs(j);
     expect(args.join(' ')).toContain('-init_hw_device vulkan=vk -filter_hw_device vk');
-    expect(valueAfter(args, '-bsf:v')).toBe('hevc_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1');
+    expect(valueAfter(args, '-bsf:v')).toBe(
+      'hevc_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1',
+    );
     expect(valueAfter(args, '-profile:v')).toBe('main');
   });
 
@@ -176,13 +206,24 @@ describe('tone mapping filters', () => {
   });
 
   it('tone-mapped H.264 for the desktop is tagged bt709 through h264_metadata', () => {
-    const args = buildFfmpegArgs(job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', toneMapped: true, audioChannels: 2 }) }));
-    expect(valueAfter(args, '-bsf:v')).toBe('h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1');
+    const args = buildFfmpegArgs(
+      job({ decision: decision({ videoCodec: 'h264', dynamicRange: 'sdr', toneMapped: true, audioChannels: 2 }) }),
+    );
+    expect(valueAfter(args, '-bsf:v')).toBe(
+      'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1',
+    );
   });
 });
 
 describe('subtitle burn-in', () => {
-  const sdr = decision({ dynamicRange: 'sdr', width: 1920, height: 1080, videoCodec: 'h264', audioChannels: 2, subtitleBurnIn: true });
+  const sdr = decision({
+    dynamicRange: 'sdr',
+    width: 1920,
+    height: 1080,
+    videoCodec: 'h264',
+    audioChannels: 2,
+    subtitleBurnIn: true,
+  });
   const burnJob = (overrides: Partial<EncodeJob> = {}) =>
     job({
       decision: sdr,
@@ -244,20 +285,34 @@ describe('subtitle burn-in', () => {
     expect(graph).toContain('overlay=eof_action=pass:format=yuv420p10,format=p010le[vout]');
   });
 
-  it.each([[24], [23.976023976], [60]])('limits the bitmap input to the video frame rate (%d fps), so audio packets cannot flood the overlay', (fps) => {
-    const graph = valueAfter(buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps } })), '-filter_complex');
-    expect(graph).toContain(`[0:5]fps=${fps.toFixed(3)},scale=`);
-  });
+  it.each([[24], [23.976023976], [60]])(
+    'limits the bitmap input to the video frame rate (%d fps), so audio packets cannot flood the overlay',
+    (fps) => {
+      const graph = valueAfter(
+        buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps } })),
+        '-filter_complex',
+      );
+      expect(graph).toContain(`[0:5]fps=${fps.toFixed(3)},scale=`);
+    },
+  );
 
   it('falls back to 24 fps when the video frame rate is unknown', () => {
-    const graph = valueAfter(buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 0 } })), '-filter_complex');
+    const graph = valueAfter(
+      buildFfmpegArgs(burnJob({ video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 0 } })),
+      '-filter_complex',
+    );
     expect(graph).toContain('[0:5]fps=24.000,');
   });
 
   describe('2160p HDR10 kept', () => {
     const uhd = decision({ subtitleBurnIn: true });
     const uhdJob = (overrides: Partial<EncodeJob> = {}) =>
-      job({ decision: uhd, video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 }, burn: { index: 4 }, ...overrides });
+      job({
+        decision: uhd,
+        video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 },
+        burn: { index: 4 },
+        ...overrides,
+      });
 
     it('decodes on NVDEC, downloads p010 frames and renders the bitmap at 1080p before a neighbor upscale', () => {
       const args = buildFfmpegArgs(uhdJob());
@@ -271,7 +326,9 @@ describe('subtitle burn-in', () => {
     });
 
     it('keeps the 10 s pre-roll and the canvas size', () => {
-      const args = buildFfmpegArgs(uhdJob({ startSegment: 10, burn: { index: 4, canvas: { width: 1920, height: 1080 } } }));
+      const args = buildFfmpegArgs(
+        uhdJob({ startSegment: 10, burn: { index: 4, canvas: { width: 1920, height: 1080 } } }),
+      );
       expect(args[args.indexOf('-ss') + 1]).toBe('30');
       expect(valueAfter(args, '-canvas_size')).toBe('1920x1080');
       expect(valueAfter(args, '-output_ts_offset')).toBe('40');
@@ -284,7 +341,17 @@ describe('subtitle burn-in', () => {
     });
 
     it('is not used for tone-mapped output or below 2160p', () => {
-      const mapped = buildFfmpegArgs(uhdJob({ decision: decision({ dynamicRange: 'sdr', toneMapped: true, width: 3840, height: 2160, subtitleBurnIn: true }) }));
+      const mapped = buildFfmpegArgs(
+        uhdJob({
+          decision: decision({
+            dynamicRange: 'sdr',
+            toneMapped: true,
+            width: 3840,
+            height: 2160,
+            subtitleBurnIn: true,
+          }),
+        }),
+      );
       expect(mapped).not.toContain('-hwaccel');
       const hd = buildFfmpegArgs(uhdJob({ decision: decision({ width: 1920, height: 1080, subtitleBurnIn: true }) }));
       expect(hd).not.toContain('-hwaccel');
@@ -294,7 +361,12 @@ describe('subtitle burn-in', () => {
 
   it('overlays after tone mapping, which runs in software from the system-memory frames', () => {
     const mapped = decision({ dynamicRange: 'sdr', toneMapped: true, subtitleBurnIn: true });
-    const graph = valueAfter(buildFfmpegArgs(burnJob({ decision: mapped, video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 } })), '-filter_complex');
+    const graph = valueAfter(
+      buildFfmpegArgs(
+        burnJob({ decision: mapped, video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 } }),
+      ),
+      '-filter_complex',
+    );
     expect(graph).toMatch(/^\[0:0\]format=p010le,hwupload,libplacebo=.*hwdownload,format=yuv420p\[v\];/);
   });
 
@@ -305,7 +377,10 @@ describe('subtitle burn-in', () => {
 
 describe('software decode fallback', () => {
   it('uses CPU scaling for sources NVDEC cannot decode', () => {
-    const j = job({ decision: decision({ dynamicRange: 'sdr', width: 1920, height: 1080 }), video: { index: 0, codec: 'h264', pixFmt: 'yuv420p10le', fps: 24 } });
+    const j = job({
+      decision: decision({ dynamicRange: 'sdr', width: 1920, height: 1080 }),
+      video: { index: 0, codec: 'h264', pixFmt: 'yuv420p10le', fps: 24 },
+    });
     expect(buildVideoFilter(j)).toBe('scale=1920:1080:flags=bicubic,format=nv12');
     expect(buildFfmpegArgs(j)).not.toContain('-hwaccel');
   });
@@ -341,11 +416,19 @@ describe('thread caps', () => {
   });
 
   it('follows the configured caps', () => {
-    expect(threadFlags(buildFfmpegArgs(job({ threads: { gpu: 2, cpu: 6 } })))).toEqual({ threads: '2', filter: '2', complex: '2' });
+    expect(threadFlags(buildFfmpegArgs(job({ threads: { gpu: 2, cpu: 6 } })))).toEqual({
+      threads: '2',
+      filter: '2',
+      complex: '2',
+    });
   });
 
   it('uses the CPU cap for software burn-in, the hwdownload plus CPU overlay path and the CPU tone-map fallback', () => {
-    const burn = job({ decision: sdrHd, video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 24 }, burn: { index: 5 } });
+    const burn = job({
+      decision: sdrHd,
+      video: { index: 0, codec: 'h264', pixFmt: 'yuv420p', fps: 24 },
+      burn: { index: 5 },
+    });
     expect(threadFlags(buildFfmpegArgs(burn)).threads).toBe('8');
     const uhdBurn = job({ decision: decision({ subtitleBurnIn: true }), burn: { index: 4 } });
     expect(threadFlags(buildFfmpegArgs(uhdBurn)).threads).toBe('8');

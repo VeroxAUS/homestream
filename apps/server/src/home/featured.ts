@@ -10,14 +10,22 @@ export interface FeaturedInput {
   popularShows: MediaSummary[];
   continueWatching: ContinueWatchingItem[];
   /** The most recent title with enough watched time and the TMDB recommendations for it; null when there is none or TMDB failed. */
-  because: { base: { mediaType: 'movie' | 'tv'; tmdbId: number; title: string }; recommendations: MediaSummary[] } | null;
+  because: {
+    base: { mediaType: 'movie' | 'tv'; tmdbId: number; title: string };
+    recommendations: MediaSummary[];
+  } | null;
   /** `movie:<id>` / `tv:<id>` of every title with enough watched time. */
   played: ReadonlySet<string>;
 }
 
 const keyOf = (type: string, tmdbId: number) => `${type}:${tmdbId}`;
 
-function toFeatured(item: MediaSummary, reason: FeaturedItem['reason'], reasonLabel: string, basedOn?: FeaturedItem['basedOn']): FeaturedItem {
+function toFeatured(
+  item: MediaSummary,
+  reason: FeaturedItem['reason'],
+  reasonLabel: string,
+  basedOn?: FeaturedItem['basedOn'],
+): FeaturedItem {
   const featured: FeaturedItem = {
     mediaType: item.type,
     tmdbId: item.tmdbId,
@@ -45,7 +53,12 @@ export function buildFeatured(input: FeaturedInput): FeaturedItem[] {
     !chosen.has(keyOf(item.type, item.tmdbId)) &&
     (allowContinuing || !continuing.has(keyOf(item.type, item.tmdbId)));
 
-  const take = (list: MediaSummary[], reason: FeaturedItem['reason'], label: string, allowContinuing = false): boolean => {
+  const take = (
+    list: MediaSummary[],
+    reason: FeaturedItem['reason'],
+    label: string,
+    allowContinuing = false,
+  ): boolean => {
     const item = list.find((candidate) => usable(candidate, allowContinuing));
     if (!item) return false;
     chosen.set(keyOf(item.type, item.tmdbId), toFeatured(item, reason, label));
@@ -58,12 +71,18 @@ export function buildFeatured(input: FeaturedInput): FeaturedItem[] {
     const { base, recommendations } = input.because;
     const pick = recommendations.find(
       (candidate) =>
-        usable(candidate) && keyOf(candidate.type, candidate.tmdbId) !== keyOf(base.mediaType, base.tmdbId) && !input.played.has(keyOf(candidate.type, candidate.tmdbId)),
+        usable(candidate) &&
+        keyOf(candidate.type, candidate.tmdbId) !== keyOf(base.mediaType, base.tmdbId) &&
+        !input.played.has(keyOf(candidate.type, candidate.tmdbId)),
     );
     if (pick) {
       chosen.set(
         keyOf(pick.type, pick.tmdbId),
-        toFeatured(pick, 'because_you_watched', `Because you watched ${base.title}`, { mediaType: base.mediaType, tmdbId: base.tmdbId, title: base.title }),
+        toFeatured(pick, 'because_you_watched', `Because you watched ${base.title}`, {
+          mediaType: base.mediaType,
+          tmdbId: base.tmdbId,
+          title: base.title,
+        }),
       );
     }
   }

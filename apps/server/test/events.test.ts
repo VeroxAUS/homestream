@@ -77,7 +77,10 @@ describe('GET /api/events', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
 
     setTimeout(() => app.ctx.bus.emit('session.update', { sessionId: 's1', state: 'playing' }), 50);
-    const text = await readUntil(response, (t) => (t.match(/event: heartbeat/g)?.length ?? 0) >= 3 && t.includes('session.update'));
+    const text = await readUntil(
+      response,
+      (t) => (t.match(/event: heartbeat/g)?.length ?? 0) >= 3 && t.includes('session.update'),
+    );
 
     expect(text.match(/event: heartbeat/g)?.length).toBeGreaterThanOrEqual(3);
     expect(text).toContain('event: session.update');

@@ -15,7 +15,13 @@ export function isMain(metaUrl) {
 
 /** Runs git with an args array (no shell) and returns stdout. */
 export function git(args, { cwd = process.cwd(), maxBuffer = 64 * 1024 * 1024 } = {}) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 export function repoRoot(cwd = process.cwd()) {

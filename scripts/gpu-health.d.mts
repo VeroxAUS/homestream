@@ -45,7 +45,11 @@ export const SYSTEM_INFO_SCRIPT: string;
 export function parseArgs(argv: string[]): { since: string; sinceMs: number; minFreeGb: number; requireIdle: boolean };
 export function parseGpuProcessNames(stdout: string): string[];
 export function parseFfmpegRunning(stdout: string): boolean;
-export function summarizeIdle(samples: Array<number | null>): { samples: Array<number | null>; utilPct: number | null; spikes: number | null };
+export function summarizeIdle(samples: Array<number | null>): {
+  samples: Array<number | null>;
+  utilPct: number | null;
+  spikes: number | null;
+};
 export function parseEvents(stdout: string): GpuEvent[];
 export function filterNewer(events: GpuEvent[], sinceMs: number): GpuEvent[];
 export function parseNvidiaSmi(stdout: string): GpuReading;

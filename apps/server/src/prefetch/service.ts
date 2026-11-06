@@ -36,7 +36,10 @@ interface Run {
 }
 
 function describe(error: unknown): string {
-  return redact(error instanceof Error ? error.message : 'unexpected error').replace(/\b(?:https?|ftp):\/\/\S+/gi, '<url>');
+  return redact(error instanceof Error ? error.message : 'unexpected error').replace(
+    /\b(?:https?|ftp):\/\/\S+/gi,
+    '<url>',
+  );
 }
 
 /**

@@ -51,17 +51,29 @@ describe('loadConfig', () => {
   });
 
   it('reads FFMPEG_MAX_RSS_MB with a 4096 MiB default and rejects values that are not positive whole numbers', () => {
-    const none = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss-default.env', '# nothing\n') }, repoRoot: null });
+    const none = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('rss-default.env', '# nothing\n') },
+      repoRoot: null,
+    });
     expect(none.ffmpegMaxRssMb).toBe(4096);
-    const set = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss.env', 'FFMPEG_MAX_RSS_MB=2048\n') }, repoRoot: null });
+    const set = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('rss.env', 'FFMPEG_MAX_RSS_MB=2048\n') },
+      repoRoot: null,
+    });
     expect(set.ffmpegMaxRssMb).toBe(2048);
-    const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('rss-bad.env', 'FFMPEG_MAX_RSS_MB=-1\n') }, repoRoot: null });
+    const bad = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('rss-bad.env', 'FFMPEG_MAX_RSS_MB=-1\n') },
+      repoRoot: null,
+    });
     expect(bad.ffmpegMaxRssMb).toBe(4096);
     expect(bad.warnings.join(' ')).toContain('FFMPEG_MAX_RSS_MB');
   });
 
   it('reads the download limits from the file, lets process env override them, and defaults to 150 / 180 / 120', () => {
-    const none = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('limits-default.env', '# nothing\n') }, repoRoot: null });
+    const none = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('limits-default.env', '# nothing\n') },
+      repoRoot: null,
+    });
     expect([none.maxDownloadMbps, none.readAheadSec, none.readAheadResumeSec]).toEqual([150, 180, 120]);
 
     const file = envFile('limits.env', 'MAX_DOWNLOAD_MBPS=45\nREAD_AHEAD_SEC=240\nREAD_AHEAD_RESUME_SEC=150\n');
@@ -70,7 +82,9 @@ describe('loadConfig', () => {
     expect(fromFile.warnings).toEqual([]);
 
     const overridden = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, MAX_DOWNLOAD_MBPS: '50' }, repoRoot: null });
-    expect([overridden.maxDownloadMbps, overridden.readAheadSec, overridden.readAheadResumeSec]).toEqual([50, 240, 150]);
+    expect([overridden.maxDownloadMbps, overridden.readAheadSec, overridden.readAheadResumeSec]).toEqual([
+      50, 240, 150,
+    ]);
   });
 
   it.each([
@@ -82,19 +96,27 @@ describe('loadConfig', () => {
     ['READ_AHEAD_SEC=0', 'READ_AHEAD_SEC', [150, 180, 120]],
     ['READ_AHEAD_RESUME_SEC=-1', 'READ_AHEAD_RESUME_SEC', [150, 180, 120]],
     ['READ_AHEAD_SEC=180\nREAD_AHEAD_RESUME_SEC=200', 'READ_AHEAD_RESUME_SEC', [150, 180, 120]],
-  ])('keeps the server up and falls back to the default with a warning naming the key for %j', (content, key, expected) => {
-    const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('limits-bad.env', `${content}\n`) }, repoRoot: null });
-    expect([config.maxDownloadMbps, config.readAheadSec, config.readAheadResumeSec]).toEqual(expected);
-    expect(config.warnings).toHaveLength(1);
-    expect(config.warnings[0]).toContain(key);
-    expect(config.warnings[0]).toContain('invalid');
-    expect(config.warnings[0]).toMatch(/default/);
-  });
+  ])(
+    'keeps the server up and falls back to the default with a warning naming the key for %j',
+    (content, key, expected) => {
+      const config = loadConfig({
+        env: { HOMESTREAM_ENV_FILE: envFile('limits-bad.env', `${content}\n`) },
+        repoRoot: null,
+      });
+      expect([config.maxDownloadMbps, config.readAheadSec, config.readAheadResumeSec]).toEqual(expected);
+      expect(config.warnings).toHaveLength(1);
+      expect(config.warnings[0]).toContain(key);
+      expect(config.warnings[0]).toContain('invalid');
+      expect(config.warnings[0]).toMatch(/default/);
+    },
+  );
 
   it('reads LOG_LEVEL (info by default) and falls back with a warning on an unknown level', () => {
     const file = envFile('log-level.env', '');
     expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null }).logLevel).toBe('info');
-    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, LOG_LEVEL: 'DEBUG' }, repoRoot: null }).logLevel).toBe('debug');
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, LOG_LEVEL: 'DEBUG' }, repoRoot: null }).logLevel).toBe(
+      'debug',
+    );
     const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, LOG_LEVEL: 'chatty' }, repoRoot: null });
     expect(bad.logLevel).toBe('info');
     expect(bad.warnings.join('\n')).toContain('LOG_LEVEL');
@@ -119,7 +141,10 @@ describe('loadConfig', () => {
   });
 
   it('falls back with a warning on an invalid PORT', () => {
-    const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('badport.env', 'PORT=banana\n') }, repoRoot: null });
+    const config = loadConfig({
+      env: { HOMESTREAM_ENV_FILE: envFile('badport.env', 'PORT=banana\n') },
+      repoRoot: null,
+    });
     expect(config.port).toBe(8600);
     expect(config.warnings.join(' ')).toContain('PORT');
   });
@@ -127,7 +152,9 @@ describe('loadConfig', () => {
   it('puts the source proxy on PORT+50 unless SOURCE_PROXY_PORT overrides it', () => {
     const file = envFile('proxyport.env', 'PORT=8606\n');
     expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null }).sourceProxyPort).toBe(8656);
-    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, SOURCE_PROXY_PORT: '8690' }, repoRoot: null }).sourceProxyPort).toBe(8690);
+    expect(
+      loadConfig({ env: { HOMESTREAM_ENV_FILE: file, SOURCE_PROXY_PORT: '8690' }, repoRoot: null }).sourceProxyPort,
+    ).toBe(8690);
     expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: file, PORT: '0' }, repoRoot: null }).sourceProxyPort).toBe(0);
     const bad = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, SOURCE_PROXY_PORT: 'banana' }, repoRoot: null });
     expect(bad.sourceProxyPort).toBe(8656);
@@ -143,7 +170,9 @@ describe('loadConfig', () => {
     writeFileSync(path.join(appData, 'HomeStream', 'config.env'), 'SERVER_NAME=appdata\n');
     const explicit = envFile('explicit.env', 'SERVER_NAME=explicit\n');
 
-    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: explicit, APPDATA: appData }, repoRoot: repo }).serverName).toBe('explicit');
+    expect(loadConfig({ env: { HOMESTREAM_ENV_FILE: explicit, APPDATA: appData }, repoRoot: repo }).serverName).toBe(
+      'explicit',
+    );
     const fromRepo = loadConfig({ env: { APPDATA: appData }, repoRoot: repo });
     expect(fromRepo.serverName).toBe('repo');
     expect(fromRepo.configFile.source).toBe('repo');

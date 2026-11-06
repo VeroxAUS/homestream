@@ -11,7 +11,17 @@ import { bootHarness, PROFILES, startSession, type Harness, type HarnessOptions,
 
 const PROBE: ProbeResult = {
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [],
 };
@@ -99,7 +109,9 @@ describe('concurrent session limit of two', () => {
 
   it('counts starts that are still preparing', async () => {
     const { harness, encoders } = await boot();
-    const results = await Promise.all((['chromecast4k', 'desktop', 'emulator'] as const).map((profile) => start(harness, profile)));
+    const results = await Promise.all(
+      (['chromecast4k', 'desktop', 'emulator'] as const).map((profile) => start(harness, profile)),
+    );
     expect(results.map((result) => result.status).sort()).toEqual([201, 201, 429]);
     expect(encoders.started).toBe(2);
     expect(await activityCount(harness)).toBe(2);
@@ -153,7 +165,9 @@ describe('concurrent session limit of two', () => {
     expect(broken.status).toBe(201);
     encoders.mode = 'fail';
     encoders.handles[0]?.crash();
-    await waitFor(async () => (await harness.app.inject(`/api/sessions/${broken.body.sessionId}`)).json().state === 'error');
+    await waitFor(
+      async () => (await harness.app.inject(`/api/sessions/${broken.body.sessionId}`)).json().state === 'error',
+    );
     // One automatic retry, then the session ends in error.
     expect(encoders.started).toBe(2);
     expect(await activityCount(harness)).toBe(0);
@@ -163,7 +177,9 @@ describe('concurrent session limit of two', () => {
     expect(results.map((result) => result.status)).toEqual([201, 201]);
     await expectRefusedThird(harness, encoders);
 
-    expect((await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${broken.body.sessionId}` })).statusCode).toBeLessThan(300);
+    expect(
+      (await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${broken.body.sessionId}` })).statusCode,
+    ).toBeLessThan(300);
     await expectRefusedThird(harness, encoders);
   });
 
@@ -172,7 +188,9 @@ describe('concurrent session limit of two', () => {
     const first = await start(harness, 'chromecast4k');
     await start(harness, 'desktop');
     await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${first.body.sessionId}` });
-    expect((await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${first.body.sessionId}` })).statusCode).toBe(404);
+    expect(
+      (await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${first.body.sessionId}` })).statusCode,
+    ).toBe(404);
     expect((await start(harness, 'emulator')).status).toBe(201);
     await expectRefusedThird(harness, encoders);
   });

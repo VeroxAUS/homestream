@@ -41,8 +41,7 @@ export class GatewayCache {
   /** Returns the entry even when expired; callers compare `expiresAt`. */
   get(key: string): CachedLookup | undefined {
     const row = this.db.prepare('SELECT key, json, expires_at FROM gateway_cache WHERE key = ?').get(key) as
-      | Row
-      | undefined;
+      Row | undefined;
     return row ? parseRow(row) : undefined;
   }
 

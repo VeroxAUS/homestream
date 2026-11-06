@@ -9,12 +9,17 @@ export function listChildPids(names: string[], parentPid: number = process.pid):
   const out = execFileSync(
     'powershell.exe',
     [
-      '-NoProfile', '-NonInteractive', '-Command',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
       `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parentPid} AND (${clause})" | ForEach-Object { $_.ProcessId }`,
     ],
     { encoding: 'utf8', timeout: 20_000, windowsHide: true },
   );
-  return out.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid) && pid > 0);
+  return out
+    .split(/\r?\n/)
+    .map((line) => Number(line.trim()))
+    .filter((pid) => Number.isInteger(pid) && pid > 0);
 }
 
 /**
@@ -30,7 +35,11 @@ export function killChildProcesses(names: string[] = GPU_PROCESS_NAMES, parentPi
   }
   for (const pid of pids) {
     try {
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 10_000, windowsHide: true });
+      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        timeout: 10_000,
+        windowsHide: true,
+      });
     } catch {
       // already gone
     }

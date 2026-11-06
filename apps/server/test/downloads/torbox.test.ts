@@ -3,7 +3,10 @@ import { TorboxClient, TorboxError, parseMylist } from '../../src/downloads/torb
 
 const KEY = 'tbkey-secret-0123456789';
 
-const client = (respond: () => Response | Promise<Response>, seen: Array<{ url: string; headers: Record<string, string> }> = []) =>
+const client = (
+  respond: () => Response | Promise<Response>,
+  seen: Array<{ url: string; headers: Record<string, string> }> = [],
+) =>
   new TorboxClient({
     baseUrl: 'https://api.torbox.test',
     apiKey: KEY,
@@ -48,7 +51,11 @@ describe('parseMylist', () => {
   });
 
   it('treats missing numbers as no progress and no eta', () => {
-    expect(parseMylist({ data: [{ hash: 'aa' }] })[0]).toMatchObject({ progress: 0, etaSec: null, downloadFinished: false });
+    expect(parseMylist({ data: [{ hash: 'aa' }] })[0]).toMatchObject({
+      progress: 0,
+      etaSec: null,
+      downloadFinished: false,
+    });
   });
 
   it('rejects an answer without a data array', () => {
@@ -68,22 +75,30 @@ describe('TorboxClient.list', () => {
   });
 
   it.each([401, 403])('maps HTTP %i to an auth error without the key in the message', async (status) => {
-    const error = await client(() => new Response('no', { status })).list().catch((e: unknown) => e);
+    const error = await client(() => new Response('no', { status }))
+      .list()
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TorboxError);
     expect((error as TorboxError).kind).toBe('auth');
     expect((error as TorboxError).message).not.toContain(KEY);
   });
 
   it.each([429, 500, 503])('maps HTTP %i to unavailable', async (status) => {
-    const error = await client(() => new Response('no', { status })).list().catch((e: unknown) => e);
+    const error = await client(() => new Response('no', { status }))
+      .list()
+      .catch((e: unknown) => e);
     expect((error as TorboxError).kind).toBe('unavailable');
   });
 
   it('maps network failures and unreadable bodies to unavailable', async () => {
-    const network = await client(() => Promise.reject(new Error(`connect failed for ${KEY}`))).list().catch((e: unknown) => e);
+    const network = await client(() => Promise.reject(new Error(`connect failed for ${KEY}`)))
+      .list()
+      .catch((e: unknown) => e);
     expect((network as TorboxError).kind).toBe('unavailable');
     expect((network as TorboxError).message).not.toContain(KEY);
-    const garbage = await client(() => new Response('<html>')).list().catch((e: unknown) => e);
+    const garbage = await client(() => new Response('<html>'))
+      .list()
+      .catch((e: unknown) => e);
     expect((garbage as TorboxError).kind).toBe('unavailable');
   });
 });

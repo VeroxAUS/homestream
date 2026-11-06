@@ -44,7 +44,16 @@ describe('failing ffmpeg wrapper', () => {
     expect((await call(exe, ['-f', 'hls', 'a.m3u8'])).code).toBe(1);
     expect((await call(exe, ['-f', 'hls', 'a.m3u8'])).code).toBe(1);
     // The third call reaches the real ffmpeg, which rejects the missing input with its own exit code (not the wrapper's simulated failure).
-    const third = await call(exe, ['-hide_banner', '-loglevel', 'error', '-i', path.join(root, 'missing input.mkv'), '-f', 'hls', path.join(root, 'a.m3u8')]);
+    const third = await call(exe, [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      path.join(root, 'missing input.mkv'),
+      '-f',
+      'hls',
+      path.join(root, 'a.m3u8'),
+    ]);
     expect(third.stderr).not.toContain('simulated encoder failure');
     expect(third.stderr).toContain('missing input.mkv');
     expect(readCounter(counter)).toBe(3);

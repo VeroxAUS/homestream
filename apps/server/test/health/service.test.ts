@@ -6,7 +6,16 @@ import { makeTempDir, removeDir } from '../helpers.js';
 import { bootHealthRig, torboxAccount, type HealthRig } from './rig.js';
 
 const MINUTE = 60_000;
-const NEEDLES = ['tmdb-test-token-123456', 'torbox-key-abcdef123456', 'gw.example.test', 'aaaa1111', 'bbbb2222cccc', 'someone@example.com', 'REFCODE1', 'tb-cdn.io'];
+const NEEDLES = [
+  'tmdb-test-token-123456',
+  'torbox-key-abcdef123456',
+  'gw.example.test',
+  'aaaa1111',
+  'bbbb2222cccc',
+  'someone@example.com',
+  'REFCODE1',
+  'tb-cdn.io',
+];
 
 let root: string;
 let rig: HealthRig;
@@ -20,7 +29,8 @@ afterEach(async () => {
   removeDir(root);
 });
 
-const statuses = (body: HealthResponse): Record<string, string> => Object.fromEntries(body.checks.map((check) => [check.id, check.status]));
+const statuses = (body: HealthResponse): Record<string, string> =>
+  Object.fromEntries(body.checks.map((check) => [check.id, check.status]));
 
 async function boot(env: Record<string, string> = {}, envFile?: string): Promise<HealthRig> {
   rig = await bootHealthRig(root, { env: { TORBOX_API_KEY: 'torbox-key-abcdef123456', ...env }, envFile });
@@ -46,13 +56,27 @@ describe('GET /api/health on a healthy system', () => {
   it('carries real details for the gateway, torbox, ffmpeg, gpu, disk, sessions and network checks', async () => {
     await boot();
     const body = await rig.health();
-    expect(rig.check(body, 'gateway').details).toMatchObject({ addon: { name: 'AIOStreams', version: '2.20.1' }, url: 'aiostreams (redacted)' });
+    expect(rig.check(body, 'gateway').details).toMatchObject({
+      addon: { name: 'AIOStreams', version: '2.20.1' },
+      url: 'aiostreams (redacted)',
+    });
     expect(rig.check(body, 'torbox').details).toMatchObject({ plan: 'Essential', is_subscribed: true, daysLeft: 39 });
-    expect(rig.check(body, 'ffmpeg').details).toMatchObject({ ffmpegVersion: '9.0.2', h264_nvenc: true, hevc_nvenc: true, testEncode: { ok: true } });
+    expect(rig.check(body, 'ffmpeg').details).toMatchObject({
+      ffmpegVersion: '9.0.2',
+      h264_nvenc: true,
+      hevc_nvenc: true,
+      testEncode: { ok: true },
+    });
     expect(rig.check(body, 'gpu').details).toMatchObject({ name: 'NVIDIA GeForce RTX 4080', temperatureC: 48 });
     expect(rig.check(body, 'disk').details).toMatchObject({ transcodeMaxGb: 20, transcodeUsageGb: 0 });
     expect(rig.check(body, 'sessions').details).toMatchObject({ active: 0, errorsLast15Min: 0 });
-    expect(rig.check(body, 'network').details).toMatchObject({ capMbps: 150, readAheadSec: 180, resumeSec: 120, rateMbps: 0, sessions: [] });
+    expect(rig.check(body, 'network').details).toMatchObject({
+      capMbps: 150,
+      readAheadSec: 180,
+      resumeSec: 120,
+      rateMbps: 0,
+      sessions: [],
+    });
   });
 
   it('never calls the stream endpoint and asks the gateway for the manifest only', async () => {
@@ -112,7 +136,8 @@ describe('POST /api/health/run and caching', () => {
     const first = await rig.health();
     rig.clock.advance(2000);
     const fresh = await rig.run('?fresh=1');
-    for (const id of ['torbox', 'ffmpeg']) expect(rig.check(fresh, id).checkedAt > rig.check(first, id).checkedAt).toBe(true);
+    for (const id of ['torbox', 'ffmpeg'])
+      expect(rig.check(fresh, id).checkedAt > rig.check(first, id).checkedAt).toBe(true);
     expect(rig.commands.filter((command) => command.includes('testsrc'))).toHaveLength(2);
   });
 
@@ -150,7 +175,14 @@ describe('induced failures', () => {
     expect(tmdb.status).toBe('error');
     expect(tmdb.hint).toMatch(/TMDB_READ_TOKEN/);
     expect(JSON.stringify(body)).not.toContain('wrong-token-value-999');
-    expect(statuses(body)).toMatchObject({ config: 'ok', gateway: 'ok', torbox: 'ok', ffmpeg: 'ok', gpu: 'ok', disk: 'ok' });
+    expect(statuses(body)).toMatchObject({
+      config: 'ok',
+      gateway: 'ok',
+      torbox: 'ok',
+      ffmpeg: 'ok',
+      gpu: 'ok',
+      disk: 'ok',
+    });
     expect(body.overall).toBe('error');
     const home = await rig.app.inject('/api/home');
     expect(home.statusCode).toBeGreaterThanOrEqual(400);
@@ -177,7 +209,9 @@ describe('induced failures', () => {
     expect(JSON.stringify(body)).not.toContain('torbox-key-abcdef123456');
     expect(statuses(body)).toMatchObject({ tmdb: 'ok', gateway: 'ok', ffmpeg: 'ok' });
     const logs = (await rig.app.inject('/api/logs?source=torbox')).json();
-    expect(logs.events).toEqual([expect.objectContaining({ level: 'error', source: 'torbox', message: expect.stringContaining('TorBox') })]);
+    expect(logs.events).toEqual([
+      expect.objectContaining({ level: 'error', source: 'torbox', message: expect.stringContaining('TorBox') }),
+    ]);
   });
 
   it('a missing ffmpeg: ffmpeg error naming FFMPEG_PATH, the server keeps answering', async () => {
@@ -232,9 +266,19 @@ describe('sessions check', () => {
     await boot();
     const deps = { db: rig.app.ctx.db, bus: rig.app.ctx.bus };
     logEvent(deps, { level: 'error', source: 'health', message: 'x', details: { check: 'ffmpeg' } });
-    logEvent(deps, { level: 'error', source: 'ffmpeg', message: 'ffmpeg own health event', details: { check: 'ffmpeg' } });
+    logEvent(deps, {
+      level: 'error',
+      source: 'ffmpeg',
+      message: 'ffmpeg own health event',
+      details: { check: 'ffmpeg' },
+    });
     expect(rig.check(await rig.run(), 'sessions').status).toBe('ok');
-    logEvent(deps, { level: 'error', source: 'session', message: 'The stream link stopped working.', sessionId: 'abc' });
+    logEvent(deps, {
+      level: 'error',
+      source: 'session',
+      message: 'The stream link stopped working.',
+      sessionId: 'abc',
+    });
     const sessions = rig.check(await rig.run(), 'sessions');
     expect(sessions).toMatchObject({ status: 'warn', details: { errorsLast15Min: 1 } });
     expect(sessions.details.recentErrors).toEqual([expect.objectContaining({ source: 'session', sessionId: 'abc' })]);
@@ -245,7 +289,10 @@ describe('sessions check', () => {
     const spy = vi.spyOn(rig.app.ctx.playback, 'fallingBehindSessions').mockReturnValue([]);
     expect(rig.check(await rig.run(), 'sessions').status).toBe('ok');
     spy.mockReturnValue(['sess-1']);
-    expect(rig.check(await rig.run(), 'sessions')).toMatchObject({ status: 'warn', details: { fallingBehind: ['sess-1'] } });
+    expect(rig.check(await rig.run(), 'sessions')).toMatchObject({
+      status: 'warn',
+      details: { fallingBehind: ['sess-1'] },
+    });
   });
 
   it('reports the active count of GET /api/activity', async () => {
@@ -304,10 +351,16 @@ describe('secret audit of health, logs and events', () => {
     await boot();
     rig.torbox.status = 401;
     rig.tmdb.failWith = 'network';
-    rig.gateway.respond = () => Promise.reject(new TypeError('fetch failed https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/manifest.json'));
+    rig.gateway.respond = () =>
+      Promise.reject(new TypeError('fetch failed https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/manifest.json'));
     logEvent(
       { db: rig.app.ctx.db, bus: rig.app.ctx.bus },
-      { level: 'error', source: 'session', message: 'link https://store-1.wnam.tb-cdn.io/dl/x?token=abc123 bearer torbox-key-abcdef123456', details: { url: 'https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/stream/movie/tt1.json' } },
+      {
+        level: 'error',
+        source: 'session',
+        message: 'link https://store-1.wnam.tb-cdn.io/dl/x?token=abc123 bearer torbox-key-abcdef123456',
+        details: { url: 'https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/stream/movie/tt1.json' },
+      },
     );
     const outputs = [
       JSON.stringify(await rig.run('?fresh=1')),

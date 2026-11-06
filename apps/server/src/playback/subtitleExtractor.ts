@@ -118,11 +118,7 @@ export class SubtitleExtractor {
   get bursting(): boolean {
     const now = Date.now();
     return this.runs.some(
-      (run) =>
-        run.running &&
-        !run.stopRequested &&
-        now - run.startedAt < BURST_MAX_MS &&
-        run.headSec < run.needSec,
+      (run) => run.running && !run.stopRequested && now - run.startedAt < BURST_MAX_MS && run.headSec < run.needSec,
     );
   }
 
@@ -210,7 +206,14 @@ export class SubtitleExtractor {
 
   private onExit(run: SubtitleRun, exit: EncoderExit): void {
     this.release(run);
-    this.options.onRunEvent?.({ event: 'stop', runId: run.id, kind: run.kind, ss: run.ss, headSec: run.headSec, exitCode: exit.code });
+    this.options.onRunEvent?.({
+      event: 'stop',
+      runId: run.id,
+      kind: run.kind,
+      ss: run.ss,
+      headSec: run.headSec,
+      exitCode: exit.code,
+    });
     this.store.setCoverage(run.id, run.coverage());
     if (this.stopped || run.stopRequested) {
       if (!this.stopped) this.evaluate();

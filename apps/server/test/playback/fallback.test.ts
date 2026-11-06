@@ -12,13 +12,25 @@ import { bootHarness, PROFILES, type Harness, type HarnessOptions, type ProfileN
 
 const PROBE: ProbeResult = {
   durationSec: 120,
-  video: { index: 0, codec: 'h264', profile: 'High', width: 1920, height: 1080, pixFmt: 'yuv420p', fps: 24, hdr: 'sdr', dolbyVisionProfile: null },
+  video: {
+    index: 0,
+    codec: 'h264',
+    profile: 'High',
+    width: 1920,
+    height: 1080,
+    pixFmt: 'yuv420p',
+    fps: 24,
+    hdr: 'sdr',
+    dolbyVisionProfile: null,
+  },
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [],
 };
 
-const corruptProbe = () => new AppError(422, 'no_video_stream', 'The selected file has no playable video stream.', 'Try again.');
-const notCached = () => new AppError(409, 'stream_not_cached', 'This stream is not cached on TorBox yet.', 'Try again later.');
+const corruptProbe = () =>
+  new AppError(422, 'no_video_stream', 'The selected file has no playable video stream.', 'Try again.');
+const notCached = () =>
+  new AppError(409, 'stream_not_cached', 'This stream is not cached on TorBox yet.', 'Try again later.');
 
 let root: string;
 const harnesses: Harness[] = [];
@@ -85,15 +97,25 @@ const post = (harness: Harness, streamId: string, profile: ProfileName = 'chrome
     payload: { mediaType: 'movie', tmdbId: 278, streamId, device: PROFILES[profile], subtitle: null },
   });
 
-const sessionDirs = (harness: Harness): string[] => (existsSync(harness.transcodeDir) ? readdirSync(harness.transcodeDir) : []);
+const sessionDirs = (harness: Harness): string[] =>
+  existsSync(harness.transcodeDir) ? readdirSync(harness.transcodeDir) : [];
 const count = (harness: Harness, sql: string): number => (harness.db.prepare(sql).get() as { n: number }).n;
 const SAME = ['1080p.WEB-DL.x264-A', '1080p.WEB-DL.x264-B', '1080p.WEB-DL.x264-C', '1080p.WEB-DL.x264-D'];
 
-async function expectNothingLeftExcept(harness: Harness, encoders: FakeEncoders, played: SessionResponse, failedEncoders: number[]): Promise<void> {
+async function expectNothingLeftExcept(
+  harness: Harness,
+  encoders: FakeEncoders,
+  played: SessionResponse,
+  failedEncoders: number[],
+): Promise<void> {
   expect(sessionDirs(harness)).toEqual([played.sessionId]);
-  expect(((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions.map((s) => s.sessionId)).toEqual([played.sessionId]);
+  expect(
+    ((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions.map((s) => s.sessionId),
+  ).toEqual([played.sessionId]);
   expect(harness.app.ctx.playback.list().map((s) => s.sessionId)).toEqual([played.sessionId]);
-  expect(harness.db.prepare('SELECT session_id, status FROM plays').all()).toEqual([{ session_id: played.sessionId, status: 'ok' }]);
+  expect(harness.db.prepare('SELECT session_id, status FROM plays').all()).toEqual([
+    { session_id: played.sessionId, status: 'ok' },
+  ]);
   expect(count(harness, "SELECT COUNT(*) AS n FROM events WHERE level = 'error'")).toBe(0);
   for (const index of failedEncoders) expect(encoders.handles[index]?.running, `encoder ${index}`).toBe(false);
   expect(encoders.handles.filter((handle) => handle.running)).toHaveLength(1);
@@ -109,7 +131,10 @@ describe('automatic start with fallback', () => {
     expect(resolved).toEqual([0]);
     expect(body.state).toMatch(/ready|starting/);
     expect(existsSync(path.join(harness.transcodeDir, body.sessionId, 'seg-0.m4s'))).toBe(true);
-    expect((await harness.app.inject(`/api/sessions/${body.sessionId}`)).json()).toMatchObject({ streamId: harness.streamIds.s0, attempts: [] });
+    expect((await harness.app.inject(`/api/sessions/${body.sessionId}`)).json()).toMatchObject({
+      streamId: harness.streamIds.s0,
+      attempts: [],
+    });
   });
 
   it('falls back when the link is a gateway placeholder, and reports its code', async () => {
@@ -121,7 +146,9 @@ describe('automatic start with fallback', () => {
     expect(body.attempts).toEqual([{ streamId: harness.streamIds.s0, code: 'stream_not_cached' }]);
     expect(resolved).toEqual([0, 1]);
     expect(encoders.started).toBe(1);
-    expect(harness.db.prepare('SELECT stream_filename FROM plays').all()).toEqual([{ stream_filename: 'Movie.1994.1080p.WEB-DL.x264-B.mkv' }]);
+    expect(harness.db.prepare('SELECT stream_filename FROM plays').all()).toEqual([
+      { stream_filename: 'Movie.1994.1080p.WEB-DL.x264-B.mkv' },
+    ]);
     await expectNothingLeftExcept(harness, encoders, body, []);
   });
 
@@ -171,7 +198,12 @@ describe('automatic start with fallback', () => {
     expect(res.statusCode).toBe(502);
     const body = res.json() as { error: Record<string, unknown>; attempts: unknown };
     const attempts = [0, 1, 2].map((i) => ({ streamId: harness.streamIds[`s${i}`], code: 'encoder_failed' }));
-    expect(body.error).toMatchObject({ code: 'all_streams_failed', message: expect.any(String), hint: expect.any(String), attempts });
+    expect(body.error).toMatchObject({
+      code: 'all_streams_failed',
+      message: expect.any(String),
+      hint: expect.any(String),
+      attempts,
+    });
     expect(body.attempts).toEqual(attempts);
     expect(JSON.stringify(body)).not.toMatch(/https?:|token\d/);
     expect(resolved).toEqual([0, 1, 2]);
@@ -198,7 +230,10 @@ describe('automatic start with fallback', () => {
     const { harness, encoders } = await boot({ names: SAME.slice(0, 1), resolveFails: { 0: notCached } });
     const res = await post(harness, 'auto');
     expect(res.statusCode).toBe(502);
-    expect(res.json()).toMatchObject({ error: { code: 'all_streams_failed' }, attempts: [{ streamId: harness.streamIds.s0, code: 'stream_not_cached' }] });
+    expect(res.json()).toMatchObject({
+      error: { code: 'all_streams_failed' },
+      attempts: [{ streamId: harness.streamIds.s0, code: 'stream_not_cached' }],
+    });
     expect(encoders.started).toBe(0);
     expect(harness.probeCalls).toEqual([]);
     expect(sessionDirs(harness)).toEqual([]);
@@ -206,7 +241,13 @@ describe('automatic start with fallback', () => {
 
   it('never tries a stream above the device resolution', async () => {
     const { harness, resolved } = await boot({
-      names: ['2160p.WEB-DL.x265-A', '1080p.WEB-DL.x264-B', '1080p.Remux.x264-C', '720p.WEB-DL.x264-D', '480p.WEB-DL.x264-E'],
+      names: [
+        '2160p.WEB-DL.x265-A',
+        '1080p.WEB-DL.x264-B',
+        '1080p.Remux.x264-C',
+        '720p.WEB-DL.x264-D',
+        '480p.WEB-DL.x264-E',
+      ],
       resolveFails: { 1: notCached },
     });
     const res = await post(harness, 'auto', 'emulator');

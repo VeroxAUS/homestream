@@ -121,7 +121,9 @@ describe('live TMDB', () => {
     const res = await app.inject('/api/movie/155');
     expect(res.statusCode).toBe(200);
     expect(performance.now() - started).toBeLessThan(50);
-    const row = app.ctx.db.prepare("SELECT expires_at FROM tmdb_cache WHERE key = 'movie:155'").get() as { expires_at: number };
+    const row = app.ctx.db.prepare("SELECT expires_at FROM tmdb_cache WHERE key = 'movie:155'").get() as {
+      expires_at: number;
+    };
     expect(row.expires_at - Date.now()).toBeGreaterThan(23 * 3_600_000);
   });
 });

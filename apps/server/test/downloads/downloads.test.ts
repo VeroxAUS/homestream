@@ -61,7 +61,8 @@ const downloadingItem = (progress: number, extra: Record<string, unknown> = {}) 
   ...extra,
 });
 
-const finishedItem = () => downloadingItem(1, { download_state: 'cached', download_finished: true, download_present: true });
+const finishedItem = () =>
+  downloadingItem(1, { download_state: 'cached', download_finished: true, download_present: true });
 
 describe('Play on a title with no cached stream (VAL-DL-001)', () => {
   it('answers 202 downloading with the download record and asks the gateway for the link exactly once', async () => {
@@ -88,7 +89,11 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
     expect(playback[0]?.headers.Range).toBe('bytes=0-0');
     expect(rig.resolveCalls).toEqual([]);
     expect(rig.ofType('download.started')).toHaveLength(1);
-    expect(rig.ofType('download.started')[0]?.data).toMatchObject({ downloadId: body.download.id, mediaType: 'movie', tmdbId: 278 });
+    expect(rig.ofType('download.started')[0]?.data).toMatchObject({
+      downloadId: body.download.id,
+      mediaType: 'movie',
+      tmdbId: 278,
+    });
   });
 
   it('sends the AIOStreams-HomeStream user agent on every gateway request', async () => {
@@ -102,8 +107,21 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
   it('picks the best-ranked uncached stream that fits the device', async () => {
     const fakes = makeFakes();
     fakes.gateway.lists.set('tt0111161', [
-      { token: 'tooBig', filename: 'Movie.1994.2160p.UHD.BluRay.REMUX.HDR.HEVC.mkv', cached: false, infoHash: 'b'.repeat(40), mode: 'store_limit_exceeded', size: 60_000_000_000 },
-      { token: 'fits', filename: 'Movie.1994.1080p.BluRay.x264.mkv', cached: false, infoHash: MOVIE_HASH, mode: 'downloading' },
+      {
+        token: 'tooBig',
+        filename: 'Movie.1994.2160p.UHD.BluRay.REMUX.HDR.HEVC.mkv',
+        cached: false,
+        infoHash: 'b'.repeat(40),
+        mode: 'store_limit_exceeded',
+        size: 60_000_000_000,
+      },
+      {
+        token: 'fits',
+        filename: 'Movie.1994.1080p.BluRay.x264.mkv',
+        cached: false,
+        infoHash: MOVIE_HASH,
+        mode: 'downloading',
+      },
     ]);
     const rig = await boot({ fakes });
     const { status } = await rig.play({ device: PROFILES.p720 });
@@ -116,7 +134,13 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
   it('tracks episodes of a show and lists them on the show details', async () => {
     const fakes = makeFakes();
     fakes.gateway.lists.set('tt0903747:1:1', [
-      { token: 'ep1', filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv', cached: false, infoHash: 'c'.repeat(40), mode: 'downloading' },
+      {
+        token: 'ep1',
+        filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv',
+        cached: false,
+        infoHash: 'c'.repeat(40),
+        mode: 'downloading',
+      },
     ]);
     const rig = await boot({ fakes });
     const { status, body } = await rig.play({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1 });
@@ -137,7 +161,9 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
     const { body } = await rig.play();
     const details = (await rig.app.inject('/api/movie/278')).json() as { download?: Download };
     expect(details.download).toMatchObject({ id: body.download.id, state: 'pending' });
-    expect((await rig.app.inject({ method: 'DELETE', url: `/api/downloads/${body.download.id}` })).statusCode).toBe(200);
+    expect((await rig.app.inject({ method: 'DELETE', url: `/api/downloads/${body.download.id}` })).statusCode).toBe(
+      200,
+    );
     expect(((await rig.app.inject('/api/movie/278')).json() as { download?: unknown }).download).toBeUndefined();
   });
 
@@ -244,12 +270,19 @@ describe('listing and cancelling (VAL-DL-004)', () => {
     const fakes = makeFakes();
     seedUncachedMovie(fakes);
     fakes.gateway.lists.set('tt0903747:1:1', [
-      { token: 'ep1', filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv', cached: false, infoHash: 'c'.repeat(40), mode: 'downloading' },
+      {
+        token: 'ep1',
+        filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv',
+        cached: false,
+        infoHash: 'c'.repeat(40),
+        mode: 'downloading',
+      },
     ]);
     const rig = await boot({ fakes });
     const movie = (await rig.play()).body.download as Download;
     fakes.clock.advance(5_000);
-    const episode = (await rig.play({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1 })).body.download as Download;
+    const episode = (await rig.play({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1 })).body
+      .download as Download;
 
     const listed = DownloadsResponseSchema.parse((await rig.app.inject('/api/downloads')).json());
     expect(listed.downloads.map((download) => download.id)).toEqual([episode.id, movie.id]);
@@ -261,7 +294,9 @@ describe('listing and cancelling (VAL-DL-004)', () => {
     expect(removed.json()).toMatchObject({ id: movie.id });
     expect(fakes.torbox.calls).toEqual([]);
     expect(fakes.gateway.calls).toHaveLength(gatewayCalls);
-    expect(DownloadsResponseSchema.parse((await rig.app.inject('/api/downloads')).json()).downloads.map((d) => d.id)).toEqual([episode.id]);
+    expect(
+      DownloadsResponseSchema.parse((await rig.app.inject('/api/downloads')).json()).downloads.map((d) => d.id),
+    ).toEqual([episode.id]);
   });
 
   it('answers a repeated or unknown cancel with a standard 404 and lets Play start a fresh download', async () => {
@@ -336,7 +371,9 @@ describe('persistence across a restart (VAL-DL-005)', () => {
   it('keeps no URLs or keys in the table', async () => {
     const rig = await bootWithMovie();
     await rig.play();
-    const columns = (rig.app.ctx.db.prepare('PRAGMA table_info(pending_downloads)').all() as Array<{ name: string }>).map((c) => c.name);
+    const columns = (
+      rig.app.ctx.db.prepare('PRAGMA table_info(pending_downloads)').all() as Array<{ name: string }>
+    ).map((c) => c.name);
     expect(columns.length).toBeGreaterThan(5);
     for (const name of columns) expect(name).not.toMatch(/url|token|secret|link|api_?key|^key$/i);
     const dump = JSON.stringify(rig.app.ctx.db.prepare('SELECT * FROM pending_downloads').all());
@@ -373,7 +410,13 @@ describe('poller (VAL-DL-006)', () => {
     const fakes = makeFakes();
     seedUncachedMovie(fakes);
     fakes.gateway.lists.set('tt0903747:1:1', [
-      { token: 'ep1', filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv', cached: false, infoHash: 'c'.repeat(40), mode: 'downloading' },
+      {
+        token: 'ep1',
+        filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv',
+        cached: false,
+        infoHash: 'c'.repeat(40),
+        mode: 'downloading',
+      },
     ]);
     const rig = await boot({ fakes });
     await rig.play();
@@ -432,7 +475,9 @@ describe('poller (VAL-DL-006)', () => {
     fakes.torbox.status = 401;
     fakes.clock.advance(MIN);
     await rig.tick();
-    const logs = (await rig.app.inject('/api/logs?source=downloads&limit=100')).json() as { events: Array<{ message: string; level: string }> };
+    const logs = (await rig.app.inject('/api/logs?source=downloads&limit=100')).json() as {
+      events: Array<{ message: string; level: string }>;
+    };
     expect(logs.events.filter((event) => /TORBOX_API_KEY/.test(event.message))).toHaveLength(1);
     expect(JSON.stringify(logs)).not.toContain(TORBOX_KEY);
 
@@ -479,7 +524,12 @@ describe('events (VAL-DL-007)', () => {
     for (const event of events) DownloadProgressEventSchema.parse(event.data);
     const values = events.map((event) => event.data.progress as number);
     expect(values).toEqual([...values].sort((a, b) => a - b));
-    expect(events[0]?.data).toMatchObject({ downloadId: expect.any(String), mediaType: 'movie', tmdbId: 278, state: 'downloading' });
+    expect(events[0]?.data).toMatchObject({
+      downloadId: expect.any(String),
+      mediaType: 'movie',
+      tmdbId: 278,
+      state: 'downloading',
+    });
   });
 
   it('never moves progress backwards when TorBox reports less than before', async () => {
@@ -508,7 +558,10 @@ describe('events (VAL-DL-007)', () => {
       let text = '';
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline && !until(text)) {
-        const chunk = await Promise.race([reader.read(), new Promise<null>((resolve) => setTimeout(() => resolve(null), deadline - Date.now()))]);
+        const chunk = await Promise.race([
+          reader.read(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), deadline - Date.now())),
+        ]);
         if (!chunk || chunk.done) break;
         text += decoder.decode(chunk.value, { stream: true });
       }
@@ -530,13 +583,24 @@ describe('events (VAL-DL-007)', () => {
     expect(text).toMatch(/event: download\.started\ndata: \{[^\n]*"downloadId":"[^"]+"/);
     expect(text).toContain('event: download.progress');
     const ready = /event: download\.ready\ndata: (.+)\n/.exec(text)?.[1] as string;
-    expect(JSON.parse(ready)).toMatchObject({ downloadId: expect.any(String), title: expect.any(String), mediaType: 'movie', tmdbId: 278 });
+    expect(JSON.parse(ready)).toMatchObject({
+      downloadId: expect.any(String),
+      title: expect.any(String),
+      mediaType: 'movie',
+      tmdbId: 278,
+    });
     expect(text.match(/event: download\.ready/g)).toHaveLength(1);
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // A download that finishes with nobody connected is announced to the first client that connects afterwards.
     fakes.gateway.lists.set('tt0903747:1:1', [
-      { token: 'ep1', filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv', cached: false, infoHash: 'c'.repeat(40), mode: 'downloading' },
+      {
+        token: 'ep1',
+        filename: 'Show.S01E01.1080p.WEB-DL.x264.mkv',
+        cached: false,
+        infoHash: 'c'.repeat(40),
+        mode: 'downloading',
+      },
     ]);
     await rig.play({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1 });
     (fakes.gateway.lists.get('tt0903747:1:1') ?? [])[0]!.cached = true;
@@ -559,7 +623,9 @@ describe('ready detection (VAL-DL-008)', () => {
     const { download } = (await rig.play()).body;
     await rig.app.inject('/api/streams/movie/278');
 
-    fakes.torbox.items = [downloadingItem(1, { download_finished: true, download_present: false, download_state: 'uploading' })];
+    fakes.torbox.items = [
+      downloadingItem(1, { download_finished: true, download_present: false, download_state: 'uploading' }),
+    ];
     fakes.clock.advance(MIN);
     await rig.tick();
     expect(rig.ofType('download.ready')).toEqual([]);
@@ -651,7 +717,12 @@ describe('failure and give-up (VAL-DL-009)', () => {
     await rig.tick();
     const failed = rig.ofType('download.failed');
     expect(failed).toHaveLength(1);
-    expect(failed[0]?.data).toMatchObject({ downloadId: download.id, reason: 'torbox_error', mediaType: 'movie', tmdbId: 278 });
+    expect(failed[0]?.data).toMatchObject({
+      downloadId: download.id,
+      reason: 'torbox_error',
+      mediaType: 'movie',
+      tmdbId: 278,
+    });
     DownloadFailedEventSchema.parse(failed[0]?.data);
     const listed = (await rig.app.inject('/api/downloads')).json() as { downloads: Download[] };
     expect(listed.downloads[0]).toMatchObject({ state: 'failed', status: 'failed' });
@@ -724,7 +795,15 @@ describe('secrets (VAL-DL-001, VAL-DL-005)', () => {
     record(rig.app.ctx.db.prepare('SELECT * FROM events').all());
 
     const text = seen.join('\n');
-    for (const secret of [TORBOX_KEY, 'aaaa1111', 'bbbb2222cccc', 'tokenA', '/api/v1/playback', GATEWAY_ORIGIN, 'cdn.example.test']) {
+    for (const secret of [
+      TORBOX_KEY,
+      'aaaa1111',
+      'bbbb2222cccc',
+      'tokenA',
+      '/api/v1/playback',
+      GATEWAY_ORIGIN,
+      'cdn.example.test',
+    ]) {
       expect(text, secret).not.toContain(secret);
     }
     expect(text).toContain('downloads');

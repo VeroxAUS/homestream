@@ -20,7 +20,10 @@ export function main(argv, cwd = process.cwd()) {
     return 1;
   }
   const flaky = files.flatMap((file) =>
-    JSON.parse(readFileSync(file, 'utf8')).flaky.map((test) => ({ ...test, package: path.basename(path.dirname(file)) })),
+    JSON.parse(readFileSync(file, 'utf8')).flaky.map((test) => ({
+      ...test,
+      package: path.basename(path.dirname(file)),
+    })),
   );
   if (flaky.length === 0) {
     console.log('No flaky tests: every test passed on its first attempt.');
@@ -29,7 +32,9 @@ export function main(argv, cwd = process.cwd()) {
   console.log(`${flaky.length} flaky test(s): failed at least once, then passed on a retry`);
   for (const test of flaky) {
     const file = path.relative(cwd, test.file).replaceAll('\\', '/');
-    console.log(`  [${test.package}] ${test.name} (${test.retries} ${test.retries === 1 ? 'retry' : 'retries'}) ${file}`);
+    console.log(
+      `  [${test.package}] ${test.name} (${test.retries} ${test.retries === 1 ? 'retry' : 'retries'}) ${file}`,
+    );
   }
   console.log('Fix the test, or quarantine it as described in docs/runbooks/flaky-tests.md.');
   return 0;

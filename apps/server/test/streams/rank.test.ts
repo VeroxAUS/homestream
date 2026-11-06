@@ -40,7 +40,14 @@ describe('rankStreams', () => {
   it('ranks sources WEB-DL, BluRay, WEBRip, Remux, HDTV, unknown at the same resolution', () => {
     const sources = ['Unknown', 'HDTV', 'Remux', 'WEBRip', 'BluRay', 'WEB-DL'];
     const items = sources.map((source) => opt({ source }));
-    expect(rankStreams(items).map((item) => item.source)).toEqual(['WEB-DL', 'BluRay', 'WEBRip', 'Remux', 'HDTV', 'Unknown']);
+    expect(rankStreams(items).map((item) => item.source)).toEqual([
+      'WEB-DL',
+      'BluRay',
+      'WEBRip',
+      'Remux',
+      'HDTV',
+      'Unknown',
+    ]);
   });
 
   it('matches the stub-gateway ordering of the validation contract', () => {

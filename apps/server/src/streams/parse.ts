@@ -1,9 +1,4 @@
-import type {
-  StreamHdr,
-  StreamOption,
-  StreamResolution,
-  StreamVideoCodec,
-} from '@homestream/shared';
+import type { StreamHdr, StreamOption, StreamResolution, StreamVideoCodec } from '@homestream/shared';
 import type { GatewayStream } from '../gateway/types.js';
 
 // Boundaries treat letters and digits as word characters; '.', '_', '-', brackets and spaces separate tokens.
@@ -12,14 +7,16 @@ const E = '(?![a-z0-9])';
 
 /** Lower-cases and turns separators into spaces, keeping dots between digits (5.1, H.264). */
 export function normalizeFilename(filename: string): string {
-  return filename
-    .toLowerCase()
-    .replace(/[_[\](){}",;:|]/g, ' ')
-    // "AC3.5.1" / "H.264.5.1": the dot after a codec number is a separator, not a decimal point.
-    .replace(/(264|265|ac ?-?3)\.(?=\d)/g, '$1 ')
-    .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    filename
+      .toLowerCase()
+      .replace(/[_[\](){}",;:|]/g, ' ')
+      // "AC3.5.1" / "H.264.5.1": the dot after a codec number is a separator, not a decimal point.
+      .replace(/(264|265|ac ?-?3)\.(?=\d)/g, '$1 ')
+      .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 const test = (re: RegExp, text: string): boolean => re.test(text);

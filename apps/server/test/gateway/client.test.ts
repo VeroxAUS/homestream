@@ -167,7 +167,11 @@ describe('parseGatewayResponse', () => {
       streams: [
         { name: 'info only', description: 'no url' },
         { name: 'x', url: 'ftp://nope/file.mkv' },
-        { name: 'a', url: 'https://cdn.example.test/p/My%20Movie%202020%201080p.mkv', behaviorHints: { videoSize: 'abc' } },
+        {
+          name: 'a',
+          url: 'https://cdn.example.test/p/My%20Movie%202020%201080p.mkv',
+          behaviorHints: { videoSize: 'abc' },
+        },
         { name: 'dup', url: 'https://cdn.example.test/p/My%20Movie%202020%201080p.mkv' },
       ],
     });
@@ -182,13 +186,33 @@ describe('parseGatewayResponse', () => {
         {
           name: 'a',
           url: 'https://cdn.example.test/p/one.mkv',
-          streamData: { type: 'debrid', service: { id: 'torbox', cached: false }, torrent: { infoHash: hash, fileIdx: 3 }, size: 1234 },
+          streamData: {
+            type: 'debrid',
+            service: { id: 'torbox', cached: false },
+            torrent: { infoHash: hash, fileIdx: 3 },
+            size: 1234,
+          },
         },
-        { name: 'b', url: 'https://cdn.example.test/p/two.mkv', streamData: { service: { cached: 'yes' }, torrent: { infoHash: 'short' } } },
-        { name: 'c', url: 'https://cdn.example.test/p/three.mkv', behaviorHints: { videoSize: 99 }, streamData: { size: 5 } },
+        {
+          name: 'b',
+          url: 'https://cdn.example.test/p/two.mkv',
+          streamData: { service: { cached: 'yes' }, torrent: { infoHash: 'short' } },
+        },
+        {
+          name: 'c',
+          url: 'https://cdn.example.test/p/three.mkv',
+          behaviorHints: { videoSize: 99 },
+          streamData: { size: 5 },
+        },
       ],
     });
-    expect(parsed[0]).toMatchObject({ cached: false, infoHash: hash.toLowerCase(), fileIdx: 3, kind: 'debrid', videoSize: 1234 });
+    expect(parsed[0]).toMatchObject({
+      cached: false,
+      infoHash: hash.toLowerCase(),
+      fileIdx: 3,
+      kind: 'debrid',
+      videoSize: 1234,
+    });
     expect(parsed[1]?.cached).toBeUndefined();
     expect(parsed[1]?.infoHash).toBeUndefined();
     expect(parsed[2]?.videoSize).toBe(99);

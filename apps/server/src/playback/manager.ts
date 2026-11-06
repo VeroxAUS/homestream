@@ -21,7 +21,14 @@ import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import type { DownloadService } from '../downloads/service.js';
 import { upsertDevice } from '../db/devices.js';
-import { deletePlay, finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision, updatePlayProgress } from '../db/plays.js';
+import {
+  deletePlay,
+  finalizePlay,
+  insertPlay,
+  mediaKeyFor,
+  updatePlayDecision,
+  updatePlayProgress,
+} from '../db/plays.js';
 import { upsertProgress } from '../db/progress.js';
 import { AllStreamsFailedError, AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
@@ -137,7 +144,12 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Errors about the request or the server itself: another stream would fail the same way. */
-const NOT_THE_STREAMS_FAULT = new Set(['invalid_audio_index', 'invalid_subtitle_index', 'subtitle_mode_unsupported', 'shutting_down']);
+const NOT_THE_STREAMS_FAULT = new Set([
+  'invalid_audio_index',
+  'invalid_subtitle_index',
+  'subtitle_mode_unsupported',
+  'shutting_down',
+]);
 
 function isStreamFault(error: unknown): boolean {
   return !(error instanceof AppError && NOT_THE_STREAMS_FAULT.has(error.code));
@@ -244,7 +256,12 @@ export class PlaybackManager {
     const plan = await this.planStart(body, details.imdbId, device);
     if (downloads && plan.auto && !plan.cached && details.imdbId) {
       // Nothing is cached: TorBox is asked to cache the best-ranked stream. A link that turns out to be playable falls through.
-      const started = await downloads.begin({ body, title: details.title, imdbId: details.imdbId, streamId: plan.streamIds[0] as string });
+      const started = await downloads.begin({
+        body,
+        title: details.title,
+        imdbId: details.imdbId,
+        streamId: plan.streamIds[0] as string,
+      });
       if (started) return started;
     }
     const attempts: StartAttempt[] = [];
@@ -276,7 +293,8 @@ export class PlaybackManager {
     device: CapabilityProfile,
   ): Promise<{ streamIds: string[]; auto: boolean; cached: boolean }> {
     if (body.streamId !== 'auto') return { streamIds: [body.streamId], auto: false, cached: true };
-    if (!imdbId) throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title.');
+    if (!imdbId)
+      throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title.');
     const query =
       body.mediaType === 'movie'
         ? ({ type: 'movie', imdbId } as const)
@@ -284,7 +302,12 @@ export class PlaybackManager {
     const listed = await this.options.streams.list(query, device.deviceId);
     const picked = startCandidates(listed.streams, deviceMaxRank(device), MAX_START_ATTEMPTS);
     if (picked.streams.length === 0) {
-      throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title or check the gateway on the health dashboard.');
+      throw new AppError(
+        404,
+        'no_streams',
+        'No streams are available for this title.',
+        'Try another title or check the gateway on the health dashboard.',
+      );
     }
     return { streamIds: picked.streams.map((stream) => stream.id), auto: true, cached: picked.cached };
   }
@@ -293,7 +316,13 @@ export class PlaybackManager {
   private async attemptStart(
     body: SessionStartRequest,
     clientIp: string | null,
-    context: { streamId: string; device: CapabilityProfile; details: TitleDetails; attempts: StartAttempt[]; timeline: StartTimeline },
+    context: {
+      streamId: string;
+      device: CapabilityProfile;
+      details: TitleDetails;
+      attempts: StartAttempt[];
+      timeline: StartTimeline;
+    },
   ): Promise<SessionResponse> {
     const { streams } = this.options;
     const id = randomUUID();
@@ -301,7 +330,12 @@ export class PlaybackManager {
     const t0 = Date.now();
     const stream = await streams.getStreamById(context.streamId);
     if (!stream) {
-      throw new AppError(404, 'stream_not_found', 'That stream is no longer available.', 'Use streamId "auto", or list the streams again to get current ids.');
+      throw new AppError(
+        404,
+        'stream_not_found',
+        'That stream is no longer available.',
+        'Use streamId "auto", or list the streams again to get current ids.',
+      );
     }
     const t1 = Date.now();
     timeline.mark('stream picked', id);
@@ -310,7 +344,14 @@ export class PlaybackManager {
     timeline.mark('source acquired', id);
     void source.headReady.then(() => timeline.mark('head fill done', id));
     try {
-      return await this.startWithSource(body, clientIp, { ...context, id, stream, source, timings: { t0, t1 }, timeline });
+      return await this.startWithSource(body, clientIp, {
+        ...context,
+        id,
+        stream,
+        source,
+        timings: { t0, t1 },
+        timeline,
+      });
     } catch (error) {
       source.release();
       throw error;
@@ -336,10 +377,15 @@ export class PlaybackManager {
     const t2 = Date.now();
     const probe = await source.probe();
     context.timeline.mark('probe done', id);
-    const timingsMs = { pickStream: context.timings.t1 - context.timings.t0, source: t2 - context.timings.t1, probe: Date.now() - t2 };
+    const timingsMs = {
+      pickStream: context.timings.t1 - context.timings.t0,
+      source: t2 - context.timings.t1,
+      probe: Date.now() - t2,
+    };
 
     const audio = requireAudio(probe, body.audioIndex);
-    const automatic = body.subtitle === undefined ? chooseDefaultSubtitle(probe.subtitles, audio, details.originalLanguage) : null;
+    const automatic =
+      body.subtitle === undefined ? chooseDefaultSubtitle(probe.subtitles, audio, details.originalLanguage) : null;
     const subtitle = automatic ? automatic.selection : requireSubtitle(probe, body.subtitle);
     const textTracks = selectTextTracks(probe, subtitle?.mode === 'sidecar' ? subtitle.index : null);
 
@@ -475,12 +521,23 @@ export class PlaybackManager {
         this.markReady(rec);
         return;
       }
-      if (rec.stopping) throw new AppError(503, 'shutting_down', 'The server is shutting down.', 'Try again in a moment.');
+      if (rec.stopping)
+        throw new AppError(503, 'shutting_down', 'The server is shutting down.', 'Try again in a moment.');
       if (rec.state === 'error') {
-        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+        throw new AppError(
+          502,
+          rec.errorCode ?? 'encoder_failed',
+          rec.error?.message ?? 'The encoder failed.',
+          rec.error?.hint,
+        );
       }
       if (rec.encoderDone && !rec.process?.running) {
-        throw new AppError(502, 'encoder_failed', 'The encoder finished without producing any video.', 'Try again in a moment.');
+        throw new AppError(
+          502,
+          'encoder_failed',
+          'The encoder finished without producing any video.',
+          'Try again in a moment.',
+        );
       }
       if (Date.now() >= deadline) {
         throw new AppError(
@@ -554,7 +611,8 @@ export class PlaybackManager {
     rec.playerSegment = Math.floor(rec.positionSec / SEGMENT_SECONDS);
     this.followPlayhead(rec);
     const state = update.state ?? 'playing';
-    if (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused' || rec.state === 'buffering') rec.state = state;
+    if (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused' || rec.state === 'buffering')
+      rec.state = state;
 
     rec.watchedSec += playingSecondsSince(rec.pingState, now - rec.pingClock);
     rec.pingClock = now;
@@ -588,13 +646,24 @@ export class PlaybackManager {
           backdropUrl: meta.backdropUrl,
         },
       });
-      updatePlayProgress(db, rec.id, { watchedSec: rec.watchedSec, lastPositionSec: positionSec, completed, bytesServed: rec.bytesServed });
+      updatePlayProgress(db, rec.id, {
+        watchedSec: rec.watchedSec,
+        lastPositionSec: positionSec,
+        completed,
+        bytesServed: rec.bytesServed,
+      });
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
       throw error;
     }
-    return { mediaKey: meta.mediaKey, positionSec, durationSec, completed, resumable: isResumable(positionSec, completed) };
+    return {
+      mediaKey: meta.mediaKey,
+      positionSec,
+      durationSec,
+      completed,
+      resumable: isResumable(positionSec, completed),
+    };
   }
 
   /**
@@ -607,7 +676,12 @@ export class PlaybackManager {
     while (rec.restart) await rec.restart.catch(() => undefined);
     if (rec.stopping) throw notFound('This session has ended.');
     if (rec.state === 'error') {
-      throw new AppError(409, 'session_failed', 'This playback session has failed and cannot switch tracks.', 'Start a new playback session.');
+      throw new AppError(
+        409,
+        'session_failed',
+        'This playback session has failed and cannot switch tracks.',
+        'Start a new playback session.',
+      );
     }
 
     const plan = planPatch(rec.probe, { audioIndex: rec.selectedAudioIndex, subtitle: rec.selectedSubtitle }, body);
@@ -617,7 +691,12 @@ export class PlaybackManager {
     if (!plan.restart) return toSessionResponse(rec);
 
     rec.selectedAudioIndex = plan.audio?.index ?? null;
-    rec.decision = decide({ video: rec.probe.video, audio: plan.audio, device: rec.device, subtitleBurnIn: plan.subtitle?.mode === 'burn' });
+    rec.decision = decide({
+      video: rec.probe.video,
+      audio: plan.audio,
+      device: rec.device,
+      subtitleBurnIn: plan.subtitle?.mode === 'burn',
+    });
     updatePlayDecision(this.options.db, rec.id, rec.decision);
     const segment = Math.min(segmentCount(rec.probe.durationSec) - 1, Math.floor(rec.positionSec / SEGMENT_SECONDS));
     this.event({
@@ -655,7 +734,10 @@ export class PlaybackManager {
     rec.lastActivity = Date.now();
     const extractor = rec.subtitles;
     if (!extractor?.store.has(index)) {
-      throw notFound(`Subtitle track ${index} is not a text track of this session.`, 'Use the subtitle urls listed in the session or in index.m3u8.');
+      throw notFound(
+        `Subtitle track ${index} is not a text track of this session.`,
+        'Use the subtitle urls listed in the session or in index.m3u8.',
+      );
     }
     return { rec, extractor };
   }
@@ -673,7 +755,10 @@ export class PlaybackManager {
     const { rec, extractor } = this.subtitleTrack(id, index);
     const { store } = extractor;
     if (segment >= store.segmentTotal) {
-      throw notFound(`Subtitle segment ${segment} does not exist in this session.`, 'Use the segment names listed in the rendition playlist.');
+      throw notFound(
+        `Subtitle segment ${segment} does not exist in this session.`,
+        'Use the segment names listed in the rendition playlist.',
+      );
     }
     const deadline = Date.now() + this.subtitleHoldMs;
     for (;;) {
@@ -709,7 +794,12 @@ export class PlaybackManager {
   serveSubtitleFull(id: string, index: number): ServedFile {
     const { extractor } = this.subtitleTrack(id, index);
     if (!extractor.store.complete) {
-      throw new AppError(404, 'subtitle_not_ready', `Subtitle track ${index} is still being extracted.`, 'Wait until fullUrl is set in the session, then fetch it.');
+      throw new AppError(
+        404,
+        'subtitle_not_ready',
+        `Subtitle track ${index} is still being extracted.`,
+        'Wait until fullUrl is set in the session, then fetch it.',
+      );
     }
     return { kind: 'text', body: extractor.store.full(index), contentType: SUBTITLE_SEGMENT_TYPE };
   }
@@ -755,13 +845,17 @@ export class PlaybackManager {
       return { kind: 'text', body: generatePlaylist(rec.probe.durationSec, rec.format), contentType };
     }
     if (file.kind === 'init') {
-      if (rec.format !== 'fmp4') throw notFound('This session has no init segment.', 'MPEG-TS sessions are self-contained.');
+      if (rec.format !== 'fmp4')
+        throw notFound('This session has no init segment.', 'MPEG-TS sessions are self-contained.');
       return this.counted(rec, await this.initResponse(rec, contentType));
     }
 
     const expectedExtension = rec.format === 'fmp4' ? 'm4s' : 'ts';
     if (file.extension !== expectedExtension || file.index >= segmentCount(rec.probe.durationSec)) {
-      throw notFound(`Segment ${file.index} does not exist in this session.`, 'Use the segment names listed in video.m3u8.');
+      throw notFound(
+        `Segment ${file.index} does not exist in this session.`,
+        'Use the segment names listed in video.m3u8.',
+      );
     }
     // A track switch replaces the files on disk; nothing from before it may be served.
     while (rec.restart) await rec.restart.catch(() => undefined);
@@ -774,7 +868,12 @@ export class PlaybackManager {
       if (!existsSync(target)) await this.ensureEncoder(rec, file.index);
       if ((await this.waitForFile(rec, target, file.index)) === 'ready') break;
       if (attempt >= MAX_SERVE_ATTEMPTS) {
-        throw new AppError(504, 'segment_timeout', `Segment ${file.index} was not ready in time.`, 'The encoder is busy with another seek; try again.');
+        throw new AppError(
+          504,
+          'segment_timeout',
+          `Segment ${file.index} was not ready in time.`,
+          'The encoder is busy with another seek; try again.',
+        );
       }
     }
     this.markReady(rec);
@@ -813,10 +912,20 @@ export class PlaybackManager {
       if (!rec.restart && produced && (existsSync(first) || !rec.process?.running)) return rec.generation;
       if (rec.stopping) throw notFound('This session has ended.');
       if (rec.state === 'error') {
-        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+        throw new AppError(
+          502,
+          rec.errorCode ?? 'encoder_failed',
+          rec.error?.message ?? 'The encoder failed.',
+          rec.error?.hint,
+        );
       }
       if (Date.now() >= deadline) {
-        throw new AppError(504, 'segment_timeout', 'The encoder did not start in time.', 'The encoder is behind; try again, or check the health dashboard.');
+        throw new AppError(
+          504,
+          'segment_timeout',
+          'The encoder did not start in time.',
+          'The encoder is behind; try again, or check the health dashboard.',
+        );
       }
       await sleep(POLL_MS);
     }
@@ -838,7 +947,9 @@ export class PlaybackManager {
     if (this.timer || interval <= 0) return;
     this.timer = setInterval(() => {
       this.observeSpeeds();
-      void this.monitor.tick().catch((error: unknown) => this.options.logger.warn({ err: error }, 'Session housekeeping failed'));
+      void this.monitor
+        .tick()
+        .catch((error: unknown) => this.options.logger.warn({ err: error }, 'Session housekeeping failed'));
     }, interval);
     this.timer.unref();
   }
@@ -926,7 +1037,12 @@ export class PlaybackManager {
     const head = Math.min(last, rec.startSegment + Math.floor(progress.outTimeSec / SEGMENT_SECONDS));
     // The HLS muxer reports no bitrate, so it is derived from segment sizes by the monitor.
     const bitrateKbps = progress.bitrateKbps > 0 ? progress.bitrateKbps : rec.stats.bitrateKbps;
-    rec.stats = { ...progress, bitrateKbps, outTimeSec: progress.outTimeSec + rec.startSegment * SEGMENT_SECONDS, headSegment: head };
+    rec.stats = {
+      ...progress,
+      bitrateKbps,
+      outTimeSec: progress.outTimeSec + rec.startSegment * SEGMENT_SECONDS,
+      headSegment: head,
+    };
     if (progress.speed > 0) {
       rec.statSamples.speedSum += progress.speed;
       rec.statSamples.speedCount += 1;
@@ -945,7 +1061,11 @@ export class PlaybackManager {
 
   /** Seconds of encoded video ahead of the player; the player's position cannot be before the start of the current run. */
   private leadSec(rec: SessionRecord): number {
-    return leadSeconds(rec.stats.headSegment, SEGMENT_SECONDS, Math.max(rec.positionSec, rec.startSegment * SEGMENT_SECONDS));
+    return leadSeconds(
+      rec.stats.headSegment,
+      SEGMENT_SECONDS,
+      Math.max(rec.positionSec, rec.startSegment * SEGMENT_SECONDS),
+    );
   }
 
   /** How far the subtitle extractors may read: the player's position, including a segment it has just asked for after a seek. */
@@ -979,7 +1099,11 @@ export class PlaybackManager {
     for (const rec of this.liveRecords()) {
       this.fallingBehind.observe(
         rec.id,
-        { speed: this.recentSpeed(rec), readAhead: rec.source.readAhead, idle: rec.encoderDone || rec.parked || !rec.process?.running },
+        {
+          speed: this.recentSpeed(rec),
+          readAhead: rec.source.readAhead,
+          idle: rec.encoderDone || rec.parked || !rec.process?.running,
+        },
         now,
       );
     }
@@ -1004,22 +1128,27 @@ export class PlaybackManager {
     if (this.limitLabels.get(rec) !== label) {
       this.limitLabels.set(rec, label);
       // The trail is for the start-up phase; later flapping would only add noise.
-      if (Date.now() - rec.startedAt < LIMIT_LOG_WINDOW_MS) this.options.logger.info(
-        {
-          sessionId: rec.id,
-          sinceStartMs: Date.now() - rec.startedAt,
-          extractorLimit: label,
-          headSegment: rec.stats.headSegment,
-          startSegment: rec.startSegment,
-          speed: Number(rec.stats.speed.toFixed(2)),
-        },
-        'Subtitle extractor read limit changed',
-      );
+      if (Date.now() - rec.startedAt < LIMIT_LOG_WINDOW_MS)
+        this.options.logger.info(
+          {
+            sessionId: rec.id,
+            sinceStartMs: Date.now() - rec.startedAt,
+            extractorLimit: label,
+            headSegment: rec.stats.headSegment,
+            startSegment: rec.startSegment,
+            speed: Number(rec.stats.speed.toFixed(2)),
+          },
+          'Subtitle extractor read limit changed',
+        );
     }
   }
 
   private isHeavy(rec: SessionRecord): boolean {
-    return isHeavySource({ height: rec.probe.video.height, sizeBytes: rec.source.sizeBytes, durationSec: rec.probe.durationSec });
+    return isHeavySource({
+      height: rec.probe.video.height,
+      sizeBytes: rec.source.sizeBytes,
+      durationSec: rec.probe.durationSec,
+    });
   }
 
   /** Encoder speed over the last few seconds; ffmpeg's own figure averages the whole run and reacts too late. 0 while unknown. */
@@ -1106,7 +1235,10 @@ export class PlaybackManager {
     if (rec.decision.toneMapped && rec.toneMapper === 'libplacebo' && !this.hasSegment(rec, rec.startSegment)) {
       rec.toneMapper = 'opencl';
       this.libplaceboBroken = true;
-      this.options.logger.warn({ sessionId: rec.id }, 'libplacebo tone mapping failed to start; falling back to tonemap_opencl');
+      this.options.logger.warn(
+        { sessionId: rec.id },
+        'libplacebo tone mapping failed to start; falling back to tonemap_opencl',
+      );
     }
     // The proxy re-resolves expired links by itself; this covers the encoder failing for another reason with a stale link.
     await rec.source.refresh().catch(() => undefined);
@@ -1124,7 +1256,13 @@ export class PlaybackManager {
     if (rec.opening) {
       // The start waiting on this session reports the failure (or tries the next stream); no client ever saw the session.
       this.options.logger.warn({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed before the first segment');
-      this.event({ level: 'warn', source: 'ffmpeg', message: rec.error.message, details: { code, detail: lastLine }, sessionId: rec.id });
+      this.event({
+        level: 'warn',
+        source: 'ffmpeg',
+        message: rec.error.message,
+        details: { code, detail: lastLine },
+        sessionId: rec.id,
+      });
       return;
     }
     this.options.logger.error({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed');
@@ -1160,7 +1298,10 @@ export class PlaybackManager {
     };
     rec.generation += 1;
     rec.source.setExtractorLimit(null);
-    this.options.logger.error({ sessionId: rec.id, pid: hit.pid, usedMb, limitMb }, 'ffmpeg stopped by the memory watchdog');
+    this.options.logger.error(
+      { sessionId: rec.id, pid: hit.pid, usedMb, limitMb },
+      'ffmpeg stopped by the memory watchdog',
+    );
     this.event({
       level: 'error',
       source: 'ffmpeg',
@@ -1168,7 +1309,12 @@ export class PlaybackManager {
       details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb, hint: rec.error.hint },
       sessionId: rec.id,
     });
-    finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'error', errorMessage: rec.error.message, ...this.endStats(rec) });
+    finalizePlay(this.options.db, rec.id, {
+      endedAt: Date.now(),
+      status: 'error',
+      errorMessage: rec.error.message,
+      ...this.endStats(rec),
+    });
     this.options.bus.emit('session.update', toActivitySession(rec));
     void Promise.all([rec.process?.stop(), rec.subtitles?.stop()]).catch(() => undefined);
   }
@@ -1226,20 +1372,34 @@ export class PlaybackManager {
       if (existsSync(target)) return 'ready';
       if (rec.stopping) throw notFound('This session has ended.');
       if (rec.state === 'error') {
-        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+        throw new AppError(
+          502,
+          rec.errorCode ?? 'encoder_failed',
+          rec.error?.message ?? 'The encoder failed.',
+          rec.error?.hint,
+        );
       }
       if (rec.encoderDone && !rec.process?.running) {
         throw notFound(`Segment ${segment} was not produced.`, 'Seek again or restart playback.');
       }
       if (!rec.restart && this.isLost(rec, segment)) return 'lost';
       if (Date.now() >= deadline) {
-        throw new AppError(504, 'segment_timeout', `Segment ${segment} was not ready in time.`, 'The encoder is behind; try again, or check the health dashboard.');
+        throw new AppError(
+          504,
+          'segment_timeout',
+          `Segment ${segment} was not ready in time.`,
+          'The encoder is behind; try again, or check the health dashboard.',
+        );
       }
       await sleep(POLL_MS);
     }
   }
 
-  private endStats(rec: SessionRecord): { avgBitrateKbps: number | null; avgSpeed: number | null; bytesServed: number } {
+  private endStats(rec: SessionRecord): {
+    avgBitrateKbps: number | null;
+    avgSpeed: number | null;
+    bytesServed: number;
+  } {
     const { speedSum, speedCount, bitrateSum, bitrateCount } = rec.statSamples;
     return {
       avgBitrateKbps: bitrateCount === 0 ? null : bitrateSum / bitrateCount,

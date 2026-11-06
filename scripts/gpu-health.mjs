@@ -19,7 +19,14 @@ export const IDLE_SPIKE_PCT = 60;
 export const IDLE_SPIKE_COUNT = 2;
 const GIB = 1024 ** 3;
 
-const SMI_FIELDS = ['temperature.gpu', 'utilization.gpu', 'utilization.encoder', 'utilization.decoder', 'memory.used', 'power.draw'];
+const SMI_FIELDS = [
+  'temperature.gpu',
+  'utilization.gpu',
+  'utilization.encoder',
+  'utilization.decoder',
+  'memory.used',
+  'power.draw',
+];
 
 /** @param {string[]} argv */
 export function parseArgs(argv) {
@@ -59,7 +66,9 @@ export function parseEvents(stdout) {
       provider: String(e.provider ?? ''),
       id: Number(e.id),
       level: String(e.level ?? ''),
-      message: String(e.message ?? '').replace(/\s+/g, ' ').trim(),
+      message: String(e.message ?? '')
+        .replace(/\s+/g, ' ')
+        .trim(),
     }))
     .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
 }
@@ -183,9 +192,11 @@ $q = Get-Counter '\\PhysicalDisk(*)\\Current Disk Queue Length' | Select-Object 
 export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, idle, errors }) {
   const reasons = [];
   if (events.length > 0) reasons.push(`${events.length} new GPU driver/TDR event(s)`);
-  if (gpu && gpu.tempC !== null && gpu.tempC > MAX_TEMP_C) reasons.push(`temperature ${gpu.tempC} C is above ${MAX_TEMP_C} C`);
+  if (gpu && gpu.tempC !== null && gpu.tempC > MAX_TEMP_C)
+    reasons.push(`temperature ${gpu.tempC} C is above ${MAX_TEMP_C} C`);
   if (!memory || !Number.isFinite(memory.freeGb)) reasons.push('could not check: free RAM is unknown');
-  else if (memory.freeGb < minFreeGb) reasons.push(`low_memory: ${memory.freeGb} GB of RAM free, below the ${minFreeGb} GB minimum`);
+  else if (memory.freeGb < minFreeGb)
+    reasons.push(`low_memory: ${memory.freeGb} GB of RAM free, below the ${minFreeGb} GB minimum`);
   if (idle) {
     if (idle.ffmpegRunning === null) reasons.push('could not check: ffmpeg process list is unknown');
     else if (!idle.ffmpegRunning) {
@@ -193,9 +204,13 @@ export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB,
       else {
         const apps = idle.processes.length ? ` (GPU processes: ${idle.processes.join(', ')})` : '';
         if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
-          reasons.push(`gpu_busy: median GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`);
+          reasons.push(
+            `gpu_busy: median GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`,
+          );
         } else if ((idle.spikes ?? 0) >= IDLE_SPIKE_COUNT) {
-          reasons.push(`gpu_busy: ${idle.spikes} GPU samples at or above ${IDLE_SPIKE_PCT}% with no ffmpeg running${apps}`);
+          reasons.push(
+            `gpu_busy: ${idle.spikes} GPU samples at or above ${IDLE_SPIKE_PCT}% with no ffmpeg running${apps}`,
+          );
         }
       }
     }
@@ -260,12 +275,16 @@ async function readEvents(sinceMs) {
 }
 
 async function readGpu() {
-  return parseNvidiaSmi(await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000));
+  return parseNvidiaSmi(
+    await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000),
+  );
 }
 
 async function readSystemInfo() {
   const encoded = Buffer.from(SYSTEM_INFO_SCRIPT, 'utf16le').toString('base64');
-  return parseSystemInfo(await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 20_000));
+  return parseSystemInfo(
+    await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 20_000),
+  );
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -280,7 +299,11 @@ async function readIdle() {
   for (let i = 0; i < IDLE_SAMPLES; i += 1) {
     if (i > 0) await sleep(IDLE_SAMPLE_GAP_MS);
     try {
-      samples.push(parseNvidiaSmi(await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000)).utilGpuPct);
+      samples.push(
+        parseNvidiaSmi(
+          await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000),
+        ).utilGpuPct,
+      );
     } catch {
       samples.push(null);
     }
@@ -320,7 +343,19 @@ export async function main(argv) {
   const { ok, reasons } = evaluate({ events, gpu, memory, minFreeGb, idle, errors });
   const shown = events.map((e) => ({ ...e, message: e.message.slice(0, 600) }));
   console.log(
-    JSON.stringify({ ok, since, checkedAt: new Date().toISOString(), eventCount: events.length, events: shown, gpu, memory, minFreeGb, idle, system, reasons }),
+    JSON.stringify({
+      ok,
+      since,
+      checkedAt: new Date().toISOString(),
+      eventCount: events.length,
+      events: shown,
+      gpu,
+      memory,
+      minFreeGb,
+      idle,
+      system,
+      reasons,
+    }),
   );
   return ok ? 0 : 1;
 }

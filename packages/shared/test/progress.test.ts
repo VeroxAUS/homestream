@@ -24,7 +24,13 @@ describe('ProgressPingRequestSchema', () => {
     }
   });
 
-  it.each([{}, { positionSec: -1 }, { positionSec: '5' }, { positionSec: 5, state: 'seeking' }, { positionSec: Number.NaN }])('rejects %j', (body) => {
+  it.each([
+    {},
+    { positionSec: -1 },
+    { positionSec: '5' },
+    { positionSec: 5, state: 'seeking' },
+    { positionSec: Number.NaN },
+  ])('rejects %j', (body) => {
     expect(ProgressPingRequestSchema.safeParse(body).success).toBe(false);
   });
 });
@@ -35,7 +41,9 @@ describe('HistoryQuerySchema', () => {
   });
 
   it('coerces paging and keeps filters', () => {
-    expect(HistoryQuerySchema.parse({ type: 'tv', deviceId: 'd1', q: 'bad', page: '2', pageSize: '50', from: '2026-11-01' })).toEqual({
+    expect(
+      HistoryQuerySchema.parse({ type: 'tv', deviceId: 'd1', q: 'bad', page: '2', pageSize: '50', from: '2026-11-01' }),
+    ).toEqual({
       type: 'tv',
       deviceId: 'd1',
       q: 'bad',
@@ -45,9 +53,12 @@ describe('HistoryQuerySchema', () => {
     });
   });
 
-  it.each([{ type: 'anime' }, { page: '0' }, { pageSize: '0' }, { pageSize: '101' }, { page: '1.5' }])('rejects %j', (query) => {
-    expect(HistoryQuerySchema.safeParse(query).success).toBe(false);
-  });
+  it.each([{ type: 'anime' }, { page: '0' }, { pageSize: '0' }, { pageSize: '101' }, { page: '1.5' }])(
+    'rejects %j',
+    (query) => {
+      expect(HistoryQuerySchema.safeParse(query).success).toBe(false);
+    },
+  );
 });
 
 describe('StatsQuerySchema', () => {

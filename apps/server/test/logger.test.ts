@@ -21,7 +21,10 @@ describe('createLogger', () => {
     const dataDir = path.join(root, 'data');
     const appLogger = createLogger({ dataDir, stdout: false });
     appLogger.logger.info('token is tmdb-secret-token-abc');
-    appLogger.logger.warn({ url: 'https://gw.test/stremio/uuidsecret111/blobsecret222/stream/movie/tt1.json?apikey=zzz999' }, 'fetch');
+    appLogger.logger.warn(
+      { url: 'https://gw.test/stremio/uuidsecret111/blobsecret222/stream/movie/tt1.json?apikey=zzz999' },
+      'fetch',
+    );
     appLogger.logger.error({ token: 'plain', headers: { authorization: 'Bearer abcdefghij' } }, 'object fields');
     await appLogger.close();
 
@@ -30,7 +33,10 @@ describe('createLogger', () => {
       expect(content).not.toContain(secret);
     }
     expect(content).not.toContain('"token":"plain"');
-    const lines = content.trim().split('\n').map((line) => JSON.parse(line) as { msg: string });
+    const lines = content
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { msg: string });
     expect(lines.map((l) => l.msg)).toEqual(['token is <redacted>', 'fetch', 'object fields']);
   });
 });

@@ -23,14 +23,7 @@ export interface EncodeJob {
 }
 
 const HW_DECODE_CODECS = new Set(['h264', 'hevc', 'vp9', 'av1', 'mpeg2video', 'mpeg4', 'vc1', 'vp8']);
-const HW_DECODE_PIX_FMTS = new Set([
-  'yuv420p',
-  'yuvj420p',
-  'nv12',
-  'yuv420p10le',
-  'yuv420p12le',
-  'p010le',
-]);
+const HW_DECODE_PIX_FMTS = new Set(['yuv420p', 'yuvj420p', 'nv12', 'yuv420p10le', 'yuv420p12le', 'p010le']);
 
 /** NVDEC cannot decode H.264 10-bit or any 4:2:2/4:4:4 H.264; keep the rule simple and fall back to software. */
 export function canHwDecode(video: Pick<VideoInfo, 'codec' | 'pixFmt'>): boolean {
@@ -124,7 +117,16 @@ function inputArgs(job: EncodeJob): string[] {
     if (!toneMapOpencl) args.push('-hwaccel_output_format', 'cuda');
   }
   if (isHttp(job.inputUrl)) {
-    args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10');
+    args.push(
+      '-reconnect',
+      '1',
+      '-reconnect_streamed',
+      '1',
+      '-reconnect_on_network_error',
+      '1',
+      '-reconnect_delay_max',
+      '10',
+    );
   }
   // Bitmap subtitles are placed on the canvas they were authored for; without it ffmpeg assumes the video size.
   if (job.burn?.canvas) args.push('-canvas_size', `${job.burn.canvas.width}x${job.burn.canvas.height}`);
@@ -153,7 +155,9 @@ function subtitleRate(job: EncodeJob): string {
 export function buildBurnFilterGraph(job: EncodeJob): string {
   const { width, height, dynamicRange } = job.decision;
   const hdr = dynamicRange === 'hdr10';
-  const dim = hdr ? `,colorchannelmixer=rr=${PQ_REFERENCE_WHITE}:gg=${PQ_REFERENCE_WHITE}:bb=${PQ_REFERENCE_WHITE}` : '';
+  const dim = hdr
+    ? `,colorchannelmixer=rr=${PQ_REFERENCE_WHITE}:gg=${PQ_REFERENCE_WHITE}:bb=${PQ_REFERENCE_WHITE}`
+    : '';
   const rate = subtitleRate(job);
   const subtitle = `[0:${job.burn?.index}]${rate}`;
   if (hdr) {
@@ -184,35 +188,62 @@ function videoEncoderArgs(job: EncodeJob): string[] {
   const gop = Math.ceil(video.fps * SEGMENT_SECONDS);
 
   const args = [
-    '-c:v', hevc ? 'hevc_nvenc' : 'h264_nvenc',
-    '-profile:v', hevc ? (hdr ? 'main10' : 'main') : 'high',
-    '-preset', 'p4',
-    '-tune', 'hq',
-    '-rc', 'vbr',
-    '-cq', hevc ? '24' : '23',
-    '-b:v', `${rate.targetKbps}k`,
-    '-maxrate', `${rate.maxKbps}k`,
-    '-bufsize', `${rate.maxKbps * 2}k`,
-    '-bf', '0',
-    '-g', String(gop),
-    '-keyint_min', String(gop),
-    '-no-scenecut', '1',
-    '-forced-idr', '1',
-    '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`,
+    '-c:v',
+    hevc ? 'hevc_nvenc' : 'h264_nvenc',
+    '-profile:v',
+    hevc ? (hdr ? 'main10' : 'main') : 'high',
+    '-preset',
+    'p4',
+    '-tune',
+    'hq',
+    '-rc',
+    'vbr',
+    '-cq',
+    hevc ? '24' : '23',
+    '-b:v',
+    `${rate.targetKbps}k`,
+    '-maxrate',
+    `${rate.maxKbps}k`,
+    '-bufsize',
+    `${rate.maxKbps * 2}k`,
+    '-bf',
+    '0',
+    '-g',
+    String(gop),
+    '-keyint_min',
+    String(gop),
+    '-no-scenecut',
+    '1',
+    '-forced-idr',
+    '1',
+    '-force_key_frames',
+    `expr:gte(t,n_forced*${SEGMENT_SECONDS})`,
   ];
   if (hevc) args.push('-tag:v', 'hvc1');
 
   // NVENC ignores -color_* options for the stream VUI, so the colour tags are written by a bitstream filter.
   const bsf = hevc ? 'hevc_metadata' : 'h264_metadata';
   if (hdr) args.push('-bsf:v', `${bsf}=colour_primaries=9:transfer_characteristics=16:matrix_coefficients=9`);
-  else if (decision.toneMapped) args.push('-bsf:v', `${bsf}=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1`);
+  else if (decision.toneMapped)
+    args.push('-bsf:v', `${bsf}=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1`);
   return args;
 }
 
 function audioArgs(job: EncodeJob): string[] {
   if (job.audioIndex === null || job.decision.audioChannels === 0) return ['-an'];
   const channels = job.decision.audioChannels;
-  return ['-c:a', 'aac', '-b:a', `${audioBitrateKbps(channels)}k`, '-ac', String(channels), '-ar', '48000', '-af', 'aresample=async=1'];
+  return [
+    '-c:a',
+    'aac',
+    '-b:a',
+    `${audioBitrateKbps(channels)}k`,
+    '-ac',
+    String(channels),
+    '-ar',
+    '48000',
+    '-af',
+    'aresample=async=1',
+  ];
 }
 
 function hlsArgs(job: EncodeJob): string[] {
@@ -225,17 +256,25 @@ function hlsArgs(job: EncodeJob): string[] {
   // Without these MPEG-TS segments start 1.4 s late, which would not match the playlist timeline.
   if (format === 'mpegts') args.push('-muxdelay', '0', '-muxpreload', '0');
   args.push(
-    '-f', 'hls',
-    '-hls_time', String(SEGMENT_SECONDS),
-    '-hls_list_size', '0',
-    '-hls_segment_type', format,
-    '-hls_flags', 'temp_file+independent_segments',
-    '-start_number', String(job.startSegment),
-    '-hls_segment_filename', `seg-%d.${segmentExtension(format)}`,
+    '-f',
+    'hls',
+    '-hls_time',
+    String(SEGMENT_SECONDS),
+    '-hls_list_size',
+    '0',
+    '-hls_segment_type',
+    format,
+    '-hls_flags',
+    'temp_file+independent_segments',
+    '-start_number',
+    String(job.startSegment),
+    '-hls_segment_filename',
+    `seg-%d.${segmentExtension(format)}`,
   );
   // Without frag_discont the mp4 muxer writes run-relative fragment times and puts the start offset of a restarted run in an
   // edit list of that run's init.mp4, so segments of different runs would not fit one init. With it the times are absolute.
-  if (format === 'fmp4') args.push('-hls_fmp4_init_filename', 'init.mp4', '-hls_segment_options', 'movflags=+frag_discont');
+  if (format === 'fmp4')
+    args.push('-hls_fmp4_init_filename', 'init.mp4', '-hls_segment_options', 'movflags=+frag_discont');
   // An absolute playlist path also puts the session id on the command line, which orphan cleanup relies on.
   args.push(path.join(job.sessionDir, ENCODER_PLAYLIST));
   return args;
