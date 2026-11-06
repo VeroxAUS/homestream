@@ -3,10 +3,10 @@
   "date": "2026-11-06",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406",
-  "reason": "Previous wiki recorded b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf, absent from available full history (fatal: bad object).",
-  "summary": "HomeStream is a TypeScript ESM pnpm monorepo for LAN media playback. Its implemented Fastify 5 server on Node 24 owns SQLite, TMDB metadata, gateway discovery, NVENC transcoding, source proxy caching, TorBox tracking, health and optional telemetry. The React 19/Vite web app remains a placeholder; desktop and TV are planned. Shared Zod contracts, analytics, flags and sanitization live in packages/shared.",
-  "architecture": "index.ts loads config/logging, builds app, recovers orphaned encoders, starts loopback proxy and LAN listener, starts health/download workers, and advertises mDNS. app.ts composes services and closes owned resources. Playback resolves ranked sources, probes through proxy, decides output from device capabilities, starts ffmpeg, and serves HLS. Downloads return 202 rather than an active session. Progress/history/home use SQLite and metadata.",
+  "commitHash": "7eb94bafed5e0e046987a81d0cbbff8e6ba999d1",
+  "reason": "Valid previous wiki base bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406; 18,095 changed lines across 273 files exceeds the 10,000-line full-generation threshold. Full history available; no git failure.",
+  "summary": "HomeStream is a TypeScript ESM pnpm monorepo for LAN media playback. Fastify 5 on Node 24 owns SQLite, TMDB metadata, gateway discovery, NVENC transcoding, proxy caching, TorBox tracking and health. React 19/Vite implements Home, search, movie/show details and Settings with TanStack Query, SSE download updates and local device identity; Player and dashboard tabs are placeholders. Electron 45 package is a support-module skeleton with no window/tray/supervisor/preload. Shared Zod contracts, analytics, identity, flags and sanitization live in packages/shared.",
+  "architecture": "index.ts loads config/logging, builds services, recovers encoder orphans, starts loopback proxy then LAN listener, health/download workers and mDNS. Playback resolves ranked sources, probes through proxy, decides output from capabilities, starts ffmpeg and serves HLS. No usable cached source can produce 202 download tracking. Browser lazy routes use schema-validating API client and defer device registration, SSE and optional telemetry until content and idle time. Browser Play links reach an unimplemented player.",
   "patterns": "Strict NodeNext TS with .js specifiers and type-only imports. Thin routes validate shared Zod schemas; AppError returns redacted error envelopes with hints. Pure rules have offline unit tests; Fastify inject integration tests use fakes. GPU/live tiers are opt-in. Resource ownership and shutdown are explicit. Hot paths must not regress. Telemetry is optional and allowlisted. No accounts; devices are not authentication; LAN only; always re-encode video; clients send streamId auto.",
   "glossary": [
     "capability profile",
@@ -24,11 +24,10 @@
     "encoder lead",
     "install id"
   ],
-  "contributors": "All origin/main human authors are VeroxAUS. .github/CODEOWNERS assigns every path to VeroxAUS. Domain bylines: Active contributors: VeroxAUS. No maintainer leaderboard; omit maintainers.md because solo history.",
+  "contributors": "Default-branch origin/main git log has VeroxAUS as the only human author; github-actions[bot] excluded. .github/CODEOWNERS assigns all paths to VeroxAUS. Domain bylines Active contributors: VeroxAUS. Omit maintainers.md for solo history.",
   "coverage": {
     "apps/server": "apps/server.md",
-    "apps/web": "apps/web.md",
-    "apps/desktop and apps/tv": "Skip dedicated pages: absent, planned only; mention under apps/index.md.",
+    "apps/web": "apps/web/index.md",
     "packages/shared": "packages/shared.md",
     "apps/server/src/db": "reference/data-models.md",
     "apps/server/src/docs": "api/index.md and how-to-contribute/tooling.md",
@@ -50,7 +49,7 @@
     "apps/server/src/telemetry": "systems/telemetry.md",
     "apps/server/src/tmdb": "features/catalog.md",
     "server top-level modules": "apps/server.md, reference/configuration.md, security.md, how-to-monitor/logging.md",
-    "apps/web/src": "apps/web.md",
+    "apps/web/src": "apps/web/index.md, apps/web/screens.md, apps/web/data-and-startup.md, apps/web/build-and-tests.md",
     "packages/shared/src": "packages/shared.md",
     "apps/server/test and packages/shared/test": "how-to-contribute/testing.md; server directories docs/downloads/encode/gateway/health/home/integration/live/network/playback/progress/scripts/sourceproxy/stats/streams/telemetry/tmdb covered by corresponding domain tests.",
     "scripts and scripts/lib": "how-to-contribute/tooling.md, deployment.md, reference/configuration.md",
@@ -60,16 +59,28 @@
     "monitoring/prometheus and monitoring/sentry": "how-to-monitor/metrics.md and how-to-monitor/alerting.md",
     "root lint/build/test configs": "how-to-contribute/tooling.md",
     "docs/runbooks": "how-to-contribute/debugging.md",
-    "node_modules/dist/reports/coverage": "Skip: dependencies and generated outputs, not implementation source."
+    "node_modules/dist/reports/coverage": "Skip: dependencies and generated outputs, not implementation source.",
+    "apps/desktop": "apps/desktop.md: request ids, logging, telemetry config/scrubbing and typed analytics; shell explicitly not implemented.",
+    "apps/tv": "Skip dedicated page: no directory or implementation, planned only; mention under apps/index.md.",
+    "apps/web/src/api": "apps/web/index.md (writer may split): request IDs, ApiError, Zod validation, Query cache and query keys.",
+    "apps/web/src/components": "apps/web/index.md: Home banner, Continue Watching, title/episode actions, Nav and visual primitives.",
+    "apps/web/src/pages and pages/dashboard": "apps/web/index.md: lazy routes and real screens; player/dashboard placeholder limits.",
+    "apps/web/src/events and device": "apps/web/index.md: deferred EventSource download invalidations and browser device identity.",
+    "apps/web/src/telemetry and apps/desktop/src/telemetry": "systems/telemetry.md: optional SDKs, no IP/geo inference, route templates, lazy loading and desktop wiring plan.",
+    "apps/web/src/lib and styles": "apps/web/index.md: startup/content mark, formatting, reduced motion, design tokens, CSS modules and self-hosted font.",
+    "apps/web/src/test and apps/web/e2e/support": "how-to-contribute/testing.md and apps/web/index.md: component fixtures/mockApi plus isolated stub hub and network deny rule.",
+    "apps/desktop/test and test/integration": "how-to-contribute/testing.md: plain Node tests, no Electron binary.",
+    "packages/shared/src/identity.ts": "packages/shared.md: host/user identity-word scrubber. Analytics install identity is separately generated in apps/server/src/db/settings.ts."
   },
   "optionalSections": {
-    "cleanup-opportunities.md": "Verified complexity ceilings and baseline web test coverage in docs/TECH_DEBT.md; do not invent dead code or outdated dependency findings.",
+    "cleanup-opportunities.md": "Verified complexity exceptions, churn hotspots and stale maintained debt/security-document claims; no unsupported dead-code or outdated-dependency findings.",
     "primitives": "Skip separate lens: contract/domain pages cover concepts without duplication.",
     "background": "Skip separate lens: lore and conventions cover evidence and rationale.",
     "fun-facts.md": "Skip: compact two-day history, no verified naming lore."
   },
-  "validationNotes": "Initial checkout clean. No app code changed. Node v24.22.2 available. Pinned pnpm 12.16.0 runs through corepack; dependencies installed with frozen lockfile and lifecycle scripts disabled. Repository documentation gates passed. Repo docs checker excludes generated wiki, so additionally audit links/anchors, full source paths, heading/tree/order/size and Mermaid syntax separately.",
+  "validationNotes": "Wiki-only regeneration. Node24.22.2 and corepack pnpm12.18.0 used; frozen dependencies installed with lifecycle scripts disabled. Existing format/docs/agents gates and an additional generated-wiki link/anchor/source-path/title/tree/order/size/Mermaid parser audit run. No application tests, GPU, live services or browser captures. Screenshots and video prerequisites unavailable.",
   "warnings": [
-    "git diff from previous wiki failed: fatal: bad object b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf; regenerated full wiki."
+    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa to enable screenshot capture.",
+    "HyperFrames doctor reported failed FFmpeg and FFprobe prerequisite checks: both binaries are absent. No video was rendered."
   ]
 }

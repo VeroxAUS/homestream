@@ -8,7 +8,7 @@ HomeStream currently runs as one local Node server on the encoding PC. It serves
 
 `apps/server/src/index.ts` is the runtime entry point. The intended playback host is a Windows PC with NVIDIA hardware, FFmpeg/ffprobe and NVENC; offline development/CI also runs on Linux (`README.md`, `.github/workflows/ci.yml`).
 
-The [web app](apps/web.md) is a React placeholder (`apps/web/src/App.tsx`), not a finished playback client. Desktop and TV are planned; reserved workspace paths, dependency allowlists and Sentry project names are not shipped applications. `.devcontainer/Dockerfile` is a development image, not a production deployment artifact.
+The [web app](apps/web/index.md) implements Home, search, movie/show details and Settings. Player and dashboard tabs remain placeholders (`apps/web/src/App.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`). The [Electron 45 package](apps/desktop.md) has logging, request-ID and telemetry helpers, but no working window, tray, supervisor, preload or installer (`apps/desktop/README.md`). Android TV is planned with no app implementation. `.devcontainer/Dockerfile` is a development image, not a production deployment artifact.
 
 ## Build and start
 
@@ -65,9 +65,11 @@ After successful CI for a push to `main`, `.github/workflows/release.yml` checks
 | `fix`, `perf`                                            | Patch          |
 | Only docs/chore/ci/test/refactor/build-style maintenance | No release     |
 
-The first qualifying release is `v0.1.0`. `pnpm release:next` is a local dry-run plan. The workflow creates the GitHub tag/release with notes and registers a Sentry `homestream@<version>` release, commits and production deploy marker. It does **not** install code on a home PC, build/upload installers, or upload source maps.
+With no existing release tag, any nonempty commit history produces the initial `v0.1.0`; after that, the bump rules above apply (`scripts/next-version.mjs`). `pnpm release:next` is a local dry-run plan. The workflow creates the GitHub tag/release with notes and registers a Sentry `homestream@<version>` release, commits and production deploy marker. It does **not** install code on a home PC, build/upload installers, or upload source maps.
 
-Server/shared TypeScript builds emit source maps (`apps/server/tsconfig.build.json`, `packages/shared/tsconfig.build.json`). Vite has no source-map upload step configured. Runtime version comes from the server package manifest (`apps/server/src/version.ts`); release planning does not rewrite package versions. A Sentry deploy marker is release metadata, not evidence that a running LAN server was upgraded.
+Server/shared TypeScript builds emit source maps (`apps/server/tsconfig.build.json`, `packages/shared/tsconfig.build.json`). Vite separately supports a **build-time** source-map upload when `HOMESTREAM_RELEASE_BUILD=1`, `SENTRY_AUTH_TOKEN` is present, and telemetry is not disabled. It emits hidden maps, uploads to `homestream-web`, then deletes maps from the web output; ordinary builds emit none (`apps/web/vite.config.ts`). The release workflow does not invoke that web build.
+
+Web telemetry keys are baked into the UI, so changing server runtime configuration does not change an existing bundle (`apps/web/src/telemetry/buildEnv.ts`). Runtime version comes from the server package manifest (`apps/server/src/version.ts`); release planning does not rewrite package versions. A Sentry deploy marker is release metadata, not evidence that a running LAN server was upgraded.
 
 ## Rollback
 
@@ -77,19 +79,27 @@ Stop the server before a simple database-file backup; SQLite uses WAL (`apps/ser
 
 ## Scheduled documentation delivery
 
-`.github/workflows/droid-wiki-refresh.yml` runs daily at 17:00 UTC or manually. It skips when no changes outside `droid-wiki/` occurred since the last successful run, unless forced; restores pages from `factory/droid-wiki`; runs read-only generation; then passes page/metadata artifacts to a separate write-enabled job.
+`.github/workflows/droid-wiki-refresh.yml` runs daily at **17:00 UTC** or on manual dispatch, never on push. Its check job compares commits outside `droid-wiki/` since the last successful workflow run on the default branch; no previous success, missing history, or `force=true` causes generation. Otherwise it skips the later jobs.
 
-Publishing opens/updates a rolling PR against the default branch and requests squash/auto-merge. Images/video stay out of git. Because normal CI ignores wiki-only changes, publishing marks `Linux`/`Windows` not applicable on the generated PR. This is a documentation-specific exception, not the application release path.
+The read-only `wiki-refresh` job restores pages from **`factory/droid-wiki`**, falling back to main's checkout, installs Droid and runs `droid exec --auto high "/wiki"` using `FACTORY_API_KEY`. Its artifact includes hidden metadata and has **one-day retention**; images/video are excluded. A separate `wiki-publish` job has contents, PR and status write permissions.
+
+`scripts/wiki-mirror.mjs` replaces the wiki with the artifact rather than overlaying it, so dropped pages become deletions. It refuses artifacts without metadata and preserves local images/video folders. Publishing opens/updates **`docs: refresh wiki`**, labels it **`droid-wiki`**, and requests squash merge, using auto-merge for a protected base and retaining the rolling branch.
+
+The optional `FACTORY_WIKI_PR_TOKEN` can create PRs that trigger other workflows; the fallback built-in token does not. Normal CI also ignores wiki-only changes. Publishing therefore posts success statuses named **`Linux`** and **`Windows`** on the generated PR head as not applicable; `REQUIRED_CHECKS` must track the required CI job names. This exception is limited by the PR action's wiki-only add-paths, not the application release path. Rejected PR creation/push or merge is reported with warning annotations; mirror/artifact failures are not covered by that tolerance.
+
+Required repository-side settings include allowing Actions to create PRs and enabling auto-merge when needed (`docs/wiki.md`). Their presence is an operator prerequisite, not something verified by reading the workflow.
 
 ## Key source files
 
-| File                                       | Purpose                                         |
-| ------------------------------------------ | ----------------------------------------------- |
-| `apps/server/src/index.ts`                 | Runtime boot/listen/shutdown                    |
-| `apps/server/src/config.ts`                | Host, storage, credentials and runtime switches |
-| `apps/server/src/playback/pidRegistry.ts`  | Orphan recovery and disposable output cleanup   |
-| `.github/workflows/ci.yml`                 | Source validation                               |
-| `.github/workflows/release.yml`            | Tag, GitHub release and Sentry metadata         |
-| `scripts/next-version.mjs`                 | Conventional Commit version planning            |
-| `docs/runbooks/rollback.md`                | Recovery procedure                              |
-| `.github/workflows/droid-wiki-refresh.yml` | Scheduled wiki publishing                       |
+| File                                       | Purpose                                                        |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `apps/server/src/index.ts`                 | Runtime boot/listen/shutdown                                   |
+| `apps/server/src/config.ts`                | Host, storage, credentials and runtime switches                |
+| `apps/server/src/playback/pidRegistry.ts`  | Orphan recovery and disposable output cleanup                  |
+| `.github/workflows/ci.yml`                 | Source validation                                              |
+| `.github/workflows/release.yml`            | Tag, GitHub release and Sentry metadata                        |
+| `scripts/next-version.mjs`                 | Conventional Commit version planning                           |
+| `docs/runbooks/rollback.md`                | Recovery procedure                                             |
+| `.github/workflows/droid-wiki-refresh.yml` | Scheduled wiki publishing                                      |
+| `scripts/wiki-mirror.mjs`                  | Replacement mirror with metadata guard and asset exclusions    |
+| `apps/web/vite.config.ts`                  | Static build, development proxy and optional source-map upload |

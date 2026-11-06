@@ -15,7 +15,9 @@ Playback turns a title request and device capabilities into seekable, server-enc
 | Resource controls     | `apps/server/src/playback/monitor.ts`, `apps/server/src/playback/memoryWatchdog.ts`            | [Lifecycle](lifecycle.md)                                  |
 | HLS timeline          | `apps/server/src/playback/playlist.ts`                                                         | One variant and duration-derived manifests                 |
 
-A record owns a `SourceHandle`, probe, device/output decision, segment store, video process, progressive subtitle controller, generation token and player state. It is not a direct-play/remux decision or an adaptive-bitrate ladder.
+A `SessionRecord` in `apps/server/src/playback/session.ts` owns a `SourceHandle` from `apps/server/src/sourceproxy/proxy.ts`, probe, device/output decision, segment store, video process, progressive subtitle controller, generation token and player state. It is not a direct-play/remux decision or an adaptive-bitrate ladder.
+
+The server pipeline is implemented independently of the current browser player. `apps/web/src/pages/PlayerPage.tsx` is a placeholder, so a Play link in the UI does not yet exercise this session-to-HLS flow. See [server](../../apps/server.md) for composition and [API](../../api/index.md) for the transport contract.
 
 ## Start-to-first-segment flow
 
@@ -55,6 +57,12 @@ An unsuccessful opening attempt is abandoned: generation is invalidated, video/s
 
 Once a session has started, the manager retries a failed encoder on the **same source** once; it does not switch to another candidate mid-play. Recovery, memory-limit behavior and residual failed records are covered in [lifecycle](lifecycle.md).
 
+## Video and subtitle scheduling
+
+Video starts without waiting for all subtitles. Text extraction starts alongside it, but source height and estimated source bitrate determine how aggressively extraction may read. Heavy sources allow only one subtitle worker and limit it to **6 MiB/s during encoder warm-up** (`apps/server/src/playback/extractorSchedule.ts`).
+
+At HEAD `7eb94ba`, the fresh-run burst clock starts after that warm-up, rather than spending its 25-second allowance while already throttled. This matters for initial cues on large sources and for new demand-driven seek runs. [Subtitles](subtitles.md#heavy-source-warm-up-and-the-burst-clock) gives the exact conditions; [network controls](../network.md) covers the separate aggregate download gate.
+
 ## HLS serving and client state
 
 The master has one video variant, with optional WebVTT renditions. HEVC uses fMP4 (`seg-N.m4s`, `init.mp4`); H.264 uses MPEG-TS (`seg-N.ts`). Video/subtitle playlists list the full duration from sequence zero and end with `EXT-X-ENDLIST`; they promise positions, not already-existing files (`apps/server/src/playback/playlist.ts`).
@@ -67,7 +75,7 @@ Progress pings update position and `playing`, `paused` or `buffering` state; ord
 
 Change orchestration in `apps/server/src/playback/manager.ts`, policy in pure decision/track modules, and contract fields in [shared schemas](../../packages/shared.md). Keep handlers thin. Preserve reservation accounting, failed-attempt cleanup, first-segment success and generation checks when changing startup.
 
-Measured playback scope: **27 source `.ts` files**, **24 `*.test.ts` files** (15 playback + 9 encode), **4 helper files**, test/code ratio **0.89**, and **1 unique human author** in scoped `origin/main` history. [Systems](../index.md) defines the counting scope; additional integration tests are excluded from these totals.
+Measured at `7eb94ba` on 2026-11-06: **27 source `.ts` files** under `apps/server/src/playback`, **24 `*.test.ts` files** (15 under `apps/server/test/playback`, 9 under `apps/server/test/encode`), and **4 non-test TypeScript helpers** in those test directories. Test/code file ratio is **24/27 = 0.89**, not line or branch coverage. Additional integration tests, routes and shared schemas are excluded. Scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots.
 
 Offline fallback, reservation and default-subtitle integration tests use fake encoders. Real-media seek/output/extraction tests live under `apps/server/test/encode` and require the GPU tier. Tests were read, not run.
 

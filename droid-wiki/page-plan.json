@@ -16,7 +16,9 @@
         "apps/web/src/App.tsx",
         "packages/shared/src"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "overview/architecture.md",
@@ -33,7 +35,9 @@
         "apps/web/src/App.tsx",
         "packages/shared/src"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "overview/getting-started.md",
@@ -50,7 +54,9 @@
         "apps/web/src/App.tsx",
         "packages/shared/src"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "overview/glossary.md",
@@ -67,7 +73,9 @@
         "apps/web/src/App.tsx",
         "packages/shared/src"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/patterns-and-conventions.md",
@@ -84,7 +92,9 @@
         "apps/web/src/App.tsx",
         "packages/shared/src"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/index.md",
@@ -99,7 +109,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/playback/index.md",
@@ -114,7 +126,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/playback/encoding.md",
@@ -129,7 +143,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/playback/lifecycle.md",
@@ -144,7 +160,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/playback/subtitles.md",
@@ -159,7 +177,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/source-proxy.md",
@@ -174,7 +194,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/network.md",
@@ -189,7 +211,9 @@
         "apps/server/test/sourceproxy",
         "apps/server/test/network"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "apps/index.md",
@@ -210,7 +234,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "apps/server.md",
@@ -231,28 +257,88 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
-      "path": "apps/web.md",
+      "path": "apps/web/index.md",
       "title": "Web",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "criticality": "critical",
+      "contentBrief": "Browser architecture, route map, boundaries and modification entry points; links focused screen, startup and build pages.",
       "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
+        "apps/web/src",
+        "apps/web/e2e",
+        "apps/web/README.md",
+        "apps/web/vite.config.ts",
+        "apps/web/.size-limit.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
+      "action": "regenerate",
+      "status": "generated"
+    },
+    {
+      "path": "apps/web/screens.md",
+      "title": "Screens",
+      "criticality": "critical",
+      "contentBrief": "Implemented Home, search, movie/show details, Settings and navigation. Distinguish player/dashboard placeholders and preserve resume/download UI behavior.",
+      "relevantSourcePaths": [
+        "apps/web/src",
+        "apps/web/e2e",
+        "apps/web/README.md",
+        "apps/web/vite.config.ts",
+        "apps/web/.size-limit.json"
+      ],
+      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
+      "action": "regenerate",
+      "status": "generated"
+    },
+    {
+      "path": "apps/web/data-and-startup.md",
+      "title": "Data and startup",
+      "criticality": "critical",
+      "contentBrief": "Schema-validating API client, Query cache, deferred content mark and idle work, SSE invalidation and device identity.",
+      "relevantSourcePaths": [
+        "apps/web/src",
+        "apps/web/e2e",
+        "apps/web/README.md",
+        "apps/web/vite.config.ts",
+        "apps/web/.size-limit.json"
+      ],
+      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
+      "action": "regenerate",
+      "status": "generated"
+    },
+    {
+      "path": "apps/web/build-and-tests.md",
+      "title": "Build and tests",
+      "criticality": "critical",
+      "contentBrief": "Vite assets/compression, build-time keys, aggregate bundle budgets, component fixtures and isolated Playwright plain/stub runs.",
+      "relevantSourcePaths": [
+        "apps/web/src",
+        "apps/web/e2e",
+        "apps/web/README.md",
+        "apps/web/vite.config.ts",
+        "apps/web/.size-limit.json"
+      ],
+      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
+      "action": "regenerate",
+      "status": "generated"
+    },
+    {
+      "path": "apps/desktop.md",
+      "title": "Desktop",
+      "criticality": "normal",
+      "action": "create",
+      "contentBrief": "Describe the Electron 45 skeleton: tested logging, request ID, analytics, scrubber and Sentry option builders. Explain the future shell wiring plan without claiming a working tray/window/preload/supervisor.",
+      "relevantSourcePaths": [
+        "apps/desktop/src",
+        "apps/desktop/test",
+        "apps/desktop/README.md",
+        "apps/desktop/package.json"
+      ],
+      "relatedPages": ["apps/web/index.md", "systems/telemetry.md", "overview/architecture.md"],
+      "status": "generated"
     },
     {
       "path": "packages/index.md",
@@ -273,13 +359,15 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "packages/shared.md",
       "title": "Shared",
       "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
+      "contentBrief": "Describe shared Zod contract families, analytics allowlists, feature flag registry, generic sanitization and host/user identity-word scrubbers. Distinguish identity-word scrubbing from random install IDs generated in server settings.",
       "relevantSourcePaths": [
         "apps/server/src/app.ts",
         "apps/server/src/index.ts",
@@ -294,7 +382,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/index.md",
@@ -315,7 +405,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/catalog.md",
@@ -336,7 +428,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/stream-selection.md",
@@ -357,7 +451,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/prefetch.md",
@@ -378,7 +474,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/downloads.md",
@@ -399,7 +497,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "features/viewing-progress.md",
@@ -420,7 +520,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/gateway.md",
@@ -441,7 +543,9 @@
         "apps/web",
         "packages/shared"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "by-the-numbers.md",
@@ -449,7 +553,9 @@
       "criticality": "normal",
       "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
       "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "lore.md",
@@ -457,7 +563,9 @@
       "criticality": "normal",
       "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
       "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/index.md",
@@ -477,7 +585,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/development-workflow.md",
@@ -497,7 +607,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/testing.md",
@@ -517,7 +629,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/debugging.md",
@@ -537,7 +651,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-contribute/tooling.md",
@@ -557,7 +673,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "api/index.md",
@@ -577,7 +695,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "deployment.md",
@@ -597,7 +717,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "security.md",
@@ -617,7 +739,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "cleanup-opportunities.md",
@@ -637,7 +761,9 @@
         "eslint.config.mjs",
         "SECURITY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/health.md",
@@ -661,31 +787,27 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "systems/telemetry.md",
       "title": "Telemetry",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "Explain server/browser/desktop optional telemetry, typed events, scrubbers, disabling IP/geo inference, lazy browser startup and feature flags. Distinguish desktop pure support modules from not-yet-wired Electron initialization.",
       "relevantSourcePaths": [
-        "apps/server/src/health",
         "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/web/src/telemetry",
+        "apps/desktop/src/telemetry",
+        "packages/shared/src/analytics.ts",
+        "packages/shared/src/sanitize.ts",
+        "packages/shared/src/flags.ts",
+        "docs/PRIVACY.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-monitor/index.md",
@@ -709,7 +831,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-monitor/logging.md",
@@ -733,7 +857,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-monitor/metrics.md",
@@ -757,7 +883,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-monitor/tracing.md",
@@ -781,7 +909,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "how-to-monitor/alerting.md",
@@ -805,7 +935,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "reference/index.md",
@@ -829,7 +961,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "reference/configuration.md",
@@ -853,7 +987,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "reference/data-models.md",
@@ -877,7 +1013,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     },
     {
       "path": "reference/dependencies.md",
@@ -901,7 +1039,9 @@
         ".env.example",
         "package.json"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"]
+      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
+      "action": "regenerate",
+      "status": "generated"
     }
   ],
   "remove": ["how-to-monitor.md"],
@@ -910,5 +1050,9 @@
     "primitives": "Skip separate lens: contract/domain pages cover concepts without duplication.",
     "background": "Skip separate lens: lore and conventions cover evidence and rationale.",
     "fun-facts.md": "Skip: compact two-day history, no verified naming lore."
-  }
+  },
+  "baseCommit": "bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406",
+  "reason": "Valid previous wiki base bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406; 18,095 changed lines across 273 files exceeds the 10,000-line full-generation threshold. Full history available; no git failure.",
+  "removedPages": ["apps/web.md", "how-to-monitor.md"],
+  "pageCount": 50
 }

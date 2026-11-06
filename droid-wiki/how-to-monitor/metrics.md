@@ -63,6 +63,8 @@ Per-request logging/metrics skip exactly `/hls/*`, `/metrics`, `/healthz`, `/rea
 
 The checked-in thresholds use 5xx share and p95 latency as useful signals, not a declared availability SLO or error-budget policy. See [alerting](alerting.md) for all boundaries and evaluation windows. The port is open to the same LAN as the API; do not expose it publicly.
 
+For a latency chart, the checked-in alert uses `histogram_quantile(0.95, sum by (le) (rate(homestream_http_request_duration_seconds_bucket[5m])))`. This aggregates all instrumented routes. For a specific operation, retain/filter its route label rather than interpreting an aggregate p95 as every route's latency (`monitoring/prometheus/alerts.yml`). No checked-in Grafana dashboard or target percentage defines a service-level objective.
+
 To add a metric, declare it in `apps/server/src/metrics/serverMetrics.ts`, attach a service source in `apps/server/src/app.ts` or a lifecycle observation, and extend `apps/server/test/integration/observability.test.ts`. Preserve scrape-time reads instead of adding work per media segment.
 
 ## Key source files

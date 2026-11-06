@@ -6,7 +6,7 @@ HomeStream probes actual media, chooses a device-compatible output and always re
 
 ## Layout and key abstractions
 
-`ProbeResult` describes duration, the first real video stream, audio and supported subtitle tracks. Pure `decide()` produces a shared `Decision`; `EncodeJob` adds input/output locations, stream indexes, start segment, tone mapper, burn target and thread caps. `buildFfmpegArgs()` builds the command; `EncoderProcess` owns its child lifetime.
+`ProbeResult` in `apps/server/src/playback/probe.ts` describes duration, the first real video stream, audio and supported subtitle tracks. Pure `decide()` in `apps/server/src/playback/decision.ts` produces a shared `Decision`; `EncodeJob` in `apps/server/src/playback/ffmpegArgs.ts` adds input/output locations, stream indexes, start segment, tone mapper, burn target and thread caps. `buildFfmpegArgs()` builds the command; `EncoderProcess` in `apps/server/src/playback/encoderProcess.ts` owns its child lifetime.
 
 Probe skips attached pictures/image codecs, reads case-insensitive language/title tags and requires a positive duration. Valid frame rates are 5–121 fps; otherwise it uses 24. Both probe and encoder bound input analysis with `-probesize 8M -analyzeduration 3M`; ffprobe's default timeout is **60 seconds** (`apps/server/src/playback/probe.ts`).
 
@@ -67,13 +67,15 @@ Bitmap burn-in input-seeks up to **10 seconds earlier**, then trims that lead-in
 
 Default thread caps are **4** for GPU-oriented jobs and **8** for burn-in, software decode or the OpenCL/CPU-filter path. The chosen cap is applied to `-threads`, `-filter_threads` and `-filter_complex_threads` before input. Subtitle extraction uses its own two-thread setting (`apps/server/src/config.ts`, `apps/server/src/playback/ffmpegArgs.ts`, `apps/server/src/playback/subtitleRun.ts`).
 
+Thread flags are concurrency hints to FFmpeg, not a CPU-percentage quota. Source-height/bitrate classification also limits subtitle-worker concurrency and read rates, independently of output resolution or these thread settings. The [extractor warm-up and burst clock](subtitles.md#heavy-source-warm-up-and-the-burst-clock) must remain separate from NVENC rate control.
+
 Video, extraction and probing lower process priority best-effort. Every managed encoder/extractor is watched for RSS; **4096 MiB per FFmpeg process** is the default, not a combined server budget. [Lifecycle protections](lifecycle.md) cover enforcement and limitations (`apps/server/src/playback/priority.ts`, `apps/server/src/playback/memoryWatchdog.ts`).
 
 ## Change and test pointers
 
 Change compatibility/rates in `apps/server/src/playback/decision.ts`, metadata parsing in `apps/server/src/playback/probe.ts`, and graphs/timing in `apps/server/src/playback/ffmpegArgs.ts`. Keep absolute timestamps, ready-init compatibility and the loopback source input intact. Binary/thread settings are listed in [configuration](../../reference/configuration.md).
 
-Playback-wide footprint: **27 source / 24 test / 4 helper files**, test/code ratio **0.89**, **1 unique human author** on scoped `origin/main`; see [counting definitions](../index.md). This is not an encoding-only allocation.
+Playback-wide footprint at `7eb94ba`: **27 source `.ts` files** in `apps/server/src/playback`, **24 `*.test.ts` files** in `apps/server/test/playback` plus `apps/server/test/encode`, and **4 non-test TypeScript helpers** there. Test/code file ratio is **24/27 = 0.89**; scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. These overlapping counts are not an encoding-only allocation or coverage measurement.
 
 Unit tests assert decision matrices, filters, subtitle frame-rate limiting, thread caps and seek flags. Real GPU tests inspect codec, dimensions, tags and timelines. Tests were inspected, not executed; test names cannot override the actual filter implementation.
 

@@ -15,7 +15,7 @@ The source proxy hides expiring upstream media links behind stable loopback URLs
 | `apps/server/src/sourceproxy/pacer.ts`       | Per-response subtitle pacing                                           |
 | `apps/server/src/sourceproxy/upstream.ts`    | Keep-alive ranged HTTP transport and typed failures                    |
 
-A `SourceEntry` is keyed by the **exact raw gateway URL**, not a content hash or final media URL. `SourceHandle` exposes main/extractor URLs, probe, refresh, lead/hold hints and idempotent release. All consumers of an entry share the underlying bytes.
+A `SourceEntry` in `apps/server/src/sourceproxy/sourceEntry.ts` is keyed by the **exact raw gateway URL**, not a content hash or final media URL. `SourceHandle` in `apps/server/src/sourceproxy/proxy.ts` exposes main/extractor URLs, probe, refresh, lead/hold hints and idempotent release. All consumers of an entry share the underlying bytes.
 
 ## Acquire-to-read flow
 
@@ -103,11 +103,13 @@ Head/tail warming and demand upstream bytes pass through one [global download ga
 
 Remote loopback pumps wait at the read-ahead boundary before even serving cached bytes. An upstream response is cut at the hold so buffered network data does not keep streaming; the loopback reader stays connected until released. Extractors use run-specific URLs for independent holds and per-response local pacing. Both remain subject to the aggregate cap; [subtitles](playback/subtitles.md) explains heavy-source/warmup limits.
 
+The proxy does not decide when video is warm or when a fresh subtitle burst begins. The playback manager calculates those conditions and calls `setExtractorLimit()`. At HEAD the warm-up timestamp delays the burst clock, while this byte pump continues to enforce whichever rate it receives. Cached blocks bypass the extractor pacer, but not a run's read-ahead hold (`apps/server/src/playback/manager.ts`, `apps/server/src/playback/extractorSchedule.ts`, `apps/server/src/sourceproxy/serve.ts`).
+
 ## Modification and test pointers
 
 Preserve opaque handle ownership rather than resolving CDN URLs inside encoders. Change lifetime in the proxy, warming/refresh/front coordination in the entry, range boundaries in serving and budgets in the block cache. [Security](../security.md) describes the LAN/internal trust boundary; opaque keys are not user authentication.
 
-Measured scope: **6 source `.ts` / 7 `*.test.ts` / 2 helper files**, test/code ratio **1.17**, under `apps/server/src/sourceproxy` and `apps/server/test/sourceproxy`. Scoped `origin/main` history has **1 unique human author, VeroxAUS**. Tests were inspected, not executed.
+Measured at `7eb94ba`: **6 source `.ts` / 7 `*.test.ts` / 2 non-test TypeScript helper files**, test/code file ratio **7/6 = 1.17**, under `apps/server/src/sourceproxy` and `apps/server/test/sourceproxy`. This excludes network and playback tests and is not a coverage measurement. Scoped default-branch history has **1 unique human committer, VeroxAUS**, excluding bots. Tests were inspected, not executed.
 
 Counters distinguish served/cache bytes from demand upstream bytes. `upstreamRequests`/`upstreamBytes` omit resolver and warm traffic; the network gate's meter includes warm media bodies. Do not equate rolling-cache statistics with process RSS or sum shared-source per-session rates as independent traffic (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/sourceproxy/serve.ts`).
 

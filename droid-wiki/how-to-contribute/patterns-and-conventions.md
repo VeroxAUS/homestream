@@ -1,29 +1,31 @@
 # Patterns and conventions
 
-HomeStream uses strict TypeScript, shared Zod contracts, thin routes, and explicit service construction. The durable project rules are in `AGENTS.md` and `CONTRIBUTING.md`; follow neighboring code rather than introducing another framework.
+HomeStream uses strict TypeScript, shared Zod contracts, thin routes, and explicit service construction. Follow `AGENTS.md`, `CONTRIBUTING.md`, and nearby code when changing behavior.
 
 ## Types and modules
 
-`tsconfig.base.json` sets strict mode, `NodeNext`, unchecked-index checks, explicit override checks, and switch fallthrough checks. Server TypeScript imports use `.js` specifiers. `eslint.config.mjs` enforces type-only imports, camelCase values, PascalCase types, constant naming, cyclomatic and cognitive complexity limits of 20, and nesting depth 4. Existing exceptions are recorded, not permission to add new ones (`docs/TECH_DEBT.md`).
+`tsconfig.base.json` enables strict mode, unchecked-index checks, explicit overrides, and switch fallthrough checks. Server imports use `.js` specifiers; web build configuration uses bundler resolution (`apps/server/tsconfig.json`, `apps/web/tsconfig.json`). `eslint.config.mjs` enforces type-only imports, camelCase values, PascalCase types, complexity ceilings of 20, and nesting depth 4. Existing exceptions are debt, not permission to add new ones (`docs/TECH_DEBT.md`).
 
-Shared runtime schemas and inferred types belong under `packages/shared/src/`. Keep API field names identical across clients. Pure parsing, ranking, decision, playlist, and statistics rules should remain side-effect-free and unit-tested (`AGENTS.md`).
+Runtime contracts and inferred types live in `packages/shared/src/`. Keep wire field names identical across clients. Parsing, ranking, encoder decisions, playlists, and statistics rules should remain pure and unit-tested (`AGENTS.md`). Apps may import shared contracts but never each other (`.dependency-cruiser.cjs`).
 
-## Routes and errors
+## HTTP and errors
 
-Validate with shared schemas in `apps/server/src/routes/`, then delegate behavior to services. Use `AppError` or `invalidRequest` from `apps/server/src/errors.ts` for expected failures. Errors have `{error:{code,message,hint?}}`; actionable errors need a plain-English hint. `apps/server/src/app.ts` hides unexpected server error details, and `errorBody` redacts returned text.
+Server handlers in `apps/server/src/routes/` validate shared schemas and delegate to services. Expected failures use `AppError` from `apps/server/src/errors.ts`. Errors have `{error:{code,message,hint?}}`, with a plain-English hint when the user can act. The app hides unexpected failure details (`apps/server/src/app.ts`).
 
-Route changes require shared schemas, route documentation, tests, and a regenerated OpenAPI export. Follow `.factory/skills/homestream-add-api-route/SKILL.md`; see [API](../api/index.md).
+Browser requests use `apiFetch` or schema-validating `apiGet`, which attach `X-Request-ID` and throw `ApiError` (`apps/web/src/api/client.ts`). Do not add direct `/api` fetches. Desktop requests use `withRequestId` from `apps/desktop/src/requestId.ts`.
+
+Route changes require contracts, OpenAPI entries, tests, and a regenerated export. Follow `.factory/skills/homestream-add-api-route/SKILL.md`; see [API](../api/index.md).
 
 ## Resource ownership
 
-`apps/server/src/app.ts` exposes narrow test seams for network clients, subprocesses, clocks, and limits. Its close hook stops services before releasing owned resources; injected resources remain the caller's responsibility. Timers, sockets, subprocesses, and temporary directories need explicit shutdown and test cleanup.
+`apps/server/src/app.ts` provides test seams for network, clocks, encoders, and limits. Its close hook stops workers before closing resources and preserves injected dependencies it does not own. Timers, subprocesses, sockets, and temporary directories need explicit cleanup.
 
-SQLite uses prepared statements and transactional numbered migrations (`apps/server/src/db/index.ts`). Append migrations to `apps/server/src/db/migrations.ts`, never rewrite an applied migration. Regenerate `docs/schema.sql` and update `docs/database.md` when the schema changes.
+Append migrations to `apps/server/src/db/migrations.ts`, never rewrite applied ones. Regenerate `docs/schema.sql` and update `docs/database.md` (`apps/server/src/db/index.ts`). Tests use isolated directories and port 0, with no real upstream calls outside the live tier (`AGENTS.md`).
 
-## Safety and performance
+## Privacy and performance
 
-Never log raw gateway/CDN URLs or keys. Register secrets with `apps/server/src/redact.ts`; logs, events, API errors, and telemetry have separate scrubbing boundaries. Typed events and allowlisted properties live in `packages/shared/src/analytics.ts`. Telemetry must remain optional, non-blocking, and harmless when unavailable (`apps/server/src/telemetry/index.ts`).
+Never log raw gateway/CDN URLs, credentials, or user text. Server redaction is in `apps/server/src/redact.ts`; browser and desktop logs use their own wrappers (`apps/web/src/logger.ts`, `apps/desktop/src/logger.ts`). Analytics events and property allowlists live in `packages/shared/src/analytics.ts`; new events require a matching `docs/PRIVACY.md` update.
 
-Do not change the product decisions: the server re-encodes all video, clients request `streamId: "auto"`, devices replace accounts, and the service is LAN-only (`AGENTS.md`). Measure before and after changing playback startup, segment serving, or other hot paths.
+Browser telemetry keys are baked in at build time. SDK imports stay outside the initial bundle. Device registration, SSE, and telemetry wait until content is visible and the browser is idle (`apps/web/src/telemetry/index.ts`, `apps/web/src/lib/startup.ts`, `apps/web/src/main.tsx`). Preserve the bundle budgets in `apps/web/.size-limit.json`.
 
-Use isolated temporary directories and port 0 in tests. Real upstream calls belong only in the live tier; real encodes belong in the GPU tier (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).
+Do not change the product rules: video is re-encoded, clients send `streamId: "auto"`, devices are not accounts, and the listener is LAN-only. Measure hot paths before and after changes (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).

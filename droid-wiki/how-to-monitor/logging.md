@@ -4,7 +4,7 @@ Process logs, domain events and SSE are separate channels. Use process logs for 
 
 ## Process logs
 
-`createLogger` in `apps/server/src/logger.ts` writes one Pino JSON object per line to stdout and appends to the process log in `DATA_DIR`. Normal startup passes `LOG_LEVEL` from configuration; supported values are `debug`, `info`, `warn`, `error`, default **info** (`apps/server/src/index.ts`, `apps/server/src/config.ts`). Direct `buildApp` construction without an injected logger uses `createLogger`'s own info default (`apps/server/src/app.ts`).
+`createLogger` in `apps/server/src/logger.ts` writes one Pino JSON object per line to stdout and appends to **`server.log` in `DATA_DIR`**. Normal startup passes `LOG_LEVEL` from configuration; supported values are `debug`, `info`, `warn`, `error`, default **info** (`apps/server/src/index.ts`, `apps/server/src/config.ts`). Direct `buildApp` construction without an injected logger uses `createLogger`'s own info default (`apps/server/src/app.ts`).
 
 There is no rotation/size retention in the logger module. File-stream errors are swallowed; a running process is not proof that the file is writable. Log writes are stream-based, but serialization/redaction happen at the call site. Avoid per-segment chatter or large objects on playback paths.
 
@@ -40,6 +40,12 @@ Pruning runs every **200 writes**, removing rows older than **30 days** and reta
 `apps/server/src/routes/events.ts` sends `retry: 3000`, an immediate heartbeat and another every **15 seconds**. Named events include `health`, `session.start/update/end`, `log` and download lifecycle events (`apps/server/src/events/bus.ts`). Subscriber failures are isolated and payload strings pass through local redaction.
 
 There are no SSE IDs or generic `Last-Event-ID` replay. Reconnect and refetch health/activity/log snapshots. Downloads separately replay unnotified ready items; that is a domain notification mechanism, not event-stream history. The server ends open SSE responses in `preClose` so shutdown can proceed.
+
+## Browser and desktop logs
+
+The browser `logger` in `apps/web/src/logger.ts` writes to the development console and buffers at most **50 non-debug entries** until a telemetry sink attaches. Non-debug entries become scrubbed Sentry breadcrumbs when that optional runtime loads; debug remains development-console only. This is not a browser log-file service. Never include user search text or signed URLs in messages, even though outbound breadcrumbs are scrubbed.
+
+`createLogger` in `apps/desktop/src/logger.ts` writes JSON lines through a caller-supplied sink and optional breadcrumb callback. It catches sink failures and scrubs message/direct string/Error fields; callers must not pass arbitrary nested sensitive objects. A file destination, its retention and shell lifecycle wiring are not implemented by this helper. See [desktop](../apps/desktop.md) and [telemetry](../systems/telemetry.md).
 
 ## Adding logs safely
 

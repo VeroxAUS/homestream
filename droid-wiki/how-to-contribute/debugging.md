@@ -49,7 +49,11 @@ In POSIX shells use `LOG_LEVEL=debug pnpm --filter @homestream/server start`. Re
 
 Missing required upstream settings warn rather than prevent startup (`apps/server/src/index.ts`). Configuration precedence is explicit file override, repository `.env`, then app-data fallback; nonblank process settings override chosen file values (`apps/server/src/config.ts`). Restart after edits. On Linux, replace Windows default storage paths; do not interpret them as valid deployment defaults.
 
-A Vite page loading on 8601 only proves the placeholder client runs. Its proxy still targets 8600 even if the server port changed (`apps/web/vite.config.ts`).
+A Vite page loading on 8601 proves only that the development client is served. Its API/HLS proxy still targets 8600 even if the server port changed (`apps/web/vite.config.ts`). Use the browser Network panel to inspect the API error envelope and response request ID. `apiFetch` and `apiGet` in `apps/web/src/api/client.ts` attach IDs and expose `ApiError`; `apps/web/src/logger.ts` provides scrubbed client breadcrumbs. Do not paste raw request bodies or URLs with user text into an issue.
+
+Home, search, details and Settings are real screens; a Play link reaching the placeholder player is not an encoder failure. Dashboard tabs also remain placeholders (`apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`). See [screens](../apps/web/screens.md) and [data and startup](../apps/web/data-and-startup.md).
+
+For telemetry that does not appear, distinguish a no-key build from runtime opt-out. Web keys are baked in by `apps/web/vite.config.ts`; changing server environment after the build cannot add them. SDK loading waits for Home content and idle time. Reproduce with the isolated telemetry browser project rather than deliberately sending production reports ([telemetry](../systems/telemetry.md), [testing](testing.md)).
 
 ## Playback-specific checks
 
@@ -60,6 +64,8 @@ Audio/subtitle PATCH may restart encoding; player progress is a separate POST. F
 ## Measure rather than guess
 
 `pnpm profile:server` uses `scripts/profile-server.mjs` to start a throwaway profiled server, default port 8602, with telemetry/NVENC health testing off, and writes CPU profiles into `reports/profiles`. It exercises light traffic, not real playback. Follow `docs/runbooks/profiling.md` for a real workload and compare identical title/client/settings before and after a hot-path change.
+
+The profiler inherits the process environment and does not install the browser suite's outbound-fetch restriction; its request loop is local-only, but it is not an isolated upstream stub harness. Do not overlap it with Playwright, which also uses 8602. `pnpm --filter @homestream/web analyze` writes `apps/web/reports/bundle.html`; follow `docs/runbooks/web-bundle-budget.md` before changing a bundle ceiling. Turbo cache/environment surprises are covered in [tooling](tooling.md).
 
 Profiles and local logs may contain machine paths or viewing details. Share reviewed redacted excerpts and a reproducer, never `.env`, raw upstream payloads or a database. [Testing](testing.md) describes stub-first reproduction and [security](../security.md) describes private reporting.
 

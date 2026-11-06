@@ -15,6 +15,7 @@ Create a focused branch from `main`; there is no required branch-name pattern in
 Run the server and Vite in separate terminals:
 
 ```powershell
+pnpm --filter @homestream/shared build
 pnpm --filter @homestream/server dev
 pnpm --filter @homestream/web dev
 ```
@@ -41,8 +42,13 @@ pnpm deps:check
 pnpm syncpack:lint
 pnpm techdebt
 pnpm check:large-files
+pnpm check:secrets
 pnpm test:ci
 pnpm test:coverage
+pnpm --filter @homestream/web build
+pnpm --filter @homestream/web size
+pnpm --filter @homestream/desktop build
+pnpm --filter @homestream/desktop size
 pnpm flags:check
 pnpm openapi:check
 pnpm db:schema:check
@@ -50,13 +56,13 @@ pnpm docs:check
 pnpm agents:check
 ```
 
-Markdown-only changes need format, docs and agent validators; route/schema/migration changes also need generated-document checks. Fix failures rather than widening budgets or complexity limits. [Tooling](tooling.md) explains each gate. Run GPU/live only when the change needs them; `pnpm test` is not the safe offline default ([testing](testing.md)).
+Markdown-only changes need format, docs and agent validators; route/schema/migration changes also need generated-document checks. The bundle checks read `apps/web/.size-limit.json` and `apps/desktop/.size-limit.json`; build before measuring. Coverage thresholds may only rise; `pnpm coverage:ratchet` measures and raises eligible thresholds, rather than being a read-only command. Fix failures instead of widening budgets or complexity limits. [Tooling](tooling.md) explains each gate. Run GPU/live only when the change needs them; `pnpm test` is not the safe offline default ([testing](testing.md)).
 
 Lefthook checks staged formatting, ESLint, secrets and file sizes, plus documentation links for Markdown and agent instructions when `AGENTS.md` changes (`lefthook.yml`). It does not run the test suite. Review the staged diff and run `pnpm check:secrets`; exclude `.env`, build outputs, reports and coverage.
 
 ## Commit, PR and CI
 
-Use an imperative Conventional Commit subject, usually under 72 characters, with an optional scope. Every AI-written commit ends with:
+Use an imperative Conventional Commit subject, usually under 72 characters, without a full stop and with an optional scope: `feat(server): ...`, `fix(web): ...`, or `docs: ...`. Explain why in the body. Other accepted types include `test`, `refactor`, `perf`, `build`, `ci`, `chore` and `revert` (`CONTRIBUTING.md`). Every AI-written commit ends with this trailer, separated by a blank line:
 
 ```text
 Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>
@@ -64,7 +70,7 @@ Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.g
 
 Open the PR against `main` using `.github/pull_request_template.md`. Include the exact checks run, relevant hardware/live checks not run, privacy changes and hot-path measurements. Do not rewrite published history or force-push.
 
-`.github/workflows/ci.yml` runs full Linux static/documentation/security gates and offline coverage; Windows runs typechecking and selected path/process-sensitive unit files. `Linux` and `Windows` are the required status names recorded in `AGENTS.md`. GPU and live tiers never run in CI. Generated-wiki-only changes are excluded and handled by their own workflow; see [deployment](../deployment.md).
+`.github/workflows/ci.yml` runs full Linux static/documentation/security gates and sequential offline coverage across all four workspaces; Windows runs typechecking and selected path/process-sensitive server unit files. Linux's coverage command executes tests rather than running a separate `test:ci` step. The parallel, non-required `Web e2e` job builds the server, installs Chromium and runs the plain/stub browser suites without playback. `Linux` and `Windows` are the required status names recorded in `AGENTS.md`; the workflow pins pnpm 12.18.0 and Node through `.nvmrc`. GPU and live tiers never run in CI. Generated-wiki-only changes are excluded and handled by their own workflow; see [tooling](tooling.md) and [deployment](../deployment.md).
 
 ## Key source files
 

@@ -1,24 +1,25 @@
 # HomeStream
 
-HomeStream is a local-network media server. A Windows PC discovers sources through a configured gateway, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to clients. The server works; the React web UI still shows a placeholder (`README.md`, `apps/server/src/app.ts`, `apps/web/src/App.tsx`).
+HomeStream is a LAN media server. A Windows PC finds stream sources, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS. The React web app has Home, search, title details, and Settings screens; its player and dashboard tabs are placeholders. The Electron package contains support modules, not a working window or supervisor yet (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/desktop/src/index.ts`).
 
 ## Start here
 
-- [Architecture](architecture.md): process boundaries and playback flow.
-- [Getting started](getting-started.md): install, configure, build, and run.
-- [Playback](../systems/playback/index.md): sessions, encoding, seeking, and subtitles.
-- [Features](../features/index.md): catalog, source selection, caching, and viewing progress.
-- [API](../api/index.md): HTTP endpoints, HLS, and server-sent events.
+- [Architecture](architecture.md): runtimes, service boundaries, and playback flow.
+- [Getting started](getting-started.md): install, configure, test, and run.
+- [Apps](../apps/index.md): server, browser UI, and desktop status.
+- [Playback](../systems/playback/index.md): encoding, seeking, subtitles, and resource limits.
+- [Features](../features/index.md): metadata, stream selection, downloads, and viewing progress.
+- [API](../api/index.md): HTTP, HLS, events, and shared contracts.
 - [Contributing](../how-to-contribute/index.md): workflow, conventions, and checks.
 
-## Current scope
+## Product boundaries
 
-The implemented workspaces are `apps/server`, `apps/web`, and `packages/shared`. Desktop and Google TV clients are planned, not shipped applications in this checkout (`README.md`, `pnpm-workspace.yaml`). There are no user accounts. Device capabilities guide encoding; device identity is not authentication.
+There are no user accounts. Device identity records client capabilities, not authentication. Clients request `streamId: "auto"`; the PC always re-encodes video. Do not expose the listener to the internet (`AGENTS.md`).
 
-The server combines SQLite persistence, TMDB metadata, gateway discovery, a loopback source proxy, playback management, TorBox download tracking, health checks, viewing history, and optional telemetry in one process (`apps/server/src/app.ts`). Clients should request `streamId: "auto"`; the PC always re-encodes video (`AGENTS.md`).
+Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared`. The Google TV app is planned, with no `apps/tv` implementation in this checkout (`pnpm-workspace.yaml`, `README.md`).
 
-## Documentation snapshot
+TMDB supplies metadata, a configured AIOStreams gateway supplies source candidates, and TorBox optionally caches unavailable titles upstream. SQLite persists local state. Sentry and PostHog are optional and disabled without matching keys (`apps/server/src/app.ts`, `apps/server/src/telemetry/index.ts`). See [security](../security.md) before deployment.
 
-Generated from commit `bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406` on 2026-11-06. This replaces a baseline whose recorded commit is absent from the available git history. [Statistics](../by-the-numbers.md) describes measurement scope; [lore](../lore.md) follows the available dated history.
+## Snapshot
 
-The maintained operational documents live under `docs/`; this generated wiki explains the implementation. See `docs/wiki.md` for the scheduled refresh workflow. Never expose the server directly to the internet. Read [security](../security.md) before deploying it.
+This wiki describes commit `7eb94bafed5e0e046987a81d0cbbff8e6ba999d1`. [Statistics](../by-the-numbers.md) records its measurement scope; [lore](../lore.md) uses git timestamps for history. Maintained operational documents are under `docs/`; scheduled generation is described in `docs/wiki.md`.

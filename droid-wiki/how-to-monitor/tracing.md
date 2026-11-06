@@ -13,6 +13,8 @@ HomeStream currently provides request-ID correlation and manually reported Sentr
 
 Request IDs do not automatically become session event IDs. Background work may have no current request scope, and FFmpeg/CDN/service requests are not a distributed request trace. See [logging](logging.md).
 
+The browser's `apiFetch` generates the request ID and includes it in API breadcrumbs and `ApiError.requestId` for non-2xx responses (`apps/web/src/api/client.ts`). Use that ID or the response header to correlate the server failure. Desktop's `withRequestId` is a tested helper, not proof that a working shell is already making requests (`apps/desktop/src/requestId.ts`).
+
 ## Sentry configuration and limits
 
 `apps/server/src/telemetry/sentry.ts` sets a **0.05** trace sample rate and a path-aware sampler. Sampling is **0** for `/hls/*`, `/metrics`, `/healthz`, `/readyz` and `/api/events`; query strings are stripped when identifying those paths.
@@ -20,6 +22,8 @@ Request IDs do not automatically become session event IDs. Background work may h
 However, the SDK integration allowlist excludes HTTP, Fastify and database auto-instrumentation, and no server source call site currently creates spans with `startSpan`. There is no automatic request transaction tree, cross-service propagation, OpenTelemetry exporter, span-name catalog or guaranteed browser-to-server continuation. CORS permits `sentry-trace` and `baggage` headers for compatibility; permitting headers alone does not consume them into a trace.
 
 The implemented manual breadcrumbs describe playback start/end/failure/restart under category `playback` (`apps/server/src/telemetry/playbackObserver.ts`). Reports use release `homestream@<version>`, environment and optional request/device/media tags. SDK error integrations also handle uncaught exceptions/unhandled rejections. Error capture and all payload hooks are explained under [telemetry](../systems/telemetry.md).
+
+Browser Sentry and the desktop option builder set trace sampling to **zero** (`apps/web/src/telemetry/sentry.ts`, `apps/desktop/src/telemetry/sentry.ts`). A Sentry issue, a release deploy marker or a permitted trace header does not imply that end-to-end spans exist.
 
 ## Instrumentation changes
 

@@ -1,31 +1,31 @@
 # Architecture
 
-HomeStream runs one Node.js server process, FFmpeg child processes, and thin LAN clients. `apps/server/src/app.ts` composes the services; `apps/server/src/index.ts` owns process startup and shutdown. The browser application is currently a placeholder, and desktop/TV clients remain planned (`apps/web/src/App.tsx`, `README.md`).
+HomeStream has one server process, FFmpeg child processes, and thin LAN clients. `apps/server/src/app.ts` constructs the services, while `apps/server/src/index.ts` owns process startup. The browser UI is implemented separately; the Electron shell remains a skeleton (`apps/web/src/main.tsx`, `apps/desktop/src/index.ts`).
 
 ```mermaid
 graph LR
-    Client[LAN client] -->|HTTP and SSE| API[Fastify API]
-    API --> Catalog[TMDB and home]
-    Catalog --> TMDB[TMDB API]
-    API --> Streams[Stream service]
-    Streams --> Gateway[Configured gateway]
+    Browser[React browser UI] -->|API and SSE| API[Fastify server]
+    API --> Catalog[Catalog and home]
+    Catalog --> TMDB[TMDB]
+    API --> Streams[Stream selection]
+    Streams --> Gateway[AIOStreams gateway]
     API --> Playback[Playback manager]
     API --> Downloads[Download tracker]
-    Downloads --> TorBox[TorBox API]
+    Downloads --> TorBox[TorBox]
     Playback --> Proxy[Loopback source proxy]
     Proxy --> CDN[Upstream media]
-    Playback --> Encoder[FFmpeg]
-    Encoder -->|stable local URL| Proxy
-    Encoder --> Files[HLS files]
-    API -->|serves| Files
+    Playback --> FFmpeg[FFmpeg and NVENC]
+    FFmpeg -->|stable local URL| Proxy
+    FFmpeg --> HLS[HLS files]
+    API -->|serves| HLS
     API --> DB[(SQLite)]
 ```
 
-## Boundaries
+## Runtime boundaries
 
-The public listener defaults to `0.0.0.0:8600`. The source proxy normally uses port 8650 and binds only to loopback (`apps/server/src/config.ts`, `apps/server/src/sourceproxy/proxy.ts`). The public API has no login or authorization layer. Device registration records capabilities, not trust. Optional Sentry and PostHog clients are disabled without their keys (`apps/server/src/telemetry/index.ts`).
+The public listener defaults to `0.0.0.0:8600`; the source proxy binds to loopback, normally on 8650. The API has no authentication. Device registration is capability bookkeeping (`apps/server/src/config.ts`, `apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/routes/devices.ts`).
 
-SQLite uses the built-in `node:sqlite` API, WAL, a busy timeout, and transactional numbered migrations (`apps/server/src/db/index.ts`). HLS segments live in a separate transcode directory. Persistent progress, plays, download tracking, events, settings, devices, and upstream caches are documented in [data models](../reference/data-models.md).
+SQLite uses built-in `node:sqlite`, WAL, prepared statements, and numbered transactional migrations. HLS files live separately in the transcode directory (`apps/server/src/db/index.ts`, `apps/server/src/db/migrations.ts`, `apps/server/src/playback/segmentStore.ts`). See [data models](../reference/data-models.md).
 
 ## Playback flow
 
@@ -36,32 +36,34 @@ sequenceDiagram
     participant M as Playback manager
     participant P as Source proxy
     participant F as FFmpeg
-    C->>A: POST /api/sessions (streamId auto)
-    A->>M: Validate shared request and start
-    M->>M: Metadata, ranked sources, device decision
-    M->>P: Register source and probe
+    C->>A: POST /api/sessions with streamId auto
+    A->>M: Validate shared schema and start
+    M->>M: Resolve ranked sources and device decision
+    M->>P: Register source, warm bytes, probe
     M->>F: Encode through loopback URL
-    F-->>M: First segment ready
-    M-->>C: 201 session and playlist URLs
-    C->>A: GET HLS playlists and segments
-    A->>M: Serve or restart encoder for seek
-    C->>A: Report progress or stop session
+    M-->>C: 201 session and HLS URLs
+    C->>A: Request playlists and segments
+    A->>M: Wait for segment or restart at seek
+    F-->>A: Segment available
+    A-->>C: Media bytes
+    C->>A: Progress reports and session stop
 ```
 
-If no cached source is available, session creation can return `202` with a tracked download rather than a session (`apps/server/src/routes/sessions.ts`, `apps/server/src/downloads/service.ts`). Prefetch warms the source and probe before Play without starting an encoder (`apps/server/src/prefetch/service.ts`).
+A session request can instead return `202` with a tracked download when no cached source is usable (`apps/server/src/routes/sessions.ts`, `apps/server/src/downloads/service.ts`). Prefetch warms bytes and probe results without starting an encoder (`apps/server/src/prefetch/service.ts`). The browser's current Play links reach a placeholder; they do not yet perform this playback sequence (`apps/web/src/pages/PlayerPage.tsx`).
 
-## Workspace boundaries
+## Workspaces and languages
 
-| Workspace         | Responsibility                                                 |
-| ----------------- | -------------------------------------------------------------- |
-| `apps/server`     | Fastify API, database, upstream services, encoders, monitoring |
-| `apps/web`        | React placeholder and Vite development proxy                   |
-| `packages/shared` | Zod contracts, telemetry catalog, flags, and sanitization      |
+| Workspace         | Responsibility                                                                  |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `apps/server`     | Fastify API, SQLite, upstream clients, playback, and monitoring                 |
+| `apps/web`        | React routes, Query cache, device identity, SSE updates, optional telemetry     |
+| `apps/desktop`    | Main-process logging, request IDs, and telemetry support; shell not implemented |
+| `packages/shared` | Zod contracts, analytics catalog, flags, identity, and sanitizers               |
 
-The runtime implementation is TypeScript/TSX; scripts use JavaScript ESM, and automation uses YAML. Exact language totals are in [by the numbers](../by-the-numbers.md). Dependencies flow toward shared contracts, never from shared into an app (`.dependency-cruiser.cjs`).
+TypeScript/TSX implements the runtimes, JavaScript ESM implements repository scripts, CSS styles the UI, and YAML configures automation. The committed snapshot contains 42,674 physical TypeScript lines, 3,513 TSX lines, 3,799 JavaScript lines, and 1,981 CSS lines, including comments, blanks, and tests. [By the numbers](../by-the-numbers.md#size) defines the exclusions and gives the complete breakdown. Imports point toward shared contracts; apps must not import each other (`.dependency-cruiser.cjs`).
 
-## Startup and ownership
+## Startup and shutdown
 
-Startup loads configuration and logging, builds services, recovers orphaned encoders, starts the source proxy and public listener, then starts health checks, download polling, telemetry, and mDNS (`apps/server/src/index.ts`). The app close hook stops services and releases resources it owns (`apps/server/src/app.ts`). Signal, IPC, and stdin shutdown requests share a bounded shutdown helper (`apps/server/src/shutdown.ts`).
+The server loads config and logging, constructs services, recovers orphaned encoders, starts both listeners, then starts health checks, download polling, and mDNS. The close hook releases owned resources; signal, IPC, and stdin shutdown paths share a bounded helper (`apps/server/src/index.ts`, `apps/server/src/app.ts`, `apps/server/src/shutdown.ts`).
 
-Continue with [server](../apps/server.md), [network controls](../systems/network.md), and [monitoring](../how-to-monitor/index.md).
+The browser prefetches Home data while loading its lazy route. Telemetry, device registration, and SSE wait for the content mark and idle time, with a fallback timeout (`apps/web/src/main.tsx`, `apps/web/src/lib/startup.ts`). Telemetry chunks contain the SDK imports, outside the initial bundle (`apps/web/src/telemetry/index.ts`). See [telemetry](../systems/telemetry.md) and [network controls](../systems/network.md).
