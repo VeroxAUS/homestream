@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 export const sharedSrcAlias = {
@@ -5,7 +6,8 @@ export const sharedSrcAlias = {
 };
 
 export const baseTestConfig = {
-  maxWorkers: 8,
+  // Several timing tests (rate limits, bandwidth caps) fail when more workers than cores compete for the CPU.
+  maxWorkers: Math.min(8, availableParallelism()),
   testTimeout: 20_000,
   hookTimeout: 20_000,
 };
