@@ -23,6 +23,14 @@ export interface EncoderProcessOptions {
   onMemoryLimit?: (hit: MemoryLimitHit) => void;
 }
 
+/** What the session manager needs from an encoder; tests substitute fakes so no ffmpeg runs. */
+export interface EncoderHandle {
+  readonly pid: number | undefined;
+  readonly exited: Promise<EncoderExit>;
+  readonly running: boolean;
+  stop(graceMs?: number): Promise<void>;
+}
+
 const STDERR_LIMIT = 4000;
 
 function killTree(pid: number): Promise<void> {
@@ -41,7 +49,7 @@ function killTree(pid: number): Promise<void> {
 }
 
 /** One ffmpeg child. Stopping it asks politely with `q`, then kills the whole process tree. */
-export class EncoderProcess {
+export class EncoderProcess implements EncoderHandle {
   readonly pid: number | undefined;
   readonly exited: Promise<EncoderExit>;
   private readonly child: ChildProcess;

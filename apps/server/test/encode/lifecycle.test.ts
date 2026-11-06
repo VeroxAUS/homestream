@@ -216,14 +216,14 @@ describe('idle timeout', () => {
 
 describe('session limit', () => {
   it('answers 429 with a hint for a session over the limit and accepts one again after a stop', async () => {
-    const harness = await boot({ playback: { maxSessions: 2 } });
+    const harness = await boot();
     const first = await startSession(harness, 'movie', 'chromecast4k');
     const second = await startSession(harness, 'movie', 'desktop');
     expect([first.status, second.status]).toEqual([201, 201]);
 
     const third = await startSession(harness, 'movie', 'emulator');
     expect(third.status).toBe(429);
-    expect(third.body).toMatchObject({ error: { code: 'too_many_sessions', message: expect.stringContaining('2'), hint: expect.any(String) } });
+    expect(third.body).toMatchObject({ error: { code: 'too_many_sessions', message: 'Two streams are already playing. Stop one to start another.', hint: expect.any(String) } });
 
     await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${first.body.sessionId}` });
     const again = await startSession(harness, 'movie', 'emulator');
@@ -233,7 +233,7 @@ describe('session limit', () => {
   }, TIMEOUT);
 
   it('counts concurrent session starts that are still preparing', async () => {
-    const harness = await boot({ playback: { maxSessions: 2 } });
+    const harness = await boot();
     const results = await Promise.all(['chromecast4k', 'desktop', 'emulator'].map((profile) => startSession(harness, 'movie', profile as 'desktop')));
     expect(results.map((result) => result.status).sort()).toEqual([201, 201, 429]);
     for (const result of results) {

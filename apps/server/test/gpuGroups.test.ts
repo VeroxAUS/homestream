@@ -22,6 +22,8 @@ function matchesGlob(glob: string, relative: string): boolean {
 const inGpuGroup = (relative: string): boolean => GPU_TEST_GLOBS.some((glob) => matchesGlob(glob, relative));
 
 // Anything that creates local media or boots the app with a real ffmpeg must live in the sequential gpu project.
+// A file that boots the harness with a fake encoder and a stubbed probe says so with this marker and stays in the parallel unit project.
+const NO_FFMPEG_MARKER = '@no-ffmpeg';
 const STARTS_FFMPEG = /\b(bootHarness|generateSources|generateLongSource|generateSubtitleSources|generateHdrBitmapSource)\b|\b(?:run|execFile)\(\s*'(?:ffmpeg|ffprobe)'/;
 
 describe('GPU test grouping', () => {
@@ -29,7 +31,10 @@ describe('GPU test grouping', () => {
     const offenders = listTests(path.join(serverRoot, 'test'))
       .map((file) => path.relative(serverRoot, file).replaceAll('\\', '/'))
       .filter((relative) => relative !== 'test/gpuGroups.test.ts' && !inGpuGroup(relative))
-      .filter((relative) => STARTS_FFMPEG.test(readFileSync(path.join(serverRoot, relative), 'utf8')));
+      .filter((relative) => {
+        const source = readFileSync(path.join(serverRoot, relative), 'utf8');
+        return STARTS_FFMPEG.test(source) && !source.includes(NO_FFMPEG_MARKER);
+      });
     expect(offenders).toEqual([]);
   });
 

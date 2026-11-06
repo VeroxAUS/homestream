@@ -24,7 +24,7 @@ import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
 import type { StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
 import { decide } from './decision.js';
-import { EncoderProcess } from './encoderProcess.js';
+import { EncoderProcess, type EncoderHandle, type EncoderProcessOptions } from './encoderProcess.js';
 import { FallingBehindWatch } from './fallingBehind.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
 import { MemoryWatchdog, imageNameOf, createWorkingSetSampler, type MemoryLimitHit } from './memoryWatchdog.js';
@@ -59,7 +59,8 @@ import { renderSegment } from './vtt.js';
 export const SEGMENT_WAIT_MS = 30_000;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
 export const SEEK_WINDOW_SEGMENTS = 5;
-export const MAX_SESSIONS = 4;
+/** Two streams at a time keeps the GPU to at most two encoders (AGENTS.md GPU safety rule 1). */
+export const MAX_SESSIONS = 2;
 export const IDLE_TIMEOUT_MS = 120_000;
 export const MONITOR_TICK_MS = 2_000;
 const POLL_MS = 100;
@@ -86,6 +87,8 @@ export interface PlaybackManagerOptions {
   segmentWaitMs?: number;
   subtitleHoldMs?: number;
   maxSessions?: number;
+  /** Test seam: replaces the ffmpeg child of the session encoder. */
+  createEncoder?: (options: EncoderProcessOptions) => EncoderHandle;
   idleTimeoutMs?: number;
   /** Housekeeping interval; 0 disables the timer (tests call `monitorTick()` themselves). */
   monitorTickMs?: number;
@@ -183,7 +186,7 @@ export class PlaybackManager {
       throw new AppError(
         429,
         'too_many_sessions',
-        `The limit of ${this.maxSessions} playback sessions at the same time is reached.`,
+        'Two streams are already playing. Stop one to start another.',
         'Stop playback on another device, or wait a couple of minutes for idle sessions to time out, then try again.',
       );
     }
@@ -680,7 +683,7 @@ export class PlaybackManager {
       burn: burnTarget(rec.probe, rec.selectedSubtitle),
       threads: { gpu: this.options.config.ffmpegThreads, cpu: this.options.config.ffmpegBurnThreads },
     });
-    const proc = new EncoderProcess({
+    const proc = (this.options.createEncoder ?? ((options) => new EncoderProcess(options)))({
       ffmpegPath: this.options.config.ffmpegPath,
       args,
       cwd: rec.dir,

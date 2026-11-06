@@ -31,7 +31,7 @@ export interface BuildAppOptions {
   tmdb?: TmdbService;
   gateway?: GatewayClient;
   /** Test seams for the playback pipeline (ffprobe, CDN link resolution, segment wait). */
-  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'idleTimeoutMs' | 'monitorTickMs'> & {
+  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'createEncoder' | 'idleTimeoutMs' | 'monitorTickMs'> & {
     probe?: ProbeRunner;
     resolveUrl?: UrlResolver;
   };

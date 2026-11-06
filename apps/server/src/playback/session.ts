@@ -8,7 +8,7 @@ import type {
   SubtitleSelection,
   SubtitleTrack,
 } from '@homestream/shared';
-import type { EncoderProcess } from './encoderProcess.js';
+import type { EncoderHandle } from './encoderProcess.js';
 import type { ToneMapper } from './ffmpegArgs.js';
 import type { ProbeResult } from './probe.js';
 import type { SegmentFormat } from './playlist.js';
@@ -59,7 +59,7 @@ export interface SessionRecord {
   statSamples: StatSamples;
   toneMapper: ToneMapper;
 
-  process: EncoderProcess | null;
+  process: EncoderHandle | null;
   /** Progressive WebVTT extraction and cue store of the text tracks; null when the file has none. Independent of encoder restarts. */
   subtitles: SubtitleExtractor | null;
   /** First segment of the current ffmpeg run. */
