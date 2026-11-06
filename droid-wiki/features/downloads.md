@@ -66,6 +66,16 @@ Progress is a nondecreasing fraction, and SSE progress emits only on movement, a
 
 The service emits `download.started`, `download.progress`, `download.ready` and `download.failed`. Ready rows finished while no SSE client was connected remain unnotified and replay when a client connects. This is not per-client acknowledgement or durable replay of all event types (`apps/server/src/downloads/service.ts`, `apps/server/src/routes/events.ts`).
 
+There is no retry-download endpoint. While pending, another automatic Play reuses tracking. After failure or local cancellation, another Play can attempt the gateway add again; transient list failures instead retry within the existing poller (`apps/server/src/downloads/service.ts`, `apps/server/src/playback/manager.ts`, `apps/server/src/routes/downloads.ts`).
+
+## Browser badges and event updates
+
+`startServerEventsWhenIdle` in `apps/web/src/events/serverEvents.ts` opens one shared `/api/events` connection after content is shown and the browser is idle. `download.progress` updates a small external progress store in `apps/web/src/events/downloadProgress.ts`. Ready/failed events clear that entry and invalidate only the affected movie/show query. A reconnect after an error invalidates Query snapshots. The current listener does not handle `download.started` or implement a complete download queue screen.
+
+`usePendingDownload` in `apps/web/src/events/usePendingDownload.ts` requires a pending download in the details response, then overlays live progress when available. Unknown initial progress stays indeterminate. `DownloadBadge` in `apps/web/src/components/DownloadBadge.tsx` replaces the Play control with a noninteractive status and optional percentage; `PlayActions` in `apps/web/src/components/PlayActions.tsx` gives that status precedence over resume actions. Movie and episode details consume these states (`apps/web/src/pages/MovieDetailsPage.tsx`, `apps/web/src/pages/ShowDetailsPage.tsx`).
+
+This is display integration, not browser playback. `apps/web/src/pages/PlayerPage.tsx` remains a placeholder, so those Play links do not yet initiate the server's 202 flow. TorBox remote caching is also distinct from [prefetch](prefetch.md) and the bounded byte caches in the [source proxy](../systems/source-proxy.md).
+
 ## Modification entry points
 
 Change pure thresholds/verdicts in `apps/server/src/downloads/rules.ts`, polling/start orchestration in `apps/server/src/downloads/service.ts`, persistence in `apps/server/src/downloads/store.ts`, and read-only TorBox parsing in `apps/server/src/downloads/torbox.ts`. Preserve deduplication and the cancellation boundary. See [stream selection](stream-selection.md), [gateway](../systems/gateway.md), [API](../api/index.md) and [data models](../reference/data-models.md).
@@ -81,10 +91,14 @@ Change pure thresholds/verdicts in `apps/server/src/downloads/rules.ts`, polling
 | `apps/server/src/gateway/client.ts`              | Single-response playback probe                           |
 | `apps/server/src/routes/downloads.ts`            | Listing and local cancellation                           |
 | `packages/shared/src/downloads.ts`               | Download states, 202 and event contracts                 |
+| `apps/server/src/routes/events.ts`               | SSE connections and deferred ready notification replay   |
+| `apps/web/src/events/serverEvents.ts`            | Deferred SSE and targeted Query invalidation             |
+| `apps/web/src/events/usePendingDownload.ts`      | Pending metadata plus live progress                      |
+| `apps/web/src/components/DownloadBadge.tsx`      | Noninteractive caching status                            |
 | `apps/server/test/downloads/rules.test.ts`       | Pure lifecycle policy                                    |
 | `apps/server/test/downloads/torbox.test.ts`      | Transport/parsing                                        |
 | `apps/server/test/integration/downloads.test.ts` | Deduplication, restart, polling, events and cancellation |
 
 ## Measured scope
 
-`apps/server/src/downloads/`: **4 source files**. Matching unit directory: **2 test files**, **0.50 test-to-code file ratio**. Integration tests, routes, DB/shared helpers and fixtures are excluded. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots. No real TorBox calls were made for this documentation.
+At the documented commit, recursively counting `*.ts` in `apps/server/src/downloads/` gives **4 source files**; counting `*.test.ts` in `apps/server/test/downloads/` gives **2 test files**, a **0.50 test-to-code file ratio** (2 / 4). Integration tests, routes, DB/shared/web helpers and fixtures are excluded. Default-branch history has **1 unique human committer**, excluding bots, without individual productivity metrics. No real TorBox calls were made for this documentation.

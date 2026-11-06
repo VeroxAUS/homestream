@@ -12,32 +12,37 @@ OpenAPI schemas are documentation-only: they do not replace the handlers' runtim
 
 Every response receives `X-Request-ID`. Safe caller IDs are preserved; invalid ones become UUIDs (`apps/server/src/requestContext.ts`, `apps/server/src/http/observability.ts`). JSON errors follow `ErrorResponseSchema` in `packages/shared/src/schemas.ts`: `{ error: { code, message, hint? } }`, with optional failed-start `attempts` both inside `error` and at the top level. Expected errors retain status/hints; unexpected failures become generic 500 responses (`apps/server/src/errors.ts`, `apps/server/src/app.ts`).
 
+Caller request IDs must be 1–64 characters from `A–Z`, `a–z`, digits, `.`, `_`, and `-`. CORS exposes the response header and permits `X-Request-ID`, `sentry-trace`, and `baggage`; that is correlation compatibility, not authentication or automatic distributed tracing (`apps/server/src/http/observability.ts`). See [tracing](../how-to-monitor/tracing.md).
+
 ## Route groups
 
 These are the explicitly registered application methods. Unless noted, success is 200 JSON. Full field constraints and status lists remain in shared schemas and `docs/openapi.json`.
 
-| Group and implementation                         | Methods and paths                                                            | Contract/behavior                                                                                |
-| ------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Identity, `apps/server/src/routes/info.ts`       | GET `/api/info`                                                              | `ServerInfoSchema`: app/name/version/actual port/LAN addresses                                   |
-| Devices, `apps/server/src/routes/devices.ts`     | GET, POST `/api/devices`                                                     | List `{ devices }`; POST upserts a `CapabilityProfileSchema` and returns `DeviceSchema`          |
-| Catalog, `apps/server/src/routes/catalog.ts`     | GET `/api/home`, `/api/search`                                               | Home rows including continue watching; search uses `SearchQuerySchema` and returns `{ results }` |
-| Catalog details                                  | GET `/api/movie/:tmdbId`, `/api/tv/:tmdbId`, `/api/tv/:tmdbId/season/:n`     | Movie/show details with optional tracked downloads; season episodes                              |
-| Streams, `apps/server/src/routes/streams.ts`     | GET `/api/streams/movie/:tmdbId`, `/api/streams/tv/:tmdbId/:season/:episode` | Optional `deviceId`; ranked `StreamsResponseSchema`, no raw source URL                           |
-| Sessions, `apps/server/src/routes/sessions.ts`   | POST `/api/sessions`                                                         | 201 `SessionResponseSchema` or 202 `DownloadStartedResponseSchema`                               |
-| Live activity                                    | GET `/api/activity`                                                          | `{ sessions: ActivitySession[] }`                                                                |
-| Session operations                               | GET, PATCH, DELETE `/api/sessions/:id`                                       | Snapshot; track change; stop response `{ sessionId, state: "stopped" }`                          |
-| Progress, `apps/server/src/routes/progress.ts`   | POST `/api/sessions/:id/progress`, GET `/api/progress/:mediaKey`             | Ping and saved `ProgressResponseSchema`                                                          |
-| Continue watching                                | GET `/api/continue-watching`, DELETE `/api/continue-watching/:mediaKey`      | `{ items }`; removal `{ mediaKey, removed }`                                                     |
-| Downloads, `apps/server/src/routes/downloads.ts` | GET `/api/downloads`, DELETE `/api/downloads/:id`                            | `{ downloads }`; stop tracking `{ id, state: "cancelled" }`                                      |
-| History, `apps/server/src/routes/history.ts`     | GET `/api/history`                                                           | Filtered, paginated `HistoryResponseSchema`                                                      |
-| Statistics                                       | GET `/api/stats/summary`, `/api/stats/graphs`                                | `StatsQuerySchema`; aggregate summary and chart buckets                                          |
-| Prefetch, `apps/server/src/routes/prefetch.ts`   | POST `/api/prefetch`                                                         | 202 `{ streamId: string \| null }`; warming continues in background                              |
-| Health/logs, `apps/server/src/routes/health.ts`  | GET `/api/health`, POST `/api/health/run`, GET `/api/logs`                   | Health snapshot/manual refresh and persisted event query                                         |
-| Events, `apps/server/src/routes/events.ts`       | GET `/api/events`                                                            | Open `text/event-stream`, described below                                                        |
-| Operations, `apps/server/src/routes/ops.ts`      | GET `/healthz`, `/readyz`, `/metrics`                                        | Liveness JSON, readiness JSON, Prometheus text                                                   |
-| HLS, `apps/server/src/routes/sessions.ts`        | GET `/hls/:id/:file`, `/hls/:id/subs/:file`, `/hls/:id/subs/:idx/:file`      | Playlists, encoded media, complete/segmented WebVTT                                              |
+| Group and implementation                         | Methods and paths                                                            | Contract/behavior                                                                                   |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Identity, `apps/server/src/routes/info.ts`       | GET `/api/info`                                                              | `ServerInfoSchema`: app/name/version/actual port/LAN addresses                                      |
+| Devices, `apps/server/src/routes/devices.ts`     | GET, POST `/api/devices`                                                     | List `{ devices }`; POST upserts a `CapabilityProfileSchema` and returns `DeviceSchema`             |
+| Catalog, `apps/server/src/routes/catalog.ts`     | GET `/api/home`, `/api/search`                                               | Home rows including continue watching; search uses `SearchQuerySchema` and returns `{ results }`    |
+| Catalog details                                  | GET `/api/movie/:tmdbId`, `/api/tv/:tmdbId`, `/api/tv/:tmdbId/season/:n`     | Movie/show details with optional tracked downloads; season episodes                                 |
+| Streams, `apps/server/src/routes/streams.ts`     | GET `/api/streams/movie/:tmdbId`, `/api/streams/tv/:tmdbId/:season/:episode` | Optional `deviceId`; ranked `StreamsResponseSchema`, no raw source URL                              |
+| Sessions, `apps/server/src/routes/sessions.ts`   | POST `/api/sessions`                                                         | 201 `SessionResponseSchema` or 202 `DownloadStartedResponseSchema`                                  |
+| Live activity                                    | GET `/api/activity`                                                          | `{ sessions: ActivitySession[] }`                                                                   |
+| Session operations                               | GET, PATCH, DELETE `/api/sessions/:id`                                       | Snapshot; track change; stop response `{ sessionId, state: "stopped" }`                             |
+| Progress, `apps/server/src/routes/progress.ts`   | POST `/api/sessions/:id/progress`, GET `/api/progress/:mediaKey`             | Ping and saved `ProgressResponseSchema`                                                             |
+| Show progress                                    | GET `/api/tv/:tmdbId/progress`                                               | `ShowProgressResponseSchema`: `{ items }` with saved episode positions, completion and resumability |
+| Continue watching                                | GET `/api/continue-watching`, DELETE `/api/continue-watching/:mediaKey`      | `{ items }`; removal `{ mediaKey, removed }`                                                        |
+| Downloads, `apps/server/src/routes/downloads.ts` | GET `/api/downloads`, DELETE `/api/downloads/:id`                            | `{ downloads }`; stop tracking `{ id, state: "cancelled" }`                                         |
+| History, `apps/server/src/routes/history.ts`     | GET `/api/history`                                                           | Filtered, paginated `HistoryResponseSchema`                                                         |
+| Statistics                                       | GET `/api/stats/summary`, `/api/stats/graphs`                                | `StatsQuerySchema`; aggregate summary and chart buckets                                             |
+| Prefetch, `apps/server/src/routes/prefetch.ts`   | POST `/api/prefetch`                                                         | 202 `{ streamId: string \| null }`; warming continues in background                                 |
+| Health/logs, `apps/server/src/routes/health.ts`  | GET `/api/health`, POST `/api/health/run`, GET `/api/logs`                   | Health snapshot/manual refresh and persisted event query                                            |
+| Events, `apps/server/src/routes/events.ts`       | GET `/api/events`                                                            | Open `text/event-stream`, described below                                                           |
+| Operations, `apps/server/src/routes/ops.ts`      | GET `/healthz`, `/readyz`, `/metrics`                                        | Liveness JSON, readiness JSON, Prometheus text                                                      |
+| HLS, `apps/server/src/routes/sessions.ts`        | GET `/hls/:id/:file`, `/hls/:id/subs/:file`, `/hls/:id/subs/:idx/:file`      | Playlists, encoded media, complete/segmented WebVTT                                                 |
 
 `parseId` in `apps/server/src/routes/params.ts` accepts safe whole-number TMDB IDs; seasons can be zero for specials, episodes start at one. Progress keys are `movie:<tmdbId>` or `tv:<tmdbId>:<season>:<episode>`, bounded to 64 characters on lookup.
+
+`ShowProgressResponseSchema` in `packages/shared/src/progress.ts` returns saved episodes, not every episode in the catalog; each item adds `season` and `episode` to the ordinary progress shape. An unwatched show can return an empty `items` array (`apps/server/src/routes/progress.ts`).
 
 History accepts `type`, `deviceId`, `q`, `from`, `to`, `page` and `pageSize` (default 1/20, maximum page size 100). Time bounds accept epoch milliseconds, ISO timestamps or local calendar days. Statistics use `days`, default 30, range 1–3650 (`packages/shared/src/progress.ts`, `apps/server/src/stats/timeBound.ts`).
 
@@ -86,7 +91,7 @@ See [playback](../systems/playback/index.md), [encoding](../systems/playback/enc
 
 Use returned track URLs. Text tracks have `url` from creation and `fullUrl` when complete, with `extracting`, `complete` or `error` status; bitmap tracks have no sidecar URL (`SubtitleTrackSchema` in `packages/shared/src/playback.ts`).
 
-Media serving waits for missing segments and can seek/restart encoding. Successful HLS responses use `Cache-Control: no-cache`. A subtitle range not extracted yet waits up to six seconds, then returns **503 `subtitle_not_ready`**, `Retry-After: 1` and `Cache-Control: no-store`; it does not send an empty 200 to hide missing data. A complete-file request before completion returns 404 `subtitle_not_ready` (`apps/server/src/playback/manager.ts`). The generic OpenAPI HLS response metadata is less specific than these runtime MIME/retry behaviors.
+Media serving waits for missing segments and can seek/restart encoding. Successful HLS responses use `Cache-Control: no-cache`. A subtitle range not extracted yet waits up to six seconds, then returns **503 `subtitle_not_ready`**, `Retry-After: 1` and `Cache-Control: no-store`. It does not substitute an empty success for pending extraction. An extractor already in an error state instead returns an empty WebVTT segment with **`X-Subtitle-Status: failed`**. A complete-file request before completion returns 404 `subtitle_not_ready` (`apps/server/src/playback/manager.ts`). The generic OpenAPI HLS response metadata is less specific than these runtime MIME/retry behaviors.
 
 Filename parsers permit only the named playlists/init and bounded numeric segment/track forms. Clients cannot choose arbitrary session-directory files. See [subtitles](../systems/playback/subtitles.md) and [source proxy](../systems/source-proxy.md); the loopback `/src/<key>` route is internal, not another public media API.
 
@@ -119,6 +124,10 @@ On reconnect, refetch activity/health/download snapshots. Download-ready notific
 ## Extending the API
 
 Follow `.factory/skills/homestream-add-api-route/SKILL.md`: shared schema, thin route, service behavior, route-doc entry, tests, regenerated export. `apps/server/test/integration/openapi.test.ts` guards undocumented routes and drift. Built static assets and extensionless SPA fallback are separate infrastructure (`apps/server/src/routes/static.ts`).
+
+`pnpm openapi:export` builds a throwaway app with an in-memory database and no upstream calls, then writes `docs/openapi.json`; `pnpm openapi:check` compares without rewriting it (`apps/server/src/docs/export.ts`, `apps/server/src/docs/generated.ts`, `apps/server/src/docs/cli.ts`). This page describes the existing export; wiki generation does not regenerate the API.
+
+Static fallback is only for GET/HEAD extensionless paths when a built web root exists. It excludes `/api`, `/hls`, and their descendants; missing assets with extensions remain 404. Hashed assets use one-year immutable caching; other web files revalidate (`apps/server/src/routes/static.ts`). See [web build and tests](../apps/web/build-and-tests.md).
 
 ## Key source files
 

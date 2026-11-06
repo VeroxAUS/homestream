@@ -32,7 +32,26 @@ Every chosen item needs a backdrop and nonblank overview, and titles are dedupli
 
 The recommendation base is the most recent play by start time with **at least 60 seconds of credited watched time**, not merely a seeked position. TV bases use the show title (`apps/server/src/db/history.ts`). Recommendation failures, not-found results or the default **1500 ms** budget remove only that slot; they do not fail Home. The budget begins alongside the other reads, does not cancel the underlying request and does not cap total Home latency. Other metadata failures can still fail Home.
 
-The planned banner-rotation flag is a client-side registry entry, not an implemented carousel (`packages/shared/src/flags.ts`, `apps/web/src/App.tsx`).
+## Browser integration
+
+`HomePage` in `apps/web/src/pages/HomePage.tsx` renders Continue Watching when nonempty, the featured banner, then the four metadata rows. `homeQuery` in `apps/web/src/api/queries.ts` validates the shared `HomeResponseSchema` from `packages/shared/src/catalog.ts` and uses a 30-second stale time. This browser Query cache is separate from the persistent TMDB cache.
+
+`Banner` in `apps/web/src/components/Banner.tsx` is an implemented carousel. Rotation pauses for hover, keyboard focus, reduced motion and when it is offscreen. `useBannerIntervalMs` in `apps/web/src/lib/bannerInterval.ts` defaults to 9 seconds and accepts the lazily loaded experiment's assignment. Movie Play links target the player route; show actions open details. The player remains a placeholder and does not create sessions (`apps/web/src/pages/PlayerPage.tsx`).
+
+`SearchPage` in `apps/web/src/pages/SearchPage.tsx` debounces trimmed input by 300 ms, skips empty requests and filters Movies/Shows within the returned results, not by additional upstream queries. `MovieDetailsPage` in `apps/web/src/pages/MovieDetailsPage.tsx` reads metadata and progress separately. `ShowDetailsPage` in `apps/web/src/pages/ShowDetailsPage.tsx` reads show metadata, one selected season and the show's bulk progress; it reveals episodes in batches of 100. See [viewing progress](viewing-progress.md) and the [web app](../apps/web/index.md).
+
+```mermaid
+graph LR
+    Web[Browser Query cache] --> Routes[Catalog routes]
+    Routes --> Home[Home orchestration]
+    Routes --> TMDB[TMDB service]
+    Home --> TMDB
+    Home --> Progress[Continue watching]
+    Home --> History[Watched-title history]
+    TMDB --> Cache[(SQLite metadata cache)]
+    TMDB --> Upstream[TMDB API]
+    Routes --> Downloads[Pending download extensions]
+```
 
 ## Cache and upstream policy
 
@@ -65,10 +84,14 @@ Change normalization in `apps/server/src/tmdb/normalize.ts`, transport/cache ope
 | `apps/server/src/db/history.ts`                        | Watched-title recommendation bases                       |
 | `apps/server/src/routes/catalog.ts`                    | Catalog HTTP adapters and download extensions            |
 | `packages/shared/src/catalog.ts`                       | Metadata, featured and Home contracts                    |
+| `apps/web/src/pages/HomePage.tsx`                      | Home rows and content-ready integration                  |
+| `apps/web/src/components/Banner.tsx`                   | Featured carousel and navigation                         |
+| `apps/web/src/pages/SearchPage.tsx`                    | Debounced search and local media-type filters            |
+| `apps/web/src/pages/ShowDetailsPage.tsx`               | Season, episode and bulk-progress integration            |
 | `apps/server/test/home/featured.test.ts`               | Banner rules                                             |
 | `apps/server/test/integration/catalog-routes.test.ts`  | Metadata routes, cache and upstream failures             |
 | `apps/server/test/integration/progress-routes.test.ts` | Home with history, recommendations and continue watching |
 
 ## Measured scope
 
-`apps/server/src/tmdb/` plus `apps/server/src/home/`: **5 source files**. Matching unit-test directories: **2 test files**, **0.40 test-to-code file ratio**. Route/integration/live tests, fixtures and DB/shared files are excluded from that count. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots.
+At the documented commit, recursively counting `*.ts` in `apps/server/src/tmdb/` plus `apps/server/src/home/` gives **5 source files**. Counting `*.test.ts` in the matching `apps/server/test/tmdb/` and `apps/server/test/home/` directories gives **2 test files**, a **0.40 test-to-code file ratio** (2 / 5). Routes, integration/live tests, fixtures, web and DB/shared files are excluded. Default-branch history has **1 unique human committer**, excluding bots; this is repository context, not an individual productivity metric.

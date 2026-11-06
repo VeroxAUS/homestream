@@ -6,7 +6,7 @@ The manager owns session processes, files and source leases. It serializes seek/
 
 ## Layout and key abstractions
 
-`SessionRecord` stores public state separately from process state: generation, current run start/head, restart promise, parked flag, playhead and activity timestamps. `EncoderProcess` owns one child; `SegmentStore` indexes finished files; `SessionMonitor` applies the pure disk planner; `MemoryWatchdog` samples process working sets; `PidRegistry` records children for crash recovery.
+`SessionRecord` in `apps/server/src/playback/session.ts` stores public state separately from process state: generation, current run start/head, restart promise, parked flag, playhead and activity timestamps. `EncoderProcess` in `apps/server/src/playback/encoderProcess.ts` owns one child; `SegmentStore` in `apps/server/src/playback/segmentStore.ts` indexes finished files; `SessionMonitor` in `apps/server/src/playback/monitor.ts` applies the pure disk planner; `MemoryWatchdog` in `apps/server/src/playback/memoryWatchdog.ts` samples process working sets; `PidRegistry` in `apps/server/src/playback/pidRegistry.ts` records children for crash recovery.
 
 ```mermaid
 stateDiagram-v2
@@ -42,6 +42,8 @@ The initial segment is `floor(startPositionSec / 4)`, clamped to the final segme
 5. Poll for the final file every **100 ms**, up to the default **30-second** deadline. A skipped/evicted target can trigger another ensure/restart, up to **3 serving attempts**.
 
 A wait timeout is 504 `segment_timeout`; terminal encoder failure is 502 with its code; clean completion without that file is 404. No `.tmp` segment is served. Each launch resets the [read-ahead window](../network.md) and recent-speed history. The manager intends one video encoder per session, apart from independent subtitle workers.
+
+Heavy-source extractor warm-up is reevaluated against the new video run's `startSegment`, not the title's absolute segment zero. Subtitle stores and running extraction workers survive a video restart. Their recorded warm timestamp is per extractor run and is set only once, so restarting video does not automatically grant an existing worker another fresh burst (`apps/server/src/playback/manager.ts`, `apps/server/src/playback/subtitleExtractor.ts`). See [subtitle scheduling](subtitles.md#heavy-source-warm-up-and-the-burst-clock).
 
 ### Safe fMP4 init
 
@@ -97,7 +99,7 @@ Recovery also deletes **every child directory under the configured transcode dir
 
 Preserve generation and restart ordering when changing `apps/server/src/playback/manager.ts`; change disk rules in the pure planner, working-set sampling in the watchdog and orphan matching in the PID registry. See [monitoring](../../how-to-monitor/index.md) for the startup timeline, events and operational warnings.
 
-Playback footprint: **27 source / 24 test / 4 helper files**, test/code ratio **0.89**, **1 unique human author** on scoped `origin/main`; see [scope](../index.md). Offline tests cover reservations, fake-process failure and RSS decisions; GPU lifecycle tests cover real seeks, idle expiry, disk parking and residue. They were inspected, not run; their time limits are not measured benchmarks.
+Playback footprint at `7eb94ba`: **27 source `.ts` files** under `apps/server/src/playback`, **24 `*.test.ts` files** under `apps/server/test/playback` and `apps/server/test/encode`, and **4 non-test TypeScript helpers** in those test directories. Test/code file ratio is **24/27 = 0.89**; scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. Integration files elsewhere are excluded. Offline tests cover reservations, fake-process failure and RSS decisions; GPU lifecycle tests cover real seeks, idle expiry, disk parking and residue. They were inspected, not run; their time limits are not measured benchmarks.
 
 ## Key source files
 

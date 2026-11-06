@@ -1,20 +1,18 @@
 # Getting started
 
-Use Node.js 24, pnpm 12, Git, FFmpeg, and ffprobe. Playback needs an NVIDIA GPU and an NVENC-enabled FFmpeg build; unit and integration tests do not (`README.md`, `.nvmrc`, `package.json`).
+Use Node.js 24, pnpm 12, and Git. Real playback also needs FFmpeg, ffprobe, and an NVIDIA GPU with NVENC support; offline tests do not (`README.md`, `.nvmrc`, `package.json`). Run commands from the repository root.
 
-## Install and configure
-
-From the repository root:
+## Install
 
 ```powershell
 node scripts/bootstrap.mjs
 ```
 
-The bootstrap checks tools, installs dependencies and hooks, creates `.env` from `.env.example` only if absent, and builds shared contracts (`scripts/bootstrap.mjs`). A dev container is available in `.devcontainer/devcontainer.json`.
+The bootstrap checks tools, installs locked dependencies and hooks, creates `.env` from `.env.example` only when absent, and builds shared contracts (`scripts/bootstrap.mjs`). A development container is available in `.devcontainer/devcontainer.json`.
 
-Set your own `GATEWAY_MANIFEST_URL` and `TMDB_READ_TOKEN` in `.env`. `TORBOX_API_KEY` is optional. Do not paste credentials or signed gateway URLs into issues or logs. The complete setting list is in `.env.example`; configuration loading is in `apps/server/src/config.ts`.
+Set your own `GATEWAY_MANIFEST_URL` and `TMDB_READ_TOKEN` in `.env`. `TORBOX_API_KEY` is optional. Never paste their values or signed URLs into issues or logs. All supported settings are listed in `.env.example`, with loading rules in `apps/server/src/config.ts`.
 
-The default data and transcode locations are `E:\HomeStream\data` and `E:\HomeStream\transcode`. On Linux, or on a machine without that drive, explicitly set `DATA_DIR` and `TRANSCODE_DIR` to writable absolute paths. Set `FFMPEG_PATH` and `FFPROBE_PATH` if the binaries are not on PATH (`apps/server/src/config.ts`).
+The default data and transcode directories use the Windows E: drive. On Linux or a machine without that drive, set `DATA_DIR` and `TRANSCODE_DIR` to writable absolute paths. Set `FFMPEG_PATH` and `FFPROBE_PATH` when the binaries are not on PATH (`apps/server/src/config.ts`).
 
 ## Build and run
 
@@ -23,18 +21,18 @@ pnpm build
 pnpm --filter @homestream/server start
 ```
 
-The API and built web assets are served on port 8600 by default. The API explorer is at `http://localhost:8600/api/docs`. The web page currently says that the UI is coming soon (`apps/web/src/App.tsx`); this is not a working browser playback screen.
+Open `http://localhost:8600/` for the web UI and `http://localhost:8600/api/docs` for Swagger. Home, search, movie/show details, and Settings exist; playback and dashboard tabs are placeholders (`apps/web/src/App.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`).
 
-For development, start the server and web app in separate terminals:
+For development, start these in separate terminals:
 
 ```powershell
 pnpm --filter @homestream/server dev
 pnpm --filter @homestream/web dev
 ```
 
-Vite listens on port 8601 and proxies `/api` and `/hls` to port 8600 (`apps/web/vite.config.ts`). Missing upstream keys produce configuration warnings rather than preventing the process from starting (`apps/server/src/index.ts`).
+Vite listens on 8601 and proxies `/api` and `/hls` to 8600 (`apps/web/vite.config.ts`). Missing upstream keys produce warnings rather than stopping server startup (`apps/server/src/index.ts`). Desktop support modules can be tested without downloading or launching Electron; there is no working shell to launch yet (`apps/desktop/README.md`).
 
-## Safe checks
+## Check the installation
 
 ```powershell
 pnpm format:check
@@ -43,6 +41,6 @@ pnpm typecheck
 pnpm test:ci
 ```
 
-`pnpm test:ci` runs offline unit and integration tests across the workspaces. GPU and live tiers are separate and must be run deliberately (`package.json`, `apps/server/package.json`). See [testing](../how-to-contribute/testing.md) for fixtures, resource rules, and coverage gates.
+These checks need no real upstream credentials or GPU. Browser e2e tests are separate and need a server build and Chromium; follow [testing](../how-to-contribute/testing.md), which also explains the opt-in GPU and live tiers (`package.json`, `apps/web/playwright.config.ts`).
 
-Use `GET /healthz` for process liveness, `GET /readyz` for local readiness, and `GET /api/health` for the dependency dashboard (`apps/server/src/routes/ops.ts`, `apps/server/src/routes/health.ts`). See [configuration](../reference/configuration.md) and [debugging](../how-to-contribute/debugging.md) when setup fails.
+Use `/healthz` for liveness, `/readyz` for local readiness, and `/api/health` for dependency health (`apps/server/src/routes/ops.ts`, `apps/server/src/routes/health.ts`). See [configuration](../reference/configuration.md) and [debugging](../how-to-contribute/debugging.md) for failures.

@@ -1,45 +1,64 @@
 # Dependencies
 
-These counts describe direct declarations in the root plus three present workspace manifests at `bb48e6d`, not the transitive lockfile graph. Runtime registry packages, workspace links and development tools are counted separately. See [architecture](../overview/architecture.md) for boundaries and [tooling](../how-to-contribute/tooling.md) for checks.
+This inventory describes direct manifest declarations at commit `7eb94bafed5e0e046987a81d0cbbff8e6ba999d1`, not installed/transitive package totals or a freshness audit. Four workspace packages are listed in `pnpm-workspace.yaml`; root `package.json` supplies shared tooling rather than a fifth workspace. See [architecture](../overview/architecture.md) and [tooling](../how-to-contribute/tooling.md).
 
-## Declaration counts
+## Counting method and totals
 
-| Manifest                       | Registry runtime | Workspace runtime | Registry development | All declarations |
-| ------------------------------ | ---------------: | ----------------: | -------------------: | ---------------: |
-| `package.json`                 |                0 |                 0 |                   17 |               17 |
-| `apps/server/package.json`     |               12 |                 1 |                    1 |               14 |
-| `apps/web/package.json`        |                2 |                 1 |                    4 |                7 |
-| `packages/shared/package.json` |                1 |                 0 |                    0 |                1 |
-| **Total declarations**         |           **15** |             **2** |               **22** |           **39** |
+Count each key in `dependencies` and `devDependencies` once per manifest and group. Separate `workspace:*` runtime links from external registry runtime entries. “Unique” means the union of package **names**, ignoring version ranges and repeated declarations. Root tooling is included explicitly; none of these five manifests declares peer or optional dependencies (`package.json`, `apps/server/package.json`, `apps/web/package.json`, `apps/desktop/package.json`, `packages/shared/package.json`).
 
-Thus runtime has **17 declarations** including the two workspace edges. Registry declarations total **37**, with **36 distinct external package names**: **14 runtime names** and **22 development names**, with no cross-group overlap. Zod is the one repeated runtime registry name. The two workspace declarations share the one name `@homestream/shared`; including it gives **37 unique dependency names** overall. None of these manifests declares peer or optional dependencies.
+| Manifest                       | External runtime | Workspace runtime | Development | All declarations |
+| ------------------------------ | ---------------: | ----------------: | ----------: | ---------------: |
+| `package.json`                 |                0 |                 0 |          17 |               17 |
+| `apps/server/package.json`     |               12 |                 1 |           1 |               14 |
+| `apps/web/package.json`        |                6 |                 1 |          14 |               21 |
+| `apps/desktop/package.json`    |                2 |                 1 |           3 |                6 |
+| `packages/shared/package.json` |                1 |                 0 |           0 |                1 |
+| **Total declarations**         |           **21** |             **3** |      **35** |           **59** |
 
-These are counts of manifest groups, not installed package count, licenses or vulnerability findings. The reserved desktop workspace and Electron build allowlist do not add dependencies without a manifest (`pnpm-workspace.yaml`).
+There are **24 runtime declarations** including internal links, **56 external declarations**, **19 unique external runtime names**, and **33 unique development names**. The external runtime/development sets do not overlap, giving **52 unique external names**, or **53 names including `@homestream/shared`**. Repeated external runtime names are Zod (server/shared) and `posthog-node` (server/desktop); `@size-limit/file` and `size-limit` repeat in development (web/desktop). A workspace edge is not a registry download.
 
-## Registry runtime packages
+These are reproducible manifest metrics, not vulnerability, license, unused-package or package-age findings. `pnpm-lock.yaml` describes concrete resolutions and platform-specific/transitive packages, which are deliberately excluded from these counts.
 
-| Package               | Manifest range | Runtime responsibility                  |
-| --------------------- | -------------- | --------------------------------------- |
-| `@fastify/cors`       | `^11.4.0`      | Server CORS                             |
-| `@fastify/rate-limit` | `^11.2.2`      | Scoped readiness throttling             |
-| `@fastify/static`     | `^10.1.8`      | Optional built web assets               |
-| `@fastify/swagger`    | `~9.9.3`       | OpenAPI generation                      |
-| `@fastify/swagger-ui` | `~6.1.3`       | Local API documentation                 |
-| `@sentry/node`        | `~11.10.0`     | Optional server errors/manual telemetry |
-| `bonjour-service`     | `^1.4.4`       | mDNS discovery                          |
-| `fastify`             | `^5.12.8`      | HTTP runtime                            |
-| `pino`                | `^10.4.0`      | Structured local logging                |
-| `posthog-node`        | `~5.61.2`      | Optional analytics and remote flags     |
-| `prom-client`         | `~15.1.3`      | Prometheus registry/process collectors  |
-| `zod`                 | `^4.6.7`       | Server/shared runtime contracts         |
-| `react`               | `^19.3.1`      | Web scaffold                            |
-| `react-dom`           | `^19.3.1`      | Browser rendering                       |
+## Production declarations
 
-Sources are `apps/server/package.json`, `apps/web/package.json` and `packages/shared/package.json`. Server and web link `@homestream/shared` with `workspace:*`; that internal link is not a registry download. Shared's only runtime dependency is Zod.
+Ranges below are **manifest requests**, not claims about the latest registry release.
 
-## Development packages
+### Server
 
-The **17** root declarations in `package.json` are:
+All entries below come from `apps/server/package.json`; the additional internal dependency is `@homestream/shared` `workspace:*`.
+
+| Package               | Range      | Responsibility                            |
+| --------------------- | ---------- | ----------------------------------------- |
+| `fastify`             | `^5.12.8`  | HTTP runtime                              |
+| `@fastify/cors`       | `^11.4.0`  | CORS                                      |
+| `@fastify/rate-limit` | `^11.2.2`  | Scoped route rate limiting                |
+| `@fastify/static`     | `^10.1.8`  | Built browser assets                      |
+| `@fastify/swagger`    | `~9.9.3`   | OpenAPI generation                        |
+| `@fastify/swagger-ui` | `~6.1.3`   | Local API reference UI                    |
+| `@sentry/node`        | `~11.10.0` | Optional error reporting/manual telemetry |
+| `bonjour-service`     | `^1.4.4`   | LAN mDNS discovery                        |
+| `pino`                | `^10.4.0`  | Structured logging                        |
+| `posthog-node`        | `~5.61.2`  | Optional analytics/flags                  |
+| `prom-client`         | `~15.1.3`  | Prometheus metrics                        |
+| `zod`                 | `^4.6.7`   | Runtime contracts                         |
+
+The server has no native npm dependency: SQLite uses Node 24's built-in synchronous `node:sqlite`, not `better-sqlite3` or another addon (`apps/server/src/db/index.ts`, `apps/server/package.json`). FFmpeg/NVENC is a separate executable/driver boundary, not a JavaScript codec library. See [server](../apps/server.md) and [data models](data-models.md).
+
+### Browser, desktop and shared
+
+| Manifest                       | External runtime declarations                                                                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/package.json`        | `react` `^19.3.1`, `react-dom` `^19.3.1`, `react-router` `^8.5.1`, `@tanstack/react-query` `^5.106.1`, `@sentry/react` `~11.10.0`, `posthog-js` `~1.446.3` |
+| `apps/desktop/package.json`    | `@sentry/electron` `~8.3.0`, `posthog-node` `~5.61.2`                                                                                                      |
+| `packages/shared/package.json` | `zod` `^4.6.7`                                                                                                                                             |
+
+Both apps also link `@homestream/shared` with `workspace:*`. The browser has real routing/query/screen consumers, while the desktop package currently exports support modules rather than launching Electron (`apps/web/src/App.tsx`, `apps/web/src/api/queries.ts`, `apps/desktop/src/index.ts`). See [web](../apps/web/index.md), [desktop](../apps/desktop.md) and [shared](../packages/shared.md).
+
+Sentry is **11.10** for server/browser and **8.3** for Electron; those different SDK families are intentional declarations, not evidence of accidental version drift. Runtime transmission remains optional and key-gated; installing a telemetry package does not enable reporting ([telemetry](../systems/telemetry.md)).
+
+## Development declarations
+
+The root's **17** tooling dependencies are declared in `package.json`:
 
 | Group                            | Packages and manifest ranges                                                                                                       |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,29 +69,22 @@ The **17** root declarations in `package.json` are:
 | Formatting/version consistency   | `prettier` `~3.9.10`, `syncpack` `~15.3.3`                                                                                         |
 | Task graph/hooks/data            | `turbo` `~2.11.10`, `lefthook` `~2.2.2`, `yaml` `^2.9.1`                                                                           |
 
-`apps/server/package.json` adds `tsx` `^4.23.15`. `apps/web/package.json` adds `@types/react` `^19.3.0`, `@types/react-dom` `^19.3.0`, `@vitejs/plugin-react` `^6.2.1` and `vite` `^8.3.5`. Shared has no separate development declarations and uses workspace tools.
+Workspace-specific development dependencies:
 
-## Resolution, external executables and services
+| Manifest                       | Declarations                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/package.json`     | `tsx` `^4.23.15`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/web/package.json`        | `@playwright/test` `~1.64.1`, `@sentry/vite-plugin` `~11.10.0`, `@size-limit/file` `~14.3.0`, `@testing-library/dom` `^10.4.2`, `@testing-library/jest-dom` `^7.0.1`, `@testing-library/react` `^16.3.3`, `@testing-library/user-event` `^14.6.8`, `@types/react` `^19.3.0`, `@types/react-dom` `^19.3.0`, `@vitejs/plugin-react` `^6.2.1`, `jsdom` `^31.0.0`, `rollup-plugin-visualizer` `^7.1.2`, `size-limit` `~14.3.0`, `vite` `^8.3.5` |
+| `apps/desktop/package.json`    | `@size-limit/file` `~14.3.0`, `electron` `~45.2.3`, `size-limit` `~14.3.0`                                                                                                                                                                                                                                                                                                                                                                  |
+| `packages/shared/package.json` | None; uses shared root tools                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-`package.json` requires **Node >=24 <25** and `devEngines.packageManager` selects **pnpm ^12.16.0**; `.nvmrc` selects Node 24. `pnpm-lock.yaml` records concrete application resolutions and a separate package-manager document resolving pnpm **12.18.0**. That manager entry is not an application runtime/development declaration.
+Electron is a development declaration even though the eventual packaged desktop runtime needs its binary. The documented setup downloads that binary separately/lazily using `node apps/desktop/node_modules/electron/install.js`; set `ELECTRON_CACHE` first if its cache must live on another drive. Plain Node desktop tests do not launch or require the binary (`apps/desktop/README.md`). The dependency does not imply an implemented window/tray/supervisor.
 
-`pnpm-workspace.yaml` overrides `glob@<14.0.2` to `14.0.2` and `minimatch@<11.0.1` to `11.0.1`. It permits install builds for Electron, esbuild, electron-winstaller and lefthook; allowlisting a build does not mean that package is a direct server dependency.
+## Resolution policy and non-npm dependencies
 
-SQLite is built into Node (`node:sqlite`), not a native npm addon (`apps/server/src/db/index.ts`). FFmpeg, ffprobe and `nvidia-smi`/NVIDIA drivers are machine dependencies rather than manifest entries (`apps/server/src/health/checks/ffmpeg.ts`, `apps/server/src/health/checks/gpu.ts`).
+- `package.json` requires **Node >=24 <25** and selects **pnpm ^12.16.0** through `devEngines.packageManager`. The package-manager document in `pnpm-lock.yaml` resolves pnpm **12.18.0**; that is not an app declaration.
+- `pnpm-workspace.yaml` permits install builds for `electron`, `esbuild`, `electron-winstaller` and `lefthook`, denies the `core-js` donation build, and overrides `glob@<14.0.2` to `14.0.2` and `minimatch@<11.0.1` to `11.0.1`. Build approval is not an inventory of direct dependencies.
+- FFmpeg, ffprobe, NVIDIA drivers and `nvidia-smi` are host requirements, not npm declarations (`apps/server/src/health/checks/ffmpeg.ts`, `apps/server/src/health/checks/gpu.ts`).
+- TMDB, gateway, upstream CDN, optional TorBox/Sentry/PostHog and an optional Prometheus scraper are service dependencies, not additional npm packages (`apps/server/src/app.ts`, `monitoring/prometheus/prometheus.yml`). See [configuration](configuration.md).
 
-TMDB, the configured gateway, upstream media CDN, optional TorBox, optional Sentry and optional PostHog are remote integration dependencies, not additional npm declarations. Prometheus is an optional external scraper. Credentials and endpoints are in [configuration](configuration.md); outbound privacy and default no-op behavior are in [telemetry](../systems/telemetry.md).
-
-Do not label versions stale or safe from this inventory alone. Dependency updates must preserve runtime/tool compatibility and pass the repository checks.
-
-## Key source files
-
-| File                           | Purpose                                                   |
-| ------------------------------ | --------------------------------------------------------- |
-| `package.json`                 | Root tooling declarations, scripts and engine constraints |
-| `apps/server/package.json`     | Twelve registry runtime dependencies plus shared link     |
-| `apps/web/package.json`        | React runtime and Vite tooling                            |
-| `packages/shared/package.json` | Shared ESM/declaration exports and Zod                    |
-| `pnpm-workspace.yaml`          | Workspace discovery, build approvals and overrides        |
-| `pnpm-lock.yaml`               | Resolved graph and package-manager resolution             |
-| `.nvmrc`                       | Node major selection                                      |
-| `apps/server/src/db/index.ts`  | Built-in SQLite dependency boundary                       |
+Update compatibility is governed by the repository's version-consistency, module-boundary, bundle and test gates, not by this inventory. No registry freshness, vulnerability or unused-dependency scan was performed for this page.

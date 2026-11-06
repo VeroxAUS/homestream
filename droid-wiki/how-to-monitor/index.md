@@ -17,6 +17,10 @@ HomeStream has local JSON logs, persisted domain events, health snapshots, Prome
 
 Probe/metrics routes make no upstream calls (`apps/server/src/routes/ops.ts`). Reading `/api/health` can run all checks before the first snapshot, including an NVENC encode; use the dedicated probes for frequent polling (`apps/server/src/health/service.ts`). Public routes are open on the configured LAN listener; keep them off the internet.
 
+`/healthz` returns `{"status":"ok"}` and `/readyz` returns `{"status":"ready"}` on success. Readiness answers **503 `not_ready`** for unusable SQLite or data storage; it does not test transcode writes, external credentials or a playable source (`apps/server/src/routes/ops.ts`). Full health returns a snapshot whose `overall` is the worst check status, not an HTTP failure merely because a dependency is unhealthy (`packages/shared/src/health.ts`, `apps/server/src/routes/health.ts`).
+
+The browser's dashboard tabs are placeholders, though the server monitoring APIs are implemented (`apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`). Use API responses and an independently configured monitoring backend rather than assuming the UI already renders these signals.
+
 ## Guides
 
 - [Logging](logging.md): process logs, domain events, SSE and request IDs.

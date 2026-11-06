@@ -50,7 +50,23 @@ The download-start probe interprets `downloading` as accepted tracking instead; 
 
 Public `StreamOption` has metadata and a 16-hex URL-hash ID, never the raw URL (`packages/shared/src/streams.ts`, `apps/server/src/gateway/types.ts`). `getStreamById` in `apps/server/src/streams/service.ts` finds the originating cache row, uses it while fresh, or refetches its lookup after expiry. Missing/disappeared IDs return null. A changed URL can change ID.
 
+`GatewayCache` in `apps/server/src/gateway/cache.ts` persists nonempty lookups for 1 hour and empty lookups for 5 minutes. Expired rows remain traceable until purged, with a 7-day post-expiry retention window; they are not silently treated as fresh. Movie and episode lookup identities use IMDb, while [catalog](catalog.md) and local progress use TMDB.
+
 `cachedList` never triggers or waits for network lookup. `refresh` bypasses list-cache freshness and updates it, which lets download completion recheck availability. [Prefetch](prefetch.md) shares the same recommendation policy.
+
+```mermaid
+graph LR
+    Route[TMDB to IMDb route] --> Lookup[Gateway lookup and cache]
+    Lookup --> Filter[Episode contradiction filter]
+    Filter --> Parse[Filename metadata]
+    Parse --> Rank[Cached-first ranking]
+    Rank --> Device[Display-tier recommendation]
+    Device --> Candidates[Automatic start candidates]
+    Candidates --> Playback[Proxy probe and encode]
+    Candidates --> Download[Uncached tracking handoff]
+```
+
+The browser currently exposes neither a manual stream picker nor a working session-start flow. Its Play links reach `apps/web/src/pages/PlayerPage.tsx`, which reports that playback is not available yet. The server API and offline playback tests implement the handoff described here; see the [web app](../apps/web/index.md).
 
 ## Modification entry points
 
@@ -65,6 +81,8 @@ Change token heuristics in `apps/server/src/streams/parse.ts`, ordering/candidat
 | `apps/server/src/streams/rank.ts`                        | Ranking, display tiers and start candidates               |
 | `apps/server/src/streams/episode.ts`                     | Episode contradiction filtering                           |
 | `apps/server/src/routes/streams.ts`                      | TMDB/device HTTP adapter                                  |
+| `packages/shared/src/streams.ts`                         | URL-free options and recommendation response              |
+| `apps/server/src/gateway/cache.ts`                       | Persistent lookup freshness and stream-ID tracing         |
 | `apps/server/src/playback/manager.ts`                    | Candidate attempts and cleanup                            |
 | `apps/server/src/playback/resolveUrl.ts`                 | Placeholder-aware redirect resolution                     |
 | `apps/server/test/streams/rank.test.ts`                  | Exact ranking/candidate policy                            |
@@ -73,4 +91,4 @@ Change token heuristics in `apps/server/src/streams/parse.ts`, ordering/candidat
 
 ## Measured scope
 
-`apps/server/src/streams/`: **4 source files**. `apps/server/test/streams/`: **3 test files**, **0.75 test-to-code file ratio**. Integration, resolver, GPU/live tests and fixtures are excluded. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots.
+At the documented commit, recursively counting `*.ts` in `apps/server/src/streams/` gives **4 source files**; counting `*.test.ts` in `apps/server/test/streams/` gives **3 test files**, a **0.75 test-to-code file ratio** (3 / 4). Routes, gateway, resolver, shared/web, integration, GPU/live tests and fixtures are excluded. Default-branch history has **1 unique human committer**, excluding bots; no individual productivity comparison is implied.

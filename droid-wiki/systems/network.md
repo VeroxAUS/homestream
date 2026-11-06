@@ -16,7 +16,7 @@ Network controls cap aggregate upstream media downloads and stop reading when en
 | `apps/server/src/network/snapshot.ts`     | Proxy totals joined with playback session readings      |
 | `apps/server/src/network/check.ts`        | Live network health status                              |
 
-`SourceProxy` creates one `DownloadGate`; every remote source entry uses it for head/tail warming and demand reads. This does not cap TMDB/gateway metadata, all server networking, client HLS downloads or TorBox's own remote caching job. The one-byte redirect resolver is outside the media-body gate (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/playback/resolveUrl.ts`).
+`SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` creates one `DownloadGate` from `apps/server/src/network/downloadGate.ts`; every remote source entry uses it for head/tail warming and demand reads. This does not cap TMDB/gateway metadata, all server networking, client HLS downloads or TorBox's own remote caching job. The one-byte redirect resolver is outside the media-body gate (`apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/playback/resolveUrl.ts`). Cache regions, opaque source ownership and HTTP recovery belong to the [source proxy](source-proxy.md).
 
 ## Aggregate download cap
 
@@ -63,11 +63,11 @@ While guarded:
 
 The guard does not reclassify prefetch/extractor ranks; their aging still applies. Without a recently waiting at-risk encoder, buffered sessions can use spare bandwidth normally. This is scheduling policy, not guaranteed stall-free service when aggregate source demand exceeds capacity (`apps/server/src/network/downloadGate.ts`).
 
-The global cap and [subtitle response pacing](playback/subtitles.md) are independent. A locally “unlimited” extractor remains rank 2 under the global gate.
+The global cap and [subtitle response pacing](playback/subtitles.md#heavy-source-warm-up-and-the-burst-clock) are independent. A locally “unlimited” extractor remains rank 2 under the global gate. Heavy-source warm-up and the delayed fresh-burst clock are playback policy; neither modifies token replenishment, waiter aging or aggregate cap settings (`apps/server/src/playback/extractorSchedule.ts`).
 
 ## Read-ahead holds
 
-`ReadAheadWindow` starts **filling**, changes to **waiting** at the hold threshold, and returns to filling only below the resume threshold or on reset. This hysteresis prevents every advancing segment from toggling the download (`apps/server/src/network/readAhead.ts`).
+`ReadAheadWindow` in `apps/server/src/network/readAhead.ts` starts **filling**, changes to **waiting** at the hold threshold, and returns to filling only below the resume threshold or on reset. This hysteresis prevents every advancing segment from toggling the download.
 
 Configured defaults are **180 seconds hold / 120 seconds resume**. Both settings must be positive finite numbers; resume must be strictly below hold. An inconsistent pair resets both to defaults with a warning (`apps/server/src/network/limits.ts`, `apps/server/src/network/readAhead.ts`).
 
@@ -87,7 +87,7 @@ These holds differ from [disk parking](playback/lifecycle.md), which actually st
 
 ## Operational readings
 
-`RateMeter` uses **250 ms slots**, retaining 80 slots, with a default five-second download reading. Global numbers come from grants, including warmed head/tail bodies; source numbers come from entry downloads. They measure proxy byte consumption, not packets on a physical NIC (`apps/server/src/network/rateMeter.ts`, `apps/server/src/network/downloadGate.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
+`RateMeter` in `apps/server/src/network/rateMeter.ts` uses **250 ms slots**, retaining 80 slots; proxy and handle callers request a five-second reading. Global numbers come from grants, including warmed head/tail bodies; source numbers come from entry downloads. They measure proxy byte consumption, not packets on a physical NIC (`apps/server/src/network/downloadGate.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
 
 The network snapshot includes aggregate rate/cap, configured hold/resume, binding duration and each live session's source rate, lead and filling/waiting state. Binding duration continues across short gaps but resets after **more than 3 seconds** without a limited request. The health check warns only after **more than 30 seconds** binding; otherwise reports OK. It makes no external request (`apps/server/src/network/snapshot.ts`, `apps/server/src/network/check.ts`). See [health](health.md) and [monitoring](../how-to-monitor/index.md).
 
@@ -97,7 +97,7 @@ A separate falling-behind watch reports sessions with positive recent speed **<1
 
 Keep token arithmetic pure/clock-driven, reevaluate live priority, preserve guard/aging interaction and abort cleanup. Change limit parsing independently of gate scheduling. Wiring lives in `apps/server/src/app.ts`; defaults and restart requirements are documented in [configuration](../reference/configuration.md).
 
-Measured scope: **7 source `.ts` / 7 `*.test.ts` / 1 helper file** under `apps/server/src/network` and `apps/server/test/network`, test/code ratio **1.00**, **1 unique human author, VeroxAUS**, in scoped `origin/main` history. Proxy transport tests are separate from this count.
+Measured at `7eb94ba`: **7 source `.ts` / 7 `*.test.ts` / 1 non-test TypeScript helper file** under `apps/server/src/network` and `apps/server/test/network`, test/code file ratio **7/7 = 1.00**. Scoped default-branch history has **1 unique human committer, VeroxAUS**, excluding bots. Proxy transport tests are separate from this count; the ratio is not line or branch coverage.
 
 Fake-clock tests check rate windows, overload/underload priority, guard expiry, aging and aborts. Proxy tests exercise actual loopback sharing/holds. The independent stub-CDN **five-second cap-window measurement is Windows-only** because Linux loopback buffers distort sender-side early windows; deterministic gate tests still cover cap math on all platforms (`apps/server/test/sourceproxy/bandwidthCap.test.ts`, `apps/server/test/network/bandwidthPriority.test.ts`). Tests were inspected, not executed for this documentation.
 

@@ -17,6 +17,20 @@ Migrations in `apps/server/src/db/migrations.ts` sort by numeric version. Each v
 
 There are **8 application tables** after version 4; SQLite's own autoincrement bookkeeping is not an application table. Foreign-key mode is on, but these migrations declare **no foreign keys**. Relations below are logical lookups, not enforced joins or cascades.
 
+```mermaid
+flowchart LR
+    media["Media key convention"] -.-> progress["progress"]
+    media -.-> plays["plays"]
+    media -.-> downloads["pending_downloads"]
+    devices["devices"] -. "device_id snapshot" .-> plays
+    session["In-memory session ID"] -.-> plays
+    session -.-> events["events"]
+    query["IMDb gateway query key"] -.-> downloads
+    query -.-> cache["gateway_cache"]
+```
+
+Dashed edges show correlations only; the media/query/session nodes are identities, not additional SQL tables (`apps/server/src/db/migrations.ts`, `apps/server/src/db/plays.ts`, `apps/server/src/gateway/types.ts`).
+
 ## Tables and writers
 
 | Table               | Identity and content                                                                                                                                          | Writer/query entry points                                                    |
@@ -37,6 +51,8 @@ Important indexes include descending progress update time/TMDB ID, play start ti
 ## Logical identities and transitions
 
 `mediaKeyFor` in `apps/server/src/db/plays.ts` produces `movie:<tmdbId>` or `tv:<tmdbId>:<season>:<episode>`. This key links progress, plays and downloads by convention. Gateway `query_key` instead uses IMDb identity and optional episode numbers (`apps/server/src/gateway/types.ts`). A download can re-resolve its link from that key without storing a playback URL in the download row.
+
+The complete progress row is `media_key`, `tmdb_id`, `type`, nullable `season`/`episode`, `position_sec`, `duration_sec`, `updated_at`, `completed`, `hidden`, and `meta_json`. Position/duration default to 0, completed/hidden to 0, and metadata to `{}`. The adapter exposes camelCase fields and a `meta` object containing optional title, show/episode title and poster/backdrop URLs (`apps/server/src/db/migrations.ts`, `apps/server/src/db/progress.ts`). This state is global by media key, not partitioned by device.
 
 `plays.device_id` refers logically to a registered device, but play rows also snapshot name/kind/IP so history is not dependent on a device join. `events.session_id` correlates local diagnostics; there is no persisted `sessions` table.
 

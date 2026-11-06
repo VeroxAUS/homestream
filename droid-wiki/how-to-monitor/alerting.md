@@ -48,7 +48,7 @@ pnpm sentry:alerts --dry-run
 pnpm sentry:alerts --apply
 ```
 
-These commands need `SENTRY_ORG` and personal `SENTRY_API_TOKEN` with alert read/write permissions, from the repository env file or process environment. An organization release token (`SENTRY_AUTH_TOKEN`) is different. Without the personal token, dry-run validates the file without contacting Sentry; apply fails. Keep the real organization slug out of tracked rules. See [configuration](../reference/configuration.md).
+**Dry-run always stays offline**, even if credentials are present: it validates and prints the checked-in definitions without reading deployed rules. Apply needs `SENTRY_ORG` and personal `SENTRY_API_TOKEN` with `alerts:read`/`alerts:write`, from the repository env file or process environment (`scripts/sentry-alerts.mjs`). An organization release token (`SENTRY_AUTH_TOKEN`) is different. Without the personal token, apply returns failure without contacting Sentry. Keep the real organization slug out of tracked rules. See [configuration](../reference/configuration.md).
 
 Slack/PagerDuty channels are not provisioned here. Add actual workflow actions and keep the JSON in sync rather than assuming an escalation chain exists. The daily issue-sync workflow copies unresolved Sentry issues into GitHub, deduplicates by short ID and skips deliberate smoke errors; it is not paging (`scripts/sentry-issues.mjs`, `.github/workflows/sentry-issues.yml`).
 

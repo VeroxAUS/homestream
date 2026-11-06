@@ -12,6 +12,16 @@ Anyone who can reach the listener can use its catalog, device, playback, progres
 
 The separate `SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` binds `127.0.0.1`, accepts GET/HEAD, and looks up randomized `/src/<key>` identifiers registered for existing sources. It is not a public arbitrary-URL proxy or a public authentication layer. Keep it loopback-only; [source proxy](systems/source-proxy.md) and [network controls](systems/network.md) explain byte-cache and resource limits.
 
+“LAN-only” is the deployment policy, not an automatic private-subnet firewall. `getLanAddresses` in `apps/server/src/net.ts` ranks noninternal IPv4 addresses for discovery; it does not restrict incoming requests. The wildcard listener needs host firewall/network isolation appropriate to the machine.
+
+## Upstream and process boundaries
+
+Public session/prefetch bodies identify a title and device, not a caller-supplied media URL (`packages/shared/src/playback.ts`). `StreamService` in `apps/server/src/streams/service.ts` resolves IDs to server-side gateway records, and public stream options omit their raw URLs. `parseGatewayResponse` in `apps/server/src/gateway/client.ts` retains HTTP(S) links and derives stable IDs from them.
+
+This still trusts the configured gateway and its redirects. `createUrlResolver` in `apps/server/src/playback/resolveUrl.ts` follows redirects manually with a **60-second** overall timeout and **eight-redirect budget**, using one-byte range requests and recognizing gateway placeholder clips. It does not implement a destination-host allowlist or a private-address denylist. Loopback binding is not a blanket SSRF defense against a malicious upstream.
+
+FFmpeg receives an executable path and argument array through `spawn`, and ffprobe uses `execFile`, rather than shell command interpolation (`apps/server/src/playback/encoderProcess.ts`, `apps/server/src/playback/probe.ts`). These processes run with the server user's privileges, not in a sandbox. Treat configured binary paths, gateway configuration, writable output directories and local access as trusted inputs; no claim here covers vulnerabilities inside FFmpeg.
+
 ## Validate before acting
 
 | Boundary                | Implementation                                                              | Constraint                                                          |
@@ -56,13 +66,19 @@ Use `example.test`, invented tokens and documentation IP ranges in fixtures. A l
 
 Sentry disables HTTP/framework/database auto-instrumentation, automatic console capture and sessions (`apps/server/src/telemetry/sentry.ts`). Do not infer full automatic distributed tracing from the SDK dependency. No autocapture/session recording or free-form user data belongs in analytics. New events require the catalog, privacy docs and tests in the same change (`docs/PRIVACY.md`, `.factory/skills/homestream-telemetry/SKILL.md`).
 
-The [web](apps/web.md), desktop and TV are not all implemented telemetry clients merely because the configuration/policy reserves names. See [telemetry](systems/telemetry.md).
+The [web](apps/web/index.md) has working deferred telemetry, with keys baked into the bundle at build time and a per-browser localStorage opt-out (`apps/web/src/telemetry/buildEnv.ts`, `apps/web/src/telemetry/index.ts`). Desktop has tested configuration/scrubbing helpers but no shell startup wiring; TV is not implemented. See [telemetry](systems/telemetry.md) for the exact runtime status and identities.
+
+`sanitizeSentryEvent` in `packages/shared/src/sanitize.ts` explicitly sets **`sdk.settings.infer_ip: "never"` and `user: { geo: {} }`** after stripping user data. The empty geo prevents Relay from looking up location using the connection address; it is not user identity. Do not remove it as redundant. PostHog carries `$geoip_disable`; account-side **Prevent Storing of IP Addresses** (Sentry organization and projects) and **Discard client IP data** (PostHog) are also required (`docs/PRIVACY.md`). No account settings or stored remote events were verified for this wiki.
+
+Optional analytics can include catalog media IDs and scrubbed TMDB titles, so “anonymous” does not mean that viewing-related information is absent. Unknown events/properties are dropped by the typed allowlist (`packages/shared/src/analytics.ts`). Keep user-entered text, device names, URLs, IPs and paths out of outbound properties.
 
 ## Patch and dependency defenses
 
 `scripts/pre-commit-secrets.mjs` scans staged additions and blocked paths. It uses Gitleaks when available, otherwise built-in patterns, and always compares suitable local config values literally. It checks repository `.env`, `.env.local`, `HOMESTREAM_ENV_FILE`, and app-data config without printing secret values.
 
 Blocked paths include non-example `.env` files, private-key/keystore extensions and `.log` files. `GITLEAKS_PATH` can select the binary; findings report rule/file/line, not matched secrets. `.gitleaks.toml` holds matching custom rules and narrowly scoped fixture allowances. Update fallback patterns and Gitleaks rules together. A fake-value allow marker is not permission to hide a real key.
+
+The staged scanner examines added lines, not every local/untracked file or every historical commit. Literal checks use parsed local configuration values of **at least 12 characters**, except `POSTHOG_HOST` and `SENTRY_ORG`; lockfile hashes are skipped and explicit fake-value markers bypass line checks (`scripts/pre-commit-secrets.mjs`). Its fallback patterns are narrower than Gitleaks's default-plus-custom rules. A passing staged scan is not a full-history or complete secret-discovery guarantee.
 
 | Automation                       | Scope                                                                     |
 | -------------------------------- | ------------------------------------------------------------------------- |
@@ -73,6 +89,8 @@ Blocked paths include non-example `.env` files, private-key/keystore extensions 
 | `.github/dependabot.yml`         | Weekly npm and action updates, with coordinated TypeScript-version policy |
 
 These tools are defenses, not proof of no vulnerabilities. The current CI workflow does not contain a `pnpm audit` step, despite that statement in `SECURITY.md`; use the checked-in workflow for the actual gate list.
+
+CI, CodeQL and Gitleaks push/PR triggers ignore wiki-only changes; separate weekly/manual CodeQL/Gitleaks runs still exist (`.github/workflows/ci.yml`, `.github/workflows/codeql.yml`, `.github/workflows/gitleaks.yml`). Their existence does not verify branch protection, secret rotation or any external administrative setting.
 
 ## Report privately
 

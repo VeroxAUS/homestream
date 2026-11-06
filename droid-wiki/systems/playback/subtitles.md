@@ -83,7 +83,22 @@ Each run has its own hold window measured from `max(playerReach, run.ss)`, using
 | Fresh main/seek burst          | Unlimited unless positive average video speed <1.35×, then **2 MiB/s**                      |
 | Outside burst                  | **2 MiB/s** if lead <30 seconds or positive recent/average speed <1.6×; otherwise unlimited |
 
-Warm means at least ten segments past run start, or at least three with recent/average speed ≥2×. A burst ends after reaching **72 seconds beyond the needed position** or **25 seconds wall time**. Recent speed uses a roughly four-second sample window with at least 1.5 seconds of span (`apps/server/src/playback/extractorSchedule.ts`, `apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/manager.ts`).
+### Heavy-source warm-up and the burst clock
+
+`encoderWarm()` in `apps/server/src/playback/extractorSchedule.ts` checks progress relative to the **current video run's start**. It is warm when video is done, when `headSegment − startSegment ≥10`, or when that difference is at least **3** and `(recentSpeed || averageSpeed) ≥2×`. These are progress/speed conditions, not a fixed warm-up timer. Recent speed comes from a roughly four-second sample window with at least 1.5 seconds of span (`apps/server/src/playback/manager.ts`).
+
+The manager calls `SubtitleExtractor.noteEncoderWarm()` in `apps/server/src/playback/subtitleExtractor.ts` when a heavy source meets that condition. Each running extractor gets its first warm timestamp only once. `burstActive()` then uses:
+
+```text
+nowMs − max(extractorStartedAtMs, warmAtMs ?? 0) < 25,000
+and extractorHeadSec < needSec
+```
+
+Fresh main/seek runs set `needSec` to the requested position plus **72 seconds**. Light sources have no warm timestamp, so their clock begins at extractor launch. A heavy source's burst clock begins when the encoder warms, even if the extractor has already spent most of 25 seconds reading at the 6 MiB/s warm-up rate. Reaching the needed stretch still ends the burst immediately.
+
+This is the fix in HEAD **`7eb94ba`**: counting from extractor launch could exhaust the entire burst before heavy-source warm-up ended. `apps/server/test/playback/extractorSchedule.test.ts` explicitly tests the delayed warm timestamp, the strict 25-second boundary, the target-head boundary and a warm timestamp older than the new run. It is a timer-policy regression, not a claim that all heavy sources warm in a particular number of seconds.
+
+After a video restart, warm-up can apply again relative to the new video start. An existing extractor does not have its first warm timestamp reset. A newly launched seek worker gets its own timestamp. During a burst the **average** encoder speed below 1.35× selects 2 MiB/s; outside the burst the preferred recent/average speed below 1.6× or less than 30 seconds of segment lead selects 2 MiB/s. Unknown zero speed alone does not trigger either speed threshold.
 
 The pacer is per upstream extractor response; it does not promise an aggregate 2/6 MiB/s ceiling across concurrent reads. Cached reads bypass that pacing. **Both encoders and extractors populate/reuse rolling blocks**. All actual proxy media downloads still share the global cap, whose priority order is encoder, prefetch, extractor with aging (`apps/server/src/sourceproxy/serve.ts`, `apps/server/src/sourceproxy/pacer.ts`). “Unlimited” here never bypasses the [global gate](../network.md).
 
@@ -113,7 +128,7 @@ Changing audio or bitmap burn target restarts video and invalidates its old segm
 
 Change default policy independently of explicit validation. Preserve the unread-versus-silent distinction, held-run handling and selected-track retention when changing extraction. API shape changes must follow [shared contracts](../../packages/shared.md) and [API guidance](../../api/index.md).
 
-Playback-wide footprint: **27 source / 24 test / 4 helper files**, test/code ratio **0.89**, **1 unique human author** in scoped `origin/main`; [systems](../index.md) defines the scope. Tests were read, not run. Offline default/scheduling/cue tests and GPU progressive/track tests cover different layers.
+Playback-wide footprint at `7eb94ba`: **27 source `.ts` files** under `apps/server/src/playback`, **24 `*.test.ts` files** under `apps/server/test/playback` and `apps/server/test/encode`, and **4 non-test TypeScript helpers** in those test directories. Test/code file ratio is **24/27 = 0.89**; scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. Integration tests elsewhere are excluded. These are overlapping subsystem counts, not subtitle-only coverage. Tests were read, not run. Offline default/scheduling/cue tests and GPU progressive/track tests cover different layers.
 
 ## Key source files
 

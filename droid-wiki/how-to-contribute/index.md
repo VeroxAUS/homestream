@@ -6,13 +6,15 @@ Work starts from `main` and ends with a focused pull request, tests, current gen
 
 Open an issue before work larger than a small fix. Use `.github/ISSUE_TEMPLATE/bug.yml` for reproducible failures and `.github/ISSUE_TEMPLATE/feature.yml` for proposals; security reports go privately through the Security tab as described in `SECURITY.md`. `.github/CODEOWNERS` assigns all paths to VeroxAUS.
 
-Read [getting started](../overview/getting-started.md), then the relevant [feature](../features/index.md) or [system](../systems/index.md). The server is implemented; the [web app](../apps/web.md) is a placeholder, and desktop/TV clients are planned. Do not assume issue-template choices imply those clients exist.
+Read [getting started](../overview/getting-started.md), then the relevant [feature](../features/index.md) or [system](../systems/index.md). The [web app](../apps/web/index.md) implements Home, search, movie/show details and Settings; its player and dashboard tabs remain placeholders. [Desktop](../apps/desktop.md) has tested support modules but no working Electron window, tray, supervisor or preload. TV is planned, not a workspace. Issue-template choices do not establish implementation status.
 
 | Change          | Start here                                                                        | Required companion work                                                  |
 | --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | HTTP behavior   | `apps/server/src/routes/` and `packages/shared/src/`                              | Shared schemas, thin handler, route docs, tests, regenerated OpenAPI     |
 | Playback        | `apps/server/src/playback/`                                                       | Pure-rule coverage, lifecycle/fallback tests, measurements for hot paths |
 | Upstream access | `apps/server/src/gateway/`, `apps/server/src/tmdb/`, `apps/server/src/downloads/` | Offline stubs; live verification only when needed                        |
+| Browser UI      | `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/api/`            | Schema-validating requests, component tests, startup and bundle budgets  |
+| Desktop support | `apps/desktop/src/`                                                               | Dependency-injected Node tests; do not assume an Electron runtime exists |
 | Database        | `apps/server/src/db/migrations.ts`                                                | Append migration, regenerate schema, document tables                     |
 | Setting         | `apps/server/src/config.ts`                                                       | Update `KNOWN_KEYS`, `.env.example`, defaults and tests                  |
 | Telemetry       | `packages/shared/src/analytics.ts`                                                | Typed event, allowlist, privacy docs, scrubber tests                     |
@@ -47,4 +49,4 @@ Do not put keys, signed URLs, personal addresses, local databases, or profiles i
 | `.factory/skills/homestream-run-checks/SKILL.md` | Scope-based verification                          |
 | `.github/workflows/ci.yml`                       | Cross-platform required jobs                      |
 
-Continue with [development workflow](development-workflow.md), [tooling](tooling.md), or [debugging](debugging.md).
+Continue with [development workflow](development-workflow.md), [testing](testing.md), [tooling](tooling.md), or [debugging](debugging.md). Contributions use the project's GPL-3.0 license and Code of Conduct (`LICENSE`, `CODE_OF_CONDUCT.md`).

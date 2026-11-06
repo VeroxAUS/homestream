@@ -52,6 +52,12 @@ Change transport/parsing in `apps/server/src/gateway/client.ts`, expiry/reverse 
 
 The app closes the client only when it created it. Limiter close clears queued tasks/timers but does not abort running requests (`apps/server/src/app.ts`, `apps/server/src/gateway/rateLimiter.ts`). See [configuration](../reference/configuration.md) and [API](../api/index.md).
 
+## Tested boundaries
+
+FIFO starts, sliding-window limits, failed tasks and rejection of new work after close are tested in `apps/server/test/gateway/rateLimiter.test.ts`. Stub-HTTP integration covers movie/series paths, concurrent lookup sharing, both cache TTLs, burst arrivals, invalid responses, missing configuration and uncached failures (`apps/server/test/integration/gateway-client.test.ts`).
+
+Download integration tests verify the single range GET, manual redirects and failure outcomes before tracking is accepted (`apps/server/test/integration/downloads.test.ts`). These boundaries do not prove live provider availability; the separate opt-in live tier owns that check.
+
 ## Key source files
 
 | File                                                  | Purpose                                            |
@@ -67,4 +73,4 @@ The app closes the client only when it created it. Limiter close clears queued t
 
 ## Measured scope
 
-`apps/server/src/gateway/`: **4 source files**. Matching unit directory: **1 test file**, **0.25 test-to-code file ratio**. Integration/live tests and stub helpers are excluded. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots. No live gateway calls were made for this documentation.
+`apps/server/src/gateway/`: **4 source files**. Direct tests: **2 files**, counting `apps/server/test/gateway/*.test.ts` plus `apps/server/test/integration/gateway-client.test.ts`; **0.50 test-to-code file ratio** (test files divided by source files). Download/live tests and stub helpers are excluded from this count. Default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. No live gateway calls were made for this documentation.

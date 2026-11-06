@@ -17,7 +17,7 @@ For each `KNOWN_KEYS` entry, a **trimmed nonblank process value wins over a trim
 
 `apps/server/src/index.ts` discovers the repository via `pnpm-workspace.yaml`; process `HOMESTREAM_PACKAGED=1` suppresses that discovery and changes the default Sentry environment. Explicit `HOMESTREAM_ENV_FILE` still wins in packaged mode. These selectors, and `APPDATA`, are process inputs outside `KNOWN_KEYS`; placing `HOMESTREAM_PACKAGED` in the selected file does not activate packaged discovery rules.
 
-## All 26 server keys
+## Server runtime keys
 
 The following groups enumerate every `KNOWN_KEYS` entry in `apps/server/src/config.ts`.
 
@@ -79,19 +79,47 @@ Invalid network numbers warn and use defaults, rather than clamping. If the effe
 
 The master switch nulls the effective client keys. Merely omitting it does not enable transmission without keys. Invalid HTTP origins warn and fall back; valid origins discard paths/query components (`apps/server/src/config.ts`). See [telemetry](../systems/telemetry.md) for client startup failure and local flag defaults.
 
+## Browser build-time configuration
+
+The browser does not fetch telemetry credentials from the server. `apps/web/vite.config.ts` reads Vite's mode-aware env files at the repository root, then overlays `process.env`, and embeds only the resulting `HS_TELEMETRY` object. Unlike the server's nonblank overlay, this spread permits an empty process value to override a file value; `nonEmpty` then turns it into null (`apps/web/src/telemetry/buildEnv.ts`).
+
+| Input                             | Build behavior/default                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `SENTRY_DSN_WEB`                  | Optional renderer DSN; null without a nonblank value                                                                           |
+| `POSTHOG_API_KEY`                 | Optional renderer analytics key; null without a nonblank value                                                                 |
+| `POSTHOG_HOST`                    | Optional baked-in host; resolver defaults to `https://us.i.posthog.com`                                                        |
+| `HOMESTREAM_TELEMETRY`            | `off`, `0`, `false`, `no`, `disabled` disable telemetry, case-insensitively                                                    |
+| `SENTRY_RELEASE`                  | `homestream@0.1.0`, derived from `apps/web/package.json`                                                                       |
+| `SENTRY_ENVIRONMENT`              | `production`, independent of the server's packaged-mode default                                                                |
+| `HOMESTREAM_TELEMETRY_STUB`       | Only literal `1` enables the deliberate-error e2e trigger                                                                      |
+| `HOMESTREAM_RELEASE_BUILD`        | Only literal `1`, a nonblank `SENTRY_AUTH_TOKEN`, and telemetry not off enable hidden source maps and the Sentry upload plugin |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` | Build/upload inputs, not embedded in `HS_TELEMETRY`; project is `homestream-web`                                               |
+
+Sources: `apps/web/vite.config.ts`, `apps/web/src/telemetry/buildEnv.ts`, `apps/web/src/telemetry/config.ts`. Test mode sets both SDK keys and the host to null. Plain builds produce no source maps; upload builds configure deletion of uploaded maps from `dist`.
+
+At browser runtime, `localStorage['homestream.telemetry']='off'` disables both clients. No baked key means no matching client; neither key means the resolver returns null. Changing server runtime keys cannot add credentials to an already-built browser bundle (`apps/web/src/telemetry/config.ts`). Initialization is deferred until content and idle time; see [telemetry](../systems/telemetry.md) and [web build and tests](../apps/web/build-and-tests.md).
+
+The Vite development server requests port **8601**, forwarding `/api` and `/hls` to `http://127.0.0.1:8600`; it does not derive that target from server `PORT` (`apps/web/vite.config.ts`). See [web data and startup](../apps/web/data-and-startup.md).
+
+## Desktop configuration support
+
+`apps/desktop/src/telemetry/config.ts` resolves supplied process variables: `SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST`, `SENTRY_ENVIRONMENT` and the same case-insensitive telemetry off values. Invalid DSNs become null; invalid hosts fall back to the US ingestion origin. Its `packaged` argument selects the default environment (`production` versus `development`).
+
+This is a pure support function, not an implemented desktop env-file loader. Loading `%APPDATA%\HomeStream\config.env` and wiring SDK initialization are future shell work (`apps/desktop/README.md`). No matching key means no matching client. See [desktop](../apps/desktop.md).
+
 ## Tooling keys are a different surface
 
 `.env.example` includes more than server `KNOWN_KEYS`; do not add them to the runtime settings table by implication.
 
-| Key/input                           | Consumer                                                                                                              |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `SENTRY_ORG`, `SENTRY_API_TOKEN`    | Personal-token Sentry alert management (`scripts/sentry-alerts.mjs`); issue sync also needs them                      |
-| `SENTRY_AUTH_TOKEN`                 | CI Sentry releases, distinct from the personal token (`.github/workflows/release.yml`)                                |
-| `SENTRY_DSN_WEB`, `SENTRY_DSN_TV`   | Reserved client project configuration; not read by the current server loader and not proof of initialized client SDKs |
-| `POSTHOG_PERSONAL_API_KEY`          | Flag creation tooling (`scripts/flags.mjs`), not event ingestion                                                      |
-| `GITHUB_TOKEN`, `GITHUB_REPOSITORY` | Issue sync process environment (`scripts/sentry-issues.mjs`)                                                          |
-| `HOMESTREAM_TEST_ROOT`              | Test temp-directory selection (`apps/server/test/helpers.ts`)                                                         |
-| `GITLEAKS_PATH`                     | Pre-commit scanner executable selection (`scripts/pre-commit-secrets.mjs`)                                            |
+| Key/input                           | Consumer                                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SENTRY_ORG`, `SENTRY_API_TOKEN`    | Personal-token Sentry alert management (`scripts/sentry-alerts.mjs`); issue sync also needs them                                             |
+| `SENTRY_AUTH_TOKEN`                 | CI Sentry releases, distinct from the personal token (`.github/workflows/release.yml`)                                                       |
+| `SENTRY_DSN_WEB`, `SENTRY_DSN_TV`   | Web DSN is consumed at browser build time and by desktop support; TV DSN is reserved for the planned client. Neither is a server runtime key |
+| `POSTHOG_PERSONAL_API_KEY`          | Flag creation tooling (`scripts/flags.mjs`), not event ingestion                                                                             |
+| `GITHUB_TOKEN`, `GITHUB_REPOSITORY` | Issue sync process environment (`scripts/sentry-issues.mjs`)                                                                                 |
+| `HOMESTREAM_TEST_ROOT`              | Test temp-directory selection (`apps/server/test/helpers.ts`)                                                                                |
+| `GITLEAKS_PATH`                     | Pre-commit scanner executable selection (`scripts/pre-commit-secrets.mjs`)                                                                   |
 
 Alert/flag scripts use `scripts/lib/dotenv.mjs` to overlay nonempty process values on the repository env file; they do not implement the server's app-data/explicit-file selection. Issue sync reads its supplied process environment directly. Configure secrets through the appropriate local/CI mechanism rather than assuming the server loader supplies them.
 

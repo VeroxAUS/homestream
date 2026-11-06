@@ -88,6 +88,12 @@ Add check IDs and wire shapes in `packages/shared/src/health.ts`, implement the 
 | `apps/server/test/integration/health-service.test.ts` | Cache, scheduling/publication and redaction behavior   |
 | `apps/server/test/integration/health-routes.test.ts`  | Logs and health SSE integration                        |
 
+## Tested boundaries
+
+The check suite uses injected HTTP, process and disk adapters for manifest/account failures, subscription expiry, missing tools, encoder inventory, GPU parsing, disk limits and session warnings (`apps/server/test/health/checks.test.ts`). Health-service integration tests validate all nine result shapes, retained measurement times, cache bypass/expiry, active-playback cache retention, independent failures, change-only logging, manual SSE publication and secret redaction (`apps/server/test/integration/health-service.test.ts`).
+
+Log filtering and two-client SSE delivery/reconnect cleanup are covered in `apps/server/test/integration/health-routes.test.ts`. These tests use fakes for external dependencies, so reading this page requires no real NVENC encode or upstream request. Production full checks do make upstream calls and can encode; use `/healthz` or `/readyz` for frequent probes.
+
 ## Measured scope
 
-At `bb48e6d`, **11 tracked TypeScript source files** under `apps/server/src/health/`, **3 directly scoped test files** (the health test directory plus integration files prefixed `health-`), and **0.27 test-to-code file ratio**. Helpers, network/playback source and cross-cutting observability tests are excluded. Default-branch ownership/history has **1 unique human author**, VeroxAUS, excluding bots. These are file counts, not coverage or executed-test results.
+At the documented commit, **11 tracked TypeScript source files** under `apps/server/src/health/`, **3 directly scoped test files** (the health test directory plus integration files prefixed `health-`), and **0.27 test-to-code file ratio** (test files divided by source files). Helpers, network/playback source and cross-cutting observability tests are excluded. Default-branch ownership/history has **1 unique human committer**, VeroxAUS, excluding bots. These are file counts, not coverage or executed-test results.

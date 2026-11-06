@@ -2,8 +2,6 @@
 
 Active contributors: VeroxAUS
 
-## Purpose
-
 Prefetch warms the cached source an automatic Play would choose, sharing resolved links, initial bytes and probe results. It creates no playback session, encoder or HLS output (`apps/server/src/prefetch/service.ts`).
 
 ## Request and flag flow
@@ -19,6 +17,25 @@ Enabled runs are keyed by media key plus display-resolution tier. Devices in the
 The background flow resolves TMDB details to IMDb, reads a fresh gateway cache if possible, otherwise discovers streams, and chooses the shared recommendation. Missing identity/recommendation, an uncached recommendation or a vanished stream stops warming (`apps/server/src/prefetch/service.ts`). Prefetch does not initiate TorBox download tracking or attempt playback fallback.
 
 The chosen ID is announced before server-side ID resolution and proxy acquisition. The response waits at most **300 ms** for that announcement by default, then returns null while background work continues. This budget begins after device/flag work and is not a total request or warming deadline. Even a non-null ID does not guarantee the source still exists or that warming succeeded.
+
+```mermaid
+sequenceDiagram
+    participant C as API caller
+    participant F as Prefetch service
+    participant S as Stream discovery
+    participant P as Source proxy
+    participant M as Later playback
+    C->>F: Title or episode and device
+    F->>F: Flag and title-tier duplicate check
+    F->>S: Cached list or discovery
+    S-->>F: Cached recommendation
+    F-->>C: 202 with ID, or null at response budget
+    F->>P: Acquire prefetch owner and probe
+    M->>P: Acquire selected source for session
+    P-->>M: Reuse warm bytes and successful probe
+```
+
+The reply budget can expire before discovery returns; the diagram shows logical dependencies, not a guarantee that a response waits for the recommendation. The later session still sends `streamId: "auto"`, reruns selection and validates the source. A retained prefetch is an optimization, not a reservation or a playback-ready state.
 
 `apps/server/src/sourceproxy/proxy.ts` acquires the raw URL under prefetch ownership. A new remote source starts head/tail warming, up to **16 MiB head** and **8 MiB tail**, then shares a probe promise (`apps/server/src/sourceproxy/sourceEntry.ts`). Acquisition can finish once size is known, while bytes continue arriving. Read priority and bandwidth limits are shared with active playback; see [network controls](../systems/network.md).
 
@@ -39,6 +56,8 @@ Background failures become redacted warning events; missing prerequisites become
 
 Change scheduling/budget/merge policy in `apps/server/src/prefetch/service.ts`; change byte retention in the [source proxy](../systems/source-proxy.md). Preserve [stream selection](stream-selection.md) consistency and non-blocking behavior.
 
+This source warming is separate from progressive subtitle extraction. Prefetch runs ffprobe, not subtitle FFmpeg. Heavy-source warm-up and burst scheduling begin only after [playback](../systems/playback/index.md) starts its workers; [TorBox downloads](downloads.md) are a third, persistent workflow for uncached titles.
+
 ## Key source files
 
 | File                                                | Purpose                                             |
@@ -54,4 +73,4 @@ Change scheduling/budget/merge policy in `apps/server/src/prefetch/service.ts`; 
 
 ## Measured scope
 
-`apps/server/src/prefetch/` has **1 source file**; there is **no matching dedicated unit-test directory**, so that narrow test-to-code ratio is **0.00**. This does not mean no tests: the GPU and integration files above exercise it, and proxy sharing has separate tests. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots. No GPU/live tests were run for this documentation.
+At `7eb94ba`, the measured scope is **1 source `.ts` file** under `apps/server/src/prefetch/` and **1 dedicated test file**, `apps/server/test/encode/prefetch.test.ts`, for a test/code file ratio of **1/1 = 1.00**. That suite exercises warming, merge/reuse, nullable IDs and failures in the GPU tier; there is no dedicated offline prefetch test directory. The ratio is not a coverage claim and overlaps the playback-wide encode-test count. Additional offline flag gating in `apps/server/test/integration/telemetryApp.test.ts` and shared proxy tests are excluded from this count. Scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. Tests were inspected, not executed.
