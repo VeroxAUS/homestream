@@ -1,12 +1,5 @@
 import path from 'node:path';
-import {
-  flagDefault,
-  type AnalyticsEventName,
-  type AnalyticsProperties,
-  type FlagKey,
-  type FlagValue,
-  FLAG_KEYS,
-} from '@homestream/shared';
+import { type AnalyticsEventName, type AnalyticsProperties, FLAG_KEYS } from '@homestream/shared';
 import type * as Sentry from '@sentry/node';
 import type { TelemetryConfig } from '../config.js';
 import type { Db } from '../db/index.js';
@@ -38,15 +31,16 @@ export interface TelemetrySetup {
   posthog?: { flushAt?: number; onRequest?: (description: string) => void };
 }
 
-/** Does nothing, answers every flag with its default. Used whenever telemetry is off. */
-function createNoopTelemetry(): Telemetry {
+/** Does nothing, answers every flag with its default (and logs that source). Used whenever telemetry is off. */
+function createNoopTelemetry(logger: TelemetryLogger): Telemetry {
+  const flags = new FlagService(null, logger);
   return {
     errorsEnabled: false,
     analyticsEnabled: false,
     capture: () => undefined,
     captureError: () => undefined,
     breadcrumb: () => undefined,
-    flag: <K extends FlagKey>(key: K): Promise<FlagValue<K>> => Promise.resolve(flagDefault(key)),
+    flag: (key) => flags.get(key),
     shutdown: () => Promise.resolve(),
   };
 }
@@ -66,7 +60,7 @@ export function describeTelemetry(config: TelemetryConfig): string {
 export function createTelemetry(setup: TelemetrySetup): Telemetry {
   const { config, logger } = setup;
   logger.info(describeTelemetry(config));
-  if (config.disabled || (!config.sentryDsn && !config.posthogKey)) return createNoopTelemetry();
+  if (config.disabled || (!config.sentryDsn && !config.posthogKey)) return createNoopTelemetry(logger);
 
   const errorScrub = createErrorScrubber();
   const roots = [path.resolve(serverRoot, '..', '..'), serverRoot];

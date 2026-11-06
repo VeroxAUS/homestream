@@ -19,12 +19,12 @@ describe('createUrlResolver', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fetchImpl: FetchImpl = async (url, init) => {
       calls.push({ url, init });
-      if (onGateway(url)) return response(307, { location: 'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc' });
+      if (onGateway(url)) return response(307, { location: 'https://example-001.wnam.tb-cdn.io/file.mkv?token=abc' });
       return response(206);
     };
     const resolve = createUrlResolver(fetchImpl);
     await expect(resolve('https://gw.example.test/playback/gw-secret-token/file')).resolves.toBe(
-      'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc',
+      'https://example-001.wnam.tb-cdn.io/file.mkv?token=abc',
     );
     expect(calls).toHaveLength(2);
     expect(calls[0]?.init).toMatchObject({ method: 'GET', redirect: 'manual', headers: { Range: 'bytes=0-0' } });

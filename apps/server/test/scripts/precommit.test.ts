@@ -66,8 +66,8 @@ describe('pre-commit-secrets (built-in scan, gitleaks disabled)', () => {
     expect(result.stderr + result.stdout).not.toContain(value);
   });
   it.each([
-    ['a single-label host', 'store-1.tb-cdn.io'],
-    ['a multi-label host', 'store-12.eu.tb-cdn.io'],
+    ['a single-label host', 'example-1.tb-cdn.io'],
+    ['a multi-label host', 'example-12.eu.tb-cdn.io'],
   ])('blocks %s of the TorBox CDN anywhere in a line', (_label, host) => {
     writeAndStage(repo, 'src/leak.ts', `fetch("https://${host}/x");\n`);
     const result = runScript(repo, 'pre-commit-secrets.mjs', [], env);

@@ -46,7 +46,7 @@ describe('sanitizeEventProperties', () => {
   it('keeps the allowlisted properties, titles included, and drops everything else', () => {
     const out = sanitizeEventProperties('playback_started', {
       ...started,
-      streamUrl: 'https://abcd.tb-cdn.io/dl/9?token=zzzz', // gitleaks:allow
+      streamUrl: 'https://example-cdn.tb-cdn.io/dl/9?token=zzzz', // gitleaks:allow
       clientIp: '192.168.1.50',
       filename: 'Movie.2160p.mkv',
     });

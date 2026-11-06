@@ -76,6 +76,26 @@ describe('telemetry that is off', () => {
     expect(stub.requests).toEqual([]);
   });
 
+  it('logs the default evaluation source at debug level without starting a client or making a request', async () => {
+    const debug: Array<{ fields: object; message: string }> = [];
+    const telemetry = createTelemetry({
+      config: testConfig(root).telemetry,
+      db,
+      logger: { ...logger, debug: (fields, message) => debug.push({ fields, message }) },
+      version: '1.2.3',
+    });
+    await telemetry.flag('prefetch-on-details');
+    expect(debug).toEqual([
+      {
+        fields: expect.objectContaining({ flag: 'prefetch-on-details', source: 'default' }),
+        message: 'Feature flag evaluated',
+      },
+    ]);
+    expect(telemetry).toMatchObject({ errorsEnabled: false, analyticsEnabled: false });
+    expect(Sentry.getClient()).toBeUndefined();
+    expect(stub.requests).toEqual([]);
+  });
+
   it('ignores an invalid DSN and stays off', () => {
     const config = testConfig(root, { SENTRY_DSN_SERVER: 'not a dsn' });
     expect(config.telemetry.sentryDsn).toBeNull();

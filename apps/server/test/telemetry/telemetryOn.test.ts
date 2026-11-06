@@ -59,7 +59,7 @@ const NEEDLES = [
   'aaaa1111',
   'bbbb2222cccc',
   'tmdb-test-token-123456',
-  'abcd.tb-cdn.io',
+  'example-cdn.tb-cdn.io',
   '192.168.1.50',
   'Alice',
   'hunter2-secret',
@@ -74,7 +74,7 @@ describe('telemetry with stub keys', () => {
       host: '192.168.1.50',
     });
     const error = new Error(
-      'Failed on C:\\Users\\Alice\\Videos\\x.mkv via https://abcd.tb-cdn.io/dl/9?token=hunter2-secret from 192.168.1.50 with tmdb-test-token-123456',
+      'Failed on C:\\Users\\Alice\\Videos\\x.mkv via https://example-cdn.tb-cdn.io/dl/9?token=hunter2-secret from 192.168.1.50 with tmdb-test-token-123456',
     );
     telemetry.captureError(error, {
       requestId: 'req-abc',
@@ -97,6 +97,8 @@ describe('telemetry with stub keys', () => {
     expect(event).not.toHaveProperty('server_name');
     expect(event).not.toHaveProperty('user');
     expect(event).not.toHaveProperty('request');
+    expect(event?.sdk?.settings).toEqual({ infer_ip: 'never' });
+    expect(JSON.stringify(event)).not.toMatch(/ip_address|"geo"/);
     expect(event?.breadcrumbs ?? event?.breadcrumbs?.values).toBeDefined();
     const everything = envelopes.map((request) => request.body).join('\n');
     for (const needle of NEEDLES) expect(everything, needle).not.toContain(needle);
@@ -143,7 +145,7 @@ describe('telemetry with stub keys', () => {
       resolution: '2160p',
       startupMs: 1800,
       // not in the catalog: dropped before sending
-      streamUrl: 'https://abcd.tb-cdn.io/dl/9?token=hunter2-secret',
+      streamUrl: 'https://example-cdn.tb-cdn.io/dl/9?token=hunter2-secret',
       clientIp: '192.168.1.50',
     } as never);
     telemetry.capture('not_in_catalog' as never, { anything: 1 } as never);
@@ -167,6 +169,9 @@ describe('telemetry with stub keys', () => {
     expect(started.properties).not.toHaveProperty('streamUrl');
     expect(started.properties).not.toHaveProperty('clientIp');
     expect(started.properties.$geoip_disable).toBe(true);
+    expect(started.properties.$process_person_profile).toBe(false);
+    expect(started.properties).not.toHaveProperty('$ip');
+    expect(Object.keys(started.properties).filter((key) => /ip$|^\$geoip_(?!disable)/i.test(key))).toEqual([]);
     const raw = batches.map((request) => request.body).join('\n');
     for (const needle of NEEDLES) expect(raw, needle).not.toContain(needle);
     expect(started.distinct_id).toBe(getSetting(db, 'install_id'));

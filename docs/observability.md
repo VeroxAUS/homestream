@@ -62,6 +62,15 @@ Telemetry code lives in `apps/server/src/telemetry`. It is off unless a key is s
 - **PostHog** (`posthog-node`): events come from the typed catalog in `packages/shared/src/analytics.ts` (listed in [PRIVACY.md](PRIVACY.md)), only allowlisted properties are kept, and the queue is flushed on shutdown. The identity is a random install id stored in the `settings` table.
 - **Feature flags**: [experimentation.md](experimentation.md).
 
+### Required account settings
+
+Sentry and PostHog add the sender's IP address (and, for Sentry, a geo location derived from it) when an event reaches them, even though the payload has none. The shared sanitizer marks every Sentry event with `sdk.settings.infer_ip: "never"` and PostHog events carry `$geoip_disable`, but these two settings must also be on (details in [PRIVACY.md](PRIVACY.md#required-account-settings)):
+
+- Sentry: **Prevent Storing of IP Addresses** in Organization Settings > Security & Privacy and in Project Settings > Security & Privacy of every HomeStream project (`scrubIPAddresses`).
+- PostHog: **Discard client IP data** in Settings > Project > IP data capture configuration (`anonymize_ips`).
+
+Changing them through the API needs a Sentry token with `org:write` and `project:write`, and a PostHog personal key with the `project:write` scope. A read-only key gets HTTP 403; set the toggles in the web UI instead. Every new Sentry project (web, TV) needs the toggle too.
+
 ### Checking that it works
 
 ```powershell

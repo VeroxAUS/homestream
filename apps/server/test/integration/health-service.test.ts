@@ -358,7 +358,7 @@ describe('secret audit of health, logs and events', () => {
       {
         level: 'error',
         source: 'session',
-        message: 'link https://store-1.wnam.tb-cdn.io/dl/x?token=abc123 bearer torbox-key-abcdef123456',
+        message: 'link https://example-1.wnam.tb-cdn.io/dl/x?token=abc123 bearer torbox-key-abcdef123456',
         details: { url: 'https://gw.example.test/stremio/aaaa1111/bbbb2222cccc/stream/movie/tt1.json' },
       },
     );

@@ -53,6 +53,17 @@ The server creates a random UUID the first time telemetry starts and keeps it in
 
 Flags are read from PostHog when a key is set; the server sends only its install id to ask for them. They only choose between behaviours that already exist in the app and default to the current behaviour when PostHog cannot be reached. See [experimentation.md](experimentation.md).
 
+## Required account settings
+
+The apps never send an IP address, but both services add the sender's connection address themselves when an event arrives. The code tells them not to (Sentry: every event carries `sdk.settings.infer_ip: "never"`; PostHog: `$geoip_disable` is set), and two account settings must be on so nothing is stored even if that fails. Turn them on once; nothing in the repository can check them for you.
+
+| Service | Where                                                                                                                                                                                 | Setting                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Sentry  | Organization Settings > Security & Privacy, and Project Settings > Security & Privacy for each of `homestream-server`, `homestream-web` and `homestream-tv` (API: `scrubIPAddresses`) | **Prevent Storing of IP Addresses** on |
+| PostHog | Settings > Project > IP data capture configuration (API: project field `anonymize_ips`)                                                                                               | **Discard client IP data** on          |
+
+PostHog adds `$ip` from the request that delivered the event, whatever the client sends, so this project setting is the only control over it. Check that it holds by reading the stored events of a smoke run (`pnpm telemetry:smoke`, see [observability.md](observability.md)): a Sentry event has no `user.ip_address` and no `user.geo`, a PostHog event has no `$ip`.
+
 ## Where data is stored locally
 
 - `homestream.db` in `DATA_DIR` holds your watch progress, play history, registered devices and the event log. It stays on your PC. Client IP addresses and device names are stored there for the history screen; they are never part of a telemetry event. The tables are described in [database.md](database.md).

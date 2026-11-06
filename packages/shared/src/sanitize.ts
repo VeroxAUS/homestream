@@ -162,11 +162,25 @@ export interface EventSanitizeOptions {
   roots?: readonly string[];
 }
 
-/** Sentry error or transaction event: no user, IP, server name or request data; frames relative; every string scrubbed. */
+/**
+ * An event without a user still gets the sender's connection address (and a geo location derived from it) from Sentry's
+ * ingestion, which the SDK options cannot prevent for server platforms. `sdk.settings.infer_ip: "never"` is the
+ * protocol switch that tells ingestion to keep exactly what the client sent.
+ */
+function forbidIpInference(event: Record<string, unknown>): void {
+  const sdk = (event.sdk ?? {}) as Record<string, unknown>;
+  event.sdk = { ...sdk, settings: { ...(sdk.settings as object | undefined), infer_ip: 'never' } };
+}
+
+/**
+ * Sentry error or transaction event: no user, IP, server name or request data, ingestion told not to infer an IP;
+ * frames relative; every string scrubbed.
+ */
 export function sanitizeSentryEvent<T extends object>(event: T, options: EventSanitizeOptions = {}): T {
   const draft = event as Record<string, unknown>;
   relativizeFrames(draft, options.roots ?? []);
   const clean = sanitizeValue(draft, options.extra);
+  forbidIpInference(clean);
   delete clean.server_name;
   delete clean.user;
   delete clean.request;

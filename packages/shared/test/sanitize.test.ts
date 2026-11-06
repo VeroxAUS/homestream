@@ -21,8 +21,8 @@ describe('sanitizeText', () => {
       'gw.example.test',
     ],
     ['addon path without a host', 'path /stremio/aaaa1111/bbbb2222cccc/stream/movie/tt1.json', 'aaaa1111'],
-    ['cdn url', 'link https://store-12.eu.tb-cdn.io/dl/abc?token=zzz', 'tb-cdn.io'], // gitleaks:allow
-    ['bare cdn host', 'resolving store-12.eu.tb-cdn.io', 'tb-cdn'], // gitleaks:allow
+    ['cdn url', 'link https://example-12.eu.tb-cdn.io/dl/abc?token=zzz', 'tb-cdn.io'], // gitleaks:allow
+    ['bare cdn host', 'resolving example-12.eu.tb-cdn.io', 'tb-cdn'], // gitleaks:allow
     ['file url', 'open file:///C:/Users/Alice/x.mkv', 'Alice'],
     ['bearer header', 'Authorization: Bearer abcdef0123456789', 'abcdef0123456789'],
     ['jwt', 'token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig', 'eyJhbGci'], // gitleaks:allow
@@ -153,13 +153,13 @@ describe('sanitizeText on adversarial input', () => {
   });
 
   it('scrubs the CDN host with all its sub-domains and nothing around it', () => {
-    expect(sanitizeText('resolving store-12.eu.tb-cdn.io now')).toBe(`resolving ${SCRUBBED} now`); // gitleaks:allow
-    expect(sanitizeText('a tb-cdn.io, b.tb-cdn.io.')).toBe(`a ${SCRUBBED}, ${SCRUBBED}.`); // gitleaks:allow
+    expect(sanitizeText('resolving example-12.eu.tb-cdn.io now')).toBe(`resolving ${SCRUBBED} now`); // gitleaks:allow
+    expect(sanitizeText('a example.tb-cdn.io, b.example.tb-cdn.io.')).toBe(`a ${SCRUBBED}, ${SCRUBBED}.`); // gitleaks:allow
   });
 
   it('scrubs a CDN host behind 50,000 characters of look-alike labels in under 50 ms', () => {
     const started = performance.now();
-    const out = sanitizeText(`${'a-'.repeat(25_000)}x.tb-cdn.io`); // gitleaks:allow
+    const out = sanitizeText(`${'a-'.repeat(25_000)}example.tb-cdn.io`); // gitleaks:allow
     expect(performance.now() - started).toBeLessThan(50);
     expect(out).not.toContain('tb-cdn');
   });
@@ -173,6 +173,7 @@ describe('sanitizeText on adversarial input', () => {
 
 describe('sanitizeSentryEvent', () => {
   const roots = ['E:\\Projects\\homestream'];
+  const NO_IP_INFERENCE = { settings: { infer_ip: 'never' } };
 
   function event() {
     return {
@@ -238,14 +239,30 @@ describe('sanitizeSentryEvent', () => {
   it('keeps contexts that have no device or culture entry', () => {
     expect(sanitizeSentryEvent({ contexts: { os: { name: 'Linux' } } })).toEqual({
       contexts: { os: { name: 'Linux' } },
+      sdk: NO_IP_INFERENCE,
     });
   });
 
   it('works for events without exceptions or contexts and without roots', () => {
-    expect(sanitizeSentryEvent({ message: 'plain' })).toEqual({ message: 'plain' });
+    expect(sanitizeSentryEvent({ message: 'plain' })).toEqual({ message: 'plain', sdk: NO_IP_INFERENCE });
     expect(sanitizeSentryEvent({ exception: { values: [{ type: 'E' }] } })).toEqual({
       exception: { values: [{ type: 'E' }] },
+      sdk: NO_IP_INFERENCE,
     });
+  });
+
+  it('tells ingestion never to infer an IP address or geo location, keeping the other SDK facts', () => {
+    const out = sanitizeSentryEvent({
+      ...event(),
+      sdk: { name: 'sentry.javascript.node', version: '1.0.0', settings: { other: 'kept', infer_ip: 'auto' } },
+    }) as LooseJson;
+    expect(out.sdk).toEqual({
+      name: 'sentry.javascript.node',
+      version: '1.0.0',
+      settings: { other: 'kept', infer_ip: 'never' },
+    });
+    expect(JSON.stringify(out)).not.toMatch(/ip_address|"geo"|192\.168/);
+    expect(sanitizeSentryEvent({})).toEqual({ sdk: NO_IP_INFERENCE });
   });
 
   it('applies the extra scrubber to every string', () => {
@@ -253,7 +270,7 @@ describe('sanitizeSentryEvent', () => {
       { message: 'my-secret-key inside' },
       { extra: (text) => text.replace('my-secret-key', 'X') },
     );
-    expect(out).toEqual({ message: 'X inside' });
+    expect(out).toEqual({ message: 'X inside', sdk: NO_IP_INFERENCE });
   });
 });
 
@@ -263,7 +280,7 @@ describe('sanitizeBreadcrumb', () => {
       category: 'http',
       level: 'info',
       message: 'GET https://gw.example.test/x',
-      data: { url: 'https://abcd.tb-cdn.io/dl/1?token=zzzzzzzz', host: '192.168.1.50', status: 200 }, // gitleaks:allow
+      data: { url: 'https://example-cdn.tb-cdn.io/dl/1?token=zzzzzzzz', host: '192.168.1.50', status: 200 }, // gitleaks:allow
     }) as LooseJson;
     expect(out).toEqual({
       category: 'http',

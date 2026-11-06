@@ -55,13 +55,13 @@ describe('redact', () => {
   });
 
   it('hides TorBox CDN URLs', () => {
-    const out = redact('resolved https://store-012.wnam.tb-cdn.io/dl/abc/def.mkv?x=1 ok');
+    const out = redact('resolved https://example-012.wnam.tb-cdn.io/dl/abc/def.mkv?x=1 ok');
     expect(out).toBe('resolved <redacted> ok');
   });
 
   it('hides bare TorBox CDN hosts, e.g. from DNS errors', () => {
-    expect(redact('getaddrinfo ENOTFOUND store-012.wnam.tb-cdn.io')).toBe('getaddrinfo ENOTFOUND <redacted>');
-    expect(redact('connect ECONNREFUSED https://store-012.tb-cdn.io:443')).not.toContain('tb-cdn');
+    expect(redact('getaddrinfo ENOTFOUND example-012.wnam.tb-cdn.io')).toBe('getaddrinfo ENOTFOUND <redacted>');
+    expect(redact('connect ECONNREFUSED https://example-012.tb-cdn.io:443')).not.toContain('tb-cdn');
   });
 
   it('hides the gateway host, path and id from any message that mentions them', () => {

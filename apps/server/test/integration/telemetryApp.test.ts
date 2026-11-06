@@ -51,7 +51,7 @@ describe('server with stub telemetry keys', () => {
     stub.requests.length = 0;
     const app = await startTestApp(makeTempDir('tele-500'), telemetryEnv());
     app.get('/__boom', () => {
-      throw new Error('boom from https://abcd.tb-cdn.io/dl/1?token=hunter2-secret');
+      throw new Error('boom from https://example-cdn.tb-cdn.io/dl/1?token=hunter2-secret');
     });
     await app.ready();
     const res = await app.inject({ url: '/__boom', headers: { 'x-request-id': 'req-sentry-1' } });
@@ -65,7 +65,7 @@ describe('server with stub telemetry keys', () => {
     const event = items.find((item) => item.header.type === 'event')?.payload as LooseJson;
     expect(event.tags).toMatchObject({ request_id: 'req-sentry-1' });
     expect(event.release).toMatch(/^homestream@\d+\.\d+\.\d+/);
-    expect(JSON.stringify(event)).not.toMatch(/abcd\.tb-cdn|hunter2/);
+    expect(JSON.stringify(event)).not.toMatch(/example-cdn\.tb-cdn|hunter2/);
   });
 
   it('does not report client errors', async () => {
