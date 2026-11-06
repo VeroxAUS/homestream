@@ -1,0 +1,72 @@
+# Used by scripts/pre-commit-secrets.mjs (staged changes) and the CI gitleaks job (full history).
+# scripts/pre-commit-secrets.mjs keeps the same custom patterns as its built-in fallback; change both together.
+title = "HomeStream gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "homestream-jwt-like"
+description = "JWT or base64url JSON token (AIOStreams manifests, TorBox and Sentry tokens start with eyJ)"
+regex = '''\beyJ[A-Za-z0-9_-]{16,}'''
+keywords = ["eyj"]
+
+[[rules]]
+id = "homestream-torbox-api-key"
+description = "TorBox API key assigned to TORBOX_API_KEY"
+regex = '''TORBOX_API_KEY\s*[=:]\s*['"]?[A-Za-z0-9_-]{16,}'''
+keywords = ["torbox_api_key"]
+
+[[rules]]
+id = "homestream-torbox-cdn-host"
+description = "Pre-signed TorBox CDN host"
+regex = '''(?i)\b[a-z0-9-]+\.tb-cdn\.io\b'''
+keywords = ["tb-cdn.io"]
+
+[[rules]]
+id = "homestream-gateway-manifest"
+description = "AIOStreams gateway manifest path segment"
+regex = '''\baiostreams-[a-z0-9_-]{8,}'''
+keywords = ["aiostreams-"]
+
+[[rules]]
+id = "homestream-posthog-key"
+description = "PostHog project (phc_) or personal (phx_) API key"
+regex = '''\bph[cx]_[A-Za-z0-9]{30,}'''
+keywords = ["phc_", "phx_"]
+
+[[rules]]
+id = "homestream-sentry-token"
+description = "Sentry organization (sntrys_) or user (sntryu_) token"
+regex = '''\bsntry[su]_[A-Za-z0-9+/=_-]{20,}'''
+keywords = ["sntrys_", "sntryu_"]
+
+[[rules]]
+id = "homestream-sentry-dsn"
+description = "Sentry DSN"
+regex = '''(?i)https://[0-9a-f]{20,}@[a-z0-9.-]*sentry\.io/\d+'''
+keywords = ["sentry.io"]
+
+# Fixture allowlist. Tests and docs use clearly fake values; a path is listed here only when it has to contain
+# secret-shaped text on purpose, and each entry says why. Real values never belong in any of these files.
+[[allowlists]]
+description = "Lockfile integrity hashes"
+paths = ['''pnpm-lock\.yaml$''']
+
+[[allowlists]]
+description = "Fake credentials and CDN hosts used by server tests and fixtures (none of them is a real value)"
+condition = "AND"
+paths = ['''apps/server/test/''']
+regexes = [
+  '''torbox-key-abcdef123456''',
+  '''torbox-secret-key-123456''',
+  '''tbkey-secret-0123456789''',
+  '''tb-cdn\.io$''',
+  '''^(abc|abc123|abc123456789)$''',
+]
+
+[[allowlists]]
+description = "The jwt.io sample token (alg HS256, sub 1234) used to test JWT redaction"
+condition = "AND"
+paths = ['''apps/server/test/redact\.test\.ts$''']
+regexes = ['''^eyJhbGciOiJIUzI1NiJ9''', '''^eyJzdWIiOiIxMjM0In0''']

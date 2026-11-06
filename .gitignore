@@ -9,6 +9,15 @@ coverage/
 *.log
 *.tsbuildinfo
 .vite/
+.turbo/
+reports/
+.eslintcache
+*.pem
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
 
 # Gradle / Android TV
 apps/tv/.gradle/

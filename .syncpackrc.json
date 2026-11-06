@@ -1,0 +1,9 @@
+{
+  "$schema": "https://syncpack.dev/schema.json",
+  "versionGroups": [
+    {
+      "label": "Every package uses the same range of a shared dependency",
+      "dependencies": ["**"]
+    }
+  ]
+}

@@ -4,18 +4,58 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "build": "pnpm -r build"
+    "prepare": "node scripts/install-hooks.mjs",
+    "build": "turbo run build",
+    "build:summary": "turbo run build --summarize",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint && pnpm lint:root",
+    "lint:root": "eslint scripts eslint.config.mjs vitest.shared.ts",
+    "test": "turbo run test",
+    "test:unit": "pnpm --filter @homestream/server test:unit",
+    "test:integration": "pnpm --filter @homestream/server test:integration",
+    "test:gpu": "pnpm --filter @homestream/server test:gpu",
+    "test:live": "pnpm --filter @homestream/server test:live",
+    "test:ci": "turbo run test:ci",
+    "test:coverage": "pnpm -r --workspace-concurrency=1 run test:coverage",
+    "test:report": "node scripts/test-report.mjs",
+    "test:timing": "node scripts/test-timing.mjs",
+    "test:flaky-report": "node scripts/flaky-report.mjs",
+    "coverage:ratchet": "node scripts/coverage-ratchet.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "dup": "jscpd",
+    "deps:check": "depcruise apps packages scripts --config .dependency-cruiser.cjs",
+    "syncpack:lint": "syncpack lint",
+    "techdebt": "node scripts/techdebt.mjs",
+    "check:large-files": "node scripts/check-large-files.mjs --all",
+    "check:secrets": "node scripts/pre-commit-secrets.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "~5.1.0",
+    "dependency-cruiser": "~18.7.2",
     "eslint": "^10.14.0",
+    "eslint-plugin-sonarjs": "~4.2.2",
     "globals": "^17.14.0",
+    "jscpd": "~5.4.2",
+    "knip": "~6.44.1",
+    "lefthook": "~2.2.2",
+    "prettier": "~3.9.10",
+    "syncpack": "~15.3.3",
+    "turbo": "~2.11.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
     "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.16.0"
+    }
   }
 }

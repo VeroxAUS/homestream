@@ -1,0 +1,24 @@
+# Git hooks, installed by `pnpm install` (root `prepare` script). Lefthook is a native binary, so the hooks run the
+# same from PowerShell 5.1 and Git Bash. The pre-commit stage only looks at staged files and never runs the test suite;
+# tests run in CI and with `pnpm test:ci`.
+min_version: 2.0.0
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: prettier
+      glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc,md,yml,yaml,css,html}'
+      run: pnpm exec prettier --check --ignore-unknown --log-level warn {staged_files}
+      fail_text: Formatting differs. Run `pnpm format` and stage the files again.
+
+    - name: eslint
+      glob: '*.{ts,tsx,js,mjs,cjs}'
+      run: pnpm exec eslint --cache --no-warn-ignored {staged_files}
+
+    - name: secrets
+      run: node scripts/pre-commit-secrets.mjs
+      fail_text: A secret was found in the staged changes (see above). Nothing was committed.
+
+    - name: large-files
+      run: node scripts/check-large-files.mjs
+      fail_text: A staged file is over the 1 MB limit (see above). Nothing was committed.
