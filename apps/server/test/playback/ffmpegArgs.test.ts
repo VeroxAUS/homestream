@@ -1,4 +1,5 @@
 import type { Decision } from '@homestream/shared';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildFfmpegArgs, buildVideoFilter, canHwDecode, type EncodeJob } from '../../src/playback/ffmpegArgs.js';
 
@@ -69,7 +70,7 @@ describe('buildFfmpegArgs: shared structure', () => {
   });
 
   it('writes the playlist under the session dir, with relative segment names', () => {
-    expect(args.at(-1)).toBe('E:\\HomeStream\\transcode\\abc\\enc.m3u8');
+    expect(args.at(-1)).toBe(path.join('E:\\HomeStream\\transcode\\abc', 'enc.m3u8'));
     expect(valueAfter(args, '-hls_segment_filename')).toBe('seg-%d.m4s');
     expect(valueAfter(args, '-hls_fmp4_init_filename')).toBe('init.mp4');
   });

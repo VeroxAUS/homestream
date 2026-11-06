@@ -25,11 +25,17 @@ function round(value: number, digits = 1): number {
   return Math.round(value * factor) / factor;
 }
 
+/** `E:` for a Windows path (also when checked on another platform), `/` for a POSIX one. */
+function driveOf(dir: string): string {
+  const flavour = /^[A-Za-z]:|^\\\\/.test(dir) ? path.win32 : path;
+  return flavour.parse(flavour.resolve(dir)).root.replace(/[\\/]+$/, '');
+}
+
 async function volume(dir: string, probe: DiskProbe): Promise<Volume> {
   const space = await probe(dir);
   return {
     dir,
-    drive: path.parse(path.resolve(dir)).root.replace(/[\\/]+$/, ''),
+    drive: driveOf(dir),
     freeGb: round(space.freeBytes / GIB, 2),
     totalGb: round(space.totalBytes / GIB),
   };

@@ -68,7 +68,7 @@ function execText(command: string, args: string[]): Promise<string> {
 
 /** Image name tasklist should list for an ffmpeg path, e.g. `C:\tools\ffmpeg` and `ffmpeg.exe` both give `ffmpeg.exe`. */
 export function imageNameOf(executable: string): string {
-  const base = path.basename(executable);
+  const base = path.win32.basename(executable);
   return /\.exe$/i.test(base) ? base : `${base}.exe`;
 }
 

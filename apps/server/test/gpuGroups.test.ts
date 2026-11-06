@@ -53,7 +53,7 @@ describe('GPU test grouping', () => {
   });
 });
 
-describe('killChildProcesses', () => {
+describe.skipIf(process.platform !== 'win32')('killChildProcesses', () => {
   it('kills matching children of this process and leaves the rest alone', async () => {
     const sleeper = () =>
       spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore', windowsHide: true });

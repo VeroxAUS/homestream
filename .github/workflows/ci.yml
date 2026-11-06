@@ -44,6 +44,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Use a runner temp directory for test files
+        shell: bash
+        run: echo "HOMESTREAM_TEST_ROOT=${{ runner.temp }}/homestream-tests" >> "$GITHUB_ENV"
+
       - name: Restore the turbo cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -54,9 +58,13 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Install ffmpeg (software only; the tests that run it need no GPU)
+        timeout-minutes: 5
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+          apt_opts='-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20'
+          sudo apt-get $apt_opts update -qq
+          sudo apt-get $apt_opts install -y -qq --no-install-recommends ffmpeg
 
       - name: Install gitleaks
         run: |
@@ -158,6 +166,10 @@ jobs:
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: ${{ env.PNPM_VERSION }}
+
+      - name: Use a runner temp directory for test files
+        shell: bash
+        run: echo "HOMESTREAM_TEST_ROOT=${{ runner.temp }}/homestream-tests" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
