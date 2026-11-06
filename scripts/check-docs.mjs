@@ -23,12 +23,19 @@ export const DIAGRAM_KEYWORDS = [
 
 /** GitHub's heading id: lower case, punctuation removed, spaces to hyphens. */
 export function slugify(heading) {
-  return heading
-    .trim()
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
+  return stripTags(heading.trim().toLowerCase())
     .replace(/[^\p{L}\p{N}\s_-]/gu, '')
     .replace(/\s/g, '-');
+}
+
+/** Repeats until stable so that nested input such as `<<b>b>` cannot leave a tag behind. */
+function stripTags(text) {
+  let current = text;
+  for (let previous = ''; previous !== current;) {
+    previous = current;
+    current = current.replace(/<[^>]+>/g, '');
+  }
+  return current;
 }
 
 /** Lines outside fenced code blocks, with their 1-based numbers. */

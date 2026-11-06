@@ -7,6 +7,7 @@ import { createLogger, type AppLogger } from '../../src/logger.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir, startTestApp, testConfig } from '../helpers.js';
 import { buildApp } from '../../src/app.js';
+import { READYZ_MAX_PER_MINUTE } from '../../src/routes/ops.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -240,6 +241,46 @@ describe('GET /healthz and /readyz', () => {
   it('is documented in OpenAPI', async () => {
     const spec = (await app.inject('/api/docs/json')).json() as { paths: Record<string, unknown> };
     expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/healthz', '/readyz', '/metrics']));
+  });
+});
+
+describe('GET /readyz rate limit', () => {
+  it('answers 429 in the usual error shape after the per-address limit, and only on /readyz', async () => {
+    const dir = makeTempDir('readyz-limit');
+    const limited = await startTestApp(dir);
+    try {
+      await limited.ready();
+      for (let i = 0; i < READYZ_MAX_PER_MINUTE; i += 1) {
+        expect((await limited.inject('/readyz')).statusCode).toBe(200);
+      }
+      const res = await limited.inject('/readyz');
+      expect(res.statusCode).toBe(429);
+      expect(res.headers['retry-after']).toEqual(expect.any(String));
+      expect(res.json()).toMatchObject({
+        error: { code: 'too_many_requests', message: expect.any(String), hint: expect.any(String) },
+      });
+      expect((await limited.inject('/healthz')).statusCode).toBe(200);
+      expect((await limited.inject('/metrics')).statusCode).toBe(200);
+      expect((await limited.inject('/api/info')).statusCode).toBe(200);
+    } finally {
+      await limited.close();
+      removeDir(dir);
+    }
+  });
+
+  it('counts each client address separately', async () => {
+    const dir = makeTempDir('readyz-limit-ip');
+    const limited = await startTestApp(dir);
+    try {
+      await limited.ready();
+      for (let i = 0; i <= READYZ_MAX_PER_MINUTE; i += 1)
+        await limited.inject({ url: '/readyz', remoteAddress: '198.51.100.7' });
+      expect((await limited.inject({ url: '/readyz', remoteAddress: '198.51.100.7' })).statusCode).toBe(429);
+      expect((await limited.inject({ url: '/readyz', remoteAddress: '198.51.100.8' })).statusCode).toBe(200);
+    } finally {
+      await limited.close();
+      removeDir(dir);
+    }
   });
 });
 

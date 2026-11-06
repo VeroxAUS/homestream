@@ -11,12 +11,16 @@ export type TextScrubber = (text: string) => string;
 
 const URL_PATTERN = /\b(?:https?|wss?|ftp|file):\/\/[^\s"'<>\\)\]]+/gi;
 const ADDON_PATH = /\/stremio\/[^\s"'<>\\]+/gi;
-const CDN_HOST = /\b(?:[a-z0-9-]+\.)*tb-cdn\.io\b/gi;
+const CDN_DOMAIN = /tb-cdn\.io\b/gi;
+const HOST_CHAR = /[a-z0-9.-]/i;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]{6,}/gi;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}/g;
 const SERVICE_KEY = /\b(?:sntry[su]_|ph[cx]_)[A-Za-z0-9]{8,}/g;
 // 40+ characters mixing letters and digits is a key or token, never prose or a UUID (36 characters).
-const LONG_TOKEN = /\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{40,}\b/g;
+// The letter and digit test runs on the match, not in lookaheads, which rescan the whole run from every word boundary.
+const LONG_TOKEN = /\b[A-Za-z0-9_-]{40,}\b/g;
+const HAS_DIGIT = /\d/;
+const HAS_LETTER = /[A-Za-z]/;
 const SECRET_FIELD =
   /\b(token|api[_-]?key|apikey|access_token|auth|authorization|password|secret|signature|sig)\b(["']?\s*[=:]\s*["']?)(?!\[redacted\])([^\s"'&,;]{4,})/gi;
 const QUERY_STRING = /\?[^\s"'#?]*=[^\s"'#]*/g;
@@ -47,6 +51,23 @@ const DENIED_KEYS = new Set([
   'email',
 ]);
 
+/**
+ * Replaces the CDN domain together with the sub-domain labels in front of it. Found from the domain outwards because a
+ * pattern of repeated labels in front of the domain is quadratic on a long label-like string that lacks it.
+ */
+function scrubCdnHosts(text: string): string {
+  let out = '';
+  let copied = 0;
+  for (const match of text.matchAll(CDN_DOMAIN)) {
+    let start = match.index;
+    while (start > copied && HOST_CHAR.test(text.charAt(start - 1))) start -= 1;
+    while (start < match.index && /[.-]/.test(text.charAt(start))) start += 1;
+    out += text.slice(copied, start) + SCRUBBED;
+    copied = match.index + match[0].length;
+  }
+  return out + text.slice(copied);
+}
+
 function hasIpv6Shape(candidate: string): boolean {
   return candidate.includes('::') || candidate.split(':').length >= 6;
 }
@@ -56,7 +77,7 @@ export function sanitizeText(input: string, extra?: TextScrubber): string {
   let out = extra ? extra(input) : input;
   out = out.replace(URL_PATTERN, SCRUBBED);
   out = out.replace(ADDON_PATH, SCRUBBED);
-  out = out.replace(CDN_HOST, SCRUBBED);
+  out = scrubCdnHosts(out);
   out = out.replace(BEARER, `Bearer ${SCRUBBED}`);
   out = out.replace(JWT, SCRUBBED);
   out = out.replace(SERVICE_KEY, SCRUBBED);
@@ -66,7 +87,7 @@ export function sanitizeText(input: string, extra?: TextScrubber): string {
   out = out.replace(POSIX_HOME, `$1${HOME_PLACEHOLDER}`);
   out = out.replace(IPV4, SCRUBBED);
   out = out.replace(IPV6, (match) => (hasIpv6Shape(match) ? SCRUBBED : match));
-  out = out.replace(LONG_TOKEN, SCRUBBED);
+  out = out.replace(LONG_TOKEN, (match) => (HAS_DIGIT.test(match) && HAS_LETTER.test(match) ? SCRUBBED : match));
   return out;
 }
 
@@ -96,11 +117,18 @@ interface Frame {
   abs_path?: string;
 }
 
+/** A `/\/+$/` replace is quadratic on a long run of slashes that does not end the string. */
+function trimTrailingSlashes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 47) end -= 1;
+  return text.slice(0, end);
+}
+
 /** Turns an absolute file path into one relative to the repository (or installed app) root. */
 export function relativizePath(file: string, roots: readonly string[]): string {
   const normalized = file.replace(/\\/g, '/');
   for (const root of roots) {
-    const base = root.replace(/\\/g, '/').replace(/\/+$/, '');
+    const base = trimTrailingSlashes(root.replace(/\\/g, '/'));
     if (base && normalized.toLowerCase().startsWith(`${base.toLowerCase()}/`)) return normalized.slice(base.length + 1);
   }
   return file;

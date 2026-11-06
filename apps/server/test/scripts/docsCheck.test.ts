@@ -73,6 +73,12 @@ describe('helpers', () => {
     expect(slugify('`pnpm db:schema` & friends!')).toBe('pnpm-dbschema--friends');
   });
 
+  it('drops HTML tags from headings, also nested ones', () => {
+    expect(slugify('A <b>bold</b> word')).toBe('a-bold-word');
+    expect(slugify('<scr<b>ipt>x')).toBe('iptx');
+    expect(slugify('<<a>b>c')).toBe('bc');
+  });
+
   it('numbers duplicate headings', () => {
     expect([...anchorsOf('# A\n\n## A\n')]).toEqual(['a', 'a-1']);
   });

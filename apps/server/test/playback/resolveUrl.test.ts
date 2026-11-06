@@ -9,6 +9,8 @@ function response(status: number, headers: Record<string, string> = {}): Respons
   return new Response(null, { status, headers });
 }
 
+const onGateway = (url: string): boolean => new URL(url).hostname === 'gw.example.test';
+
 beforeEach(() => registerSecret('gw-secret-token'));
 afterEach(() => clearSecrets());
 
@@ -17,8 +19,7 @@ describe('createUrlResolver', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fetchImpl: FetchImpl = async (url, init) => {
       calls.push({ url, init });
-      if (url.startsWith('https://gw.example.test'))
-        return response(307, { location: 'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc' });
+      if (onGateway(url)) return response(307, { location: 'https://store-001.wnam.tb-cdn.io/file.mkv?token=abc' });
       return response(206);
     };
     const resolve = createUrlResolver(fetchImpl);
@@ -91,9 +92,7 @@ describe('createUrlResolver', () => {
 
     it('leaves a static mp4 on another host (a CDN file) alone', async () => {
       const resolve = createUrlResolver(async (url) =>
-        url.startsWith('https://gw.example.test')
-          ? response(307, { location: 'https://cdn.example.test/static/downloading.mp4' })
-          : response(206),
+        onGateway(url) ? response(307, { location: 'https://cdn.example.test/static/downloading.mp4' }) : response(206),
       );
       await expect(resolve('https://gw.example.test/a')).resolves.toBe(
         'https://cdn.example.test/static/downloading.mp4',

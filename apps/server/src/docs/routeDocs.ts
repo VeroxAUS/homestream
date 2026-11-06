@@ -270,9 +270,9 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
     {
       summary: 'Readiness probe',
       description:
-        'Checks the database and that the data directory is writable. Makes no external calls (TMDB, gateway, TorBox).',
+        'Checks the database and that the data directory is writable (it writes and removes a small file, so it is limited to 300 requests per minute per client address). Makes no external calls (TMDB, gateway, TorBox).',
       tag: 'ops',
-      errors: [503],
+      errors: [429, 503],
     },
     ok(ReadyzResponseSchema, 'Database and data directory are usable.'),
   ),

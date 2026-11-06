@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import rateLimit from '@fastify/rate-limit';
 import type { HealthzResponse, ReadyzResponse } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.js';
@@ -26,11 +27,22 @@ function databaseUsable(ctx: AppContext): boolean {
   }
 }
 
+/** A monitoring probe runs every few seconds; this is far above that and far below a loop that wears out the disk. */
+export const READYZ_MAX_PER_MINUTE = 300;
+
 /** Probes and metrics for monitoring. None of them calls TMDB, the gateway or TorBox. */
-export function registerOpsRoutes(app: FastifyInstance, ctx: AppContext): void {
+export async function registerOpsRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
+  // Opt-in per route: playback, HLS and the UI must never be throttled. The plugin has to load before the route exists.
+  await app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: () =>
+      new AppError(429, 'too_many_requests', 'Too many requests from this address.', 'Wait a minute and try again.'),
+  });
+
   app.get('/healthz', async (): Promise<HealthzResponse> => ({ status: 'ok' }));
 
-  app.get('/readyz', async (): Promise<ReadyzResponse> => {
+  const readyzLimit = { max: READYZ_MAX_PER_MINUTE, timeWindow: '1 minute' };
+  app.get('/readyz', { config: { rateLimit: readyzLimit } }, async (): Promise<ReadyzResponse> => {
     if (!databaseUsable(ctx)) {
       throw new AppError(
         503,

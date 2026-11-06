@@ -5825,7 +5825,7 @@
         "tags": [
           "ops"
         ],
-        "description": "Checks the database and that the data directory is writable. Makes no external calls (TMDB, gateway, TorBox).",
+        "description": "Checks the database and that the data directory is writable (it writes and removes a small file, so it is limited to 300 requests per minute per client address). Makes no external calls (TMDB, gateway, TorBox).",
         "responses": {
           "200": {
             "description": "Database and data directory are usable.",
@@ -5845,6 +5845,16 @@
                     "status"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests or sessions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

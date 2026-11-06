@@ -9,3 +9,7 @@ allowBuilds:
   esbuild: true
   electron-winstaller: true
   lefthook: true
+
+overrides:
+  glob@<14.0.2: 14.0.2
+  minimatch@<11.0.1: 11.0.1

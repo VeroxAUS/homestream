@@ -65,6 +65,21 @@ describe('pre-commit-secrets (built-in scan, gitleaks disabled)', () => {
     expect(result.stderr).toContain(rule);
     expect(result.stderr + result.stdout).not.toContain(value);
   });
+  it.each([
+    ['a single-label host', 'store-1.tb-cdn.io'],
+    ['a multi-label host', 'store-12.eu.tb-cdn.io'],
+  ])('blocks %s of the TorBox CDN anywhere in a line', (_label, host) => {
+    writeAndStage(repo, 'src/leak.ts', `fetch("https://${host}/x");\n`);
+    const result = runScript(repo, 'pre-commit-secrets.mjs', [], env);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('torbox-cdn-host');
+  });
+
+  it('accepts a look-alike host that does not end in the CDN domain', () => {
+    writeAndStage(repo, 'src/ok.ts', 'const a = "tb-cdn.io.example.test"; const b = "nottb-cdn.io";\n');
+    expect(runScript(repo, 'pre-commit-secrets.mjs', [], env).status).toBe(0);
+  });
+
   it('blocks a literal copy of a local .env value and never prints it', () => {
     const value = `lit-${randomBytes(10).toString('hex')}`;
     const envDir = makeTempDir('precommit-env');

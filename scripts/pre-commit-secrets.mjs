@@ -14,7 +14,7 @@ import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 export const PATTERNS = [
   { id: 'jwt', regex: /\beyJ[A-Za-z0-9_-]{16,}/ },
   { id: 'torbox-api-key', regex: /TORBOX_API_KEY\s*[=:]\s*['"]?[A-Za-z0-9_-]{16,}/ },
-  { id: 'torbox-cdn-host', regex: /\b[a-z0-9-]+\.tb-cdn\.io\b/i },
+  { id: 'torbox-cdn-host', regex: /(?:^|[^\w.-])(?:[a-z0-9-]+\.)+tb-cdn\.io\b/i },
   { id: 'gateway-manifest', regex: /\baiostreams-[a-z0-9_-]{8,}/ },
   { id: 'posthog-key', regex: /\bph[cx]_[A-Za-z0-9]{30,}/ },
   { id: 'sentry-token', regex: /\bsntry[su]_[A-Za-z0-9+/=_-]{20,}/ },

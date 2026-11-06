@@ -37,7 +37,7 @@ describe('sanitizeText', () => {
   ])('removes a %s', (_label, input, needle) => {
     const out = sanitizeText(input);
     expect(out).not.toContain(needle);
-    expect(out).toContain(SCRUBBED.replace('[', '[').slice(0, 3));
+    expect(out).toContain(SCRUBBED);
   });
 
   it('turns Windows and POSIX home paths into <home> and keeps the rest of the path', () => {
@@ -120,6 +120,54 @@ describe('relativizePath', () => {
     expect(relativizePath('node:internal/process', roots)).toBe('node:internal/process');
     expect(relativizePath('E:\\Projects\\homestream-other\\x.ts', roots)).toBe('E:\\Projects\\homestream-other\\x.ts');
     expect(relativizePath('/srv/homestream/dist/c.js', [''])).toBe('/srv/homestream/dist/c.js');
+  });
+
+  it('ignores any number of trailing slashes on a root', () => {
+    expect(relativizePath('/srv/homestream/dist/c.js', ['/srv/homestream///'])).toBe('dist/c.js');
+    expect(relativizePath('/srv/homestream/dist/c.js', ['///'])).toBe('/srv/homestream/dist/c.js');
+  });
+
+  it('handles an adversarial root of 50,000 slashes in under 50 ms', () => {
+    const roots = [`/srv${'/'.repeat(50_000)}x`, '/'.repeat(50_000)];
+    const started = performance.now();
+    const result = relativizePath('/srv/homestream/dist/c.js', roots);
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(result).toBe('/srv/homestream/dist/c.js');
+  });
+});
+
+describe('sanitizeText on adversarial input', () => {
+  it.each([
+    ['slashes', '/'.repeat(50_000)],
+    ['backslashes', '\\'.repeat(50_000)],
+    ['dots', '.'.repeat(50_000)],
+    ['digits', '1'.repeat(50_000)],
+    ['colons', ':'.repeat(50_000)],
+    ['letters', 'a'.repeat(50_000)],
+    ['letters joined by hyphens', 'a-'.repeat(25_000)],
+    ['digits joined by hyphens', '1-'.repeat(25_000)],
+  ])('scrubs 50,000 repeated %s in under 50 ms', (_label, input) => {
+    const started = performance.now();
+    sanitizeText(input);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it('scrubs the CDN host with all its sub-domains and nothing around it', () => {
+    expect(sanitizeText('resolving store-12.eu.tb-cdn.io now')).toBe(`resolving ${SCRUBBED} now`); // gitleaks:allow
+    expect(sanitizeText('a tb-cdn.io, b.tb-cdn.io.')).toBe(`a ${SCRUBBED}, ${SCRUBBED}.`); // gitleaks:allow
+  });
+
+  it('scrubs a CDN host behind 50,000 characters of look-alike labels in under 50 ms', () => {
+    const started = performance.now();
+    const out = sanitizeText(`${'a-'.repeat(25_000)}x.tb-cdn.io`); // gitleaks:allow
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(out).not.toContain('tb-cdn');
+  });
+
+  it('leaves normal paths and text unchanged', () => {
+    for (const text of ['at src/a/b.ts:12:3', 'cut /srv/homestream/dist/c.js here', 'plain text']) {
+      expect(sanitizeText(text)).toBe(text);
+    }
   });
 });
 

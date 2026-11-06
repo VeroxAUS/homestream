@@ -265,7 +265,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerHistoryRoutes(app, ctx);
   registerPrefetchRoutes(app, ctx);
   registerHealthRoutes(app, ctx);
-  registerOpsRoutes(app, ctx);
+  await registerOpsRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
   app.addHook('onClose', async () => {
