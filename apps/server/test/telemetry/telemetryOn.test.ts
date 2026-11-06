@@ -95,10 +95,10 @@ describe('telemetry with stub keys', () => {
       tags: { request_id: 'req-abc', 'device.kind': 'tv', 'media.type': 'movie', error_code: 'x', app: 'server' },
     });
     expect(event).not.toHaveProperty('server_name');
-    expect(event).not.toHaveProperty('user');
+    expect(event?.user).toEqual({ geo: {} });
     expect(event).not.toHaveProperty('request');
     expect(event?.sdk?.settings).toEqual({ infer_ip: 'never' });
-    expect(JSON.stringify(event)).not.toMatch(/ip_address|"geo"/);
+    expect(JSON.stringify(event)).not.toMatch(/ip_address/);
     expect(event?.breadcrumbs ?? event?.breadcrumbs?.values).toBeDefined();
     const everything = envelopes.map((request) => request.body).join('\n');
     for (const needle of NEEDLES) expect(everything, needle).not.toContain(needle);

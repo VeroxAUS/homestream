@@ -58,13 +58,13 @@ Telemetry code lives in `apps/server/src/telemetry`. It is off unless a key is s
 | `POSTHOG_API_KEY`    | Product events and feature flags                                     |
 | `POSTHOG_HOST`       | PostHog ingestion host (default `https://us.i.posthog.com`)          |
 
-- **Sentry** (`@sentry/node`): release `homestream@<version>`, the environment, the tags `device.kind`, `media.type` and `request_id`, 5 % performance sampling, no HTTP, console or session auto-instrumentation. `beforeSend`, `beforeSendTransaction` and `beforeBreadcrumb` run every payload through the shared sanitizer in `packages/shared/src/sanitize.ts`: registered secrets, authorization fields, gateway and CDN URLs, query strings, private network addresses and Windows user folders are removed, and `user`, `ip_address` and `server_name` are never set.
+- **Sentry** (`@sentry/node`): release `homestream@<version>`, the environment, the tags `device.kind`, `media.type` and `request_id`, 5 % performance sampling, no HTTP, console or session auto-instrumentation. `beforeSend`, `beforeSendTransaction` and `beforeBreadcrumb` run every payload through the shared sanitizer in `packages/shared/src/sanitize.ts`: registered secrets, authorization fields, gateway and CDN URLs, query strings, private network addresses and Windows user folders are removed, and no user data, `ip_address`, `server_name` or request is ever set (the only `user` content is an empty `geo`, see below).
 - **PostHog** (`posthog-node`): events come from the typed catalog in `packages/shared/src/analytics.ts` (listed in [PRIVACY.md](PRIVACY.md)), only allowlisted properties are kept, and the queue is flushed on shutdown. The identity is a random install id stored in the `settings` table.
 - **Feature flags**: [experimentation.md](experimentation.md).
 
 ### Required account settings
 
-Sentry and PostHog add the sender's IP address (and, for Sentry, a geo location derived from it) when an event reaches them, even though the payload has none. The shared sanitizer marks every Sentry event with `sdk.settings.infer_ip: "never"` and PostHog events carry `$geoip_disable`, but these two settings must also be on (details in [PRIVACY.md](PRIVACY.md#required-account-settings)):
+Sentry and PostHog add the sender's IP address (and, for Sentry, a geo location derived from it) when an event reaches them, even though the payload has none. The shared sanitizer marks every Sentry event with `sdk.settings.infer_ip: "never"` plus an empty `user.geo` (`infer_ip` alone does not stop the geo lookup: Relay looks the location up from the connection address whenever `user.geo` is absent, and skips the lookup when it is present; an empty geo is not stored). PostHog events carry `$geoip_disable`. These two settings must also be on (details in [PRIVACY.md](PRIVACY.md#required-account-settings)):
 
 - Sentry: **Prevent Storing of IP Addresses** in Organization Settings > Security & Privacy and in Project Settings > Security & Privacy of every HomeStream project (`scrubIPAddresses`).
 - PostHog: **Discard client IP data** in Settings > Project > IP data capture configuration (`anonymize_ips`).

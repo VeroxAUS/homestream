@@ -163,26 +163,30 @@ export interface EventSanitizeOptions {
 }
 
 /**
- * An event without a user still gets the sender's connection address (and a geo location derived from it) from Sentry's
- * ingestion, which the SDK options cannot prevent for server platforms. `sdk.settings.infer_ip: "never"` is the
- * protocol switch that tells ingestion to keep exactly what the client sent.
+ * An event without a user still gets the sender's connection address from Sentry's ingestion unless
+ * `sdk.settings.infer_ip: "never"` says to keep exactly what the client sent.
+ *
+ * That switch does not cover the geo lookup: Relay's `normalize_user_geoinfo` falls back to the envelope's connection
+ * address whenever `user.geo` is absent, whatever `infer_ip` says. It skips the lookup when `user.geo` is present, and
+ * drops an empty geo again when it serialises the event, so the stored event carries no location. The user object holds
+ * nothing else: no id, no `ip_address`.
  */
-function forbidIpInference(event: Record<string, unknown>): void {
+function forbidIpAndGeoInference(event: Record<string, unknown>): void {
   const sdk = (event.sdk ?? {}) as Record<string, unknown>;
   event.sdk = { ...sdk, settings: { ...(sdk.settings as object | undefined), infer_ip: 'never' } };
+  event.user = { geo: {} };
 }
 
 /**
- * Sentry error or transaction event: no user, IP, server name or request data, ingestion told not to infer an IP;
- * frames relative; every string scrubbed.
+ * Sentry error or transaction event: no user data, IP, server name or request data, ingestion told not to infer an IP
+ * or a geo location; frames relative; every string scrubbed.
  */
 export function sanitizeSentryEvent<T extends object>(event: T, options: EventSanitizeOptions = {}): T {
   const draft = event as Record<string, unknown>;
   relativizeFrames(draft, options.roots ?? []);
   const clean = sanitizeValue(draft, options.extra);
-  forbidIpInference(clean);
+  forbidIpAndGeoInference(clean);
   delete clean.server_name;
-  delete clean.user;
   delete clean.request;
   trimContexts(clean.contexts as Record<string, Record<string, unknown>> | undefined);
   return clean as T;

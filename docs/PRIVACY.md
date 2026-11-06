@@ -55,7 +55,7 @@ Flags are read from PostHog when a key is set; the server sends only its install
 
 ## Required account settings
 
-The apps never send an IP address, but both services add the sender's connection address themselves when an event arrives. The code tells them not to (Sentry: every event carries `sdk.settings.infer_ip: "never"`; PostHog: `$geoip_disable` is set), and two account settings must be on so nothing is stored even if that fails. Turn them on once; nothing in the repository can check them for you.
+The apps never send an IP address, but both services add the sender's connection address themselves when an event arrives. The code tells them not to (Sentry: every event carries `sdk.settings.infer_ip: "never"` and an empty `user.geo`, which makes ingestion skip its location lookup and leaves no location in the stored event; PostHog: `$geoip_disable` is set), and two account settings must be on so nothing is stored even if that fails. Turn them on once; nothing in the repository can check them for you.
 
 | Service | Where                                                                                                                                                                                 | Setting                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |

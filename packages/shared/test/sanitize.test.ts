@@ -174,6 +174,7 @@ describe('sanitizeText on adversarial input', () => {
 describe('sanitizeSentryEvent', () => {
   const roots = ['E:\\Projects\\homestream'];
   const NO_IP_INFERENCE = { settings: { infer_ip: 'never' } };
+  const NO_GEO_LOOKUP = { geo: {} };
 
   function event() {
     return {
@@ -215,10 +216,10 @@ describe('sanitizeSentryEvent', () => {
     };
   }
 
-  it('drops server name, user, request data and identifying context, keeps tags and OS facts', () => {
+  it('drops server name, user data, request data and identifying context, keeps tags and OS facts', () => {
     const out = sanitizeSentryEvent(event(), { roots }) as LooseJson;
     expect(out).not.toHaveProperty('server_name');
-    expect(out).not.toHaveProperty('user');
+    expect(out.user).toEqual(NO_GEO_LOOKUP);
     expect(out).not.toHaveProperty('request');
     expect(out.tags).toEqual({ request_id: 'req-1', 'device.kind': 'tv' });
     expect(out.contexts).toEqual({
@@ -240,18 +241,24 @@ describe('sanitizeSentryEvent', () => {
     expect(sanitizeSentryEvent({ contexts: { os: { name: 'Linux' } } })).toEqual({
       contexts: { os: { name: 'Linux' } },
       sdk: NO_IP_INFERENCE,
+      user: NO_GEO_LOOKUP,
     });
   });
 
   it('works for events without exceptions or contexts and without roots', () => {
-    expect(sanitizeSentryEvent({ message: 'plain' })).toEqual({ message: 'plain', sdk: NO_IP_INFERENCE });
+    expect(sanitizeSentryEvent({ message: 'plain' })).toEqual({
+      message: 'plain',
+      sdk: NO_IP_INFERENCE,
+      user: NO_GEO_LOOKUP,
+    });
     expect(sanitizeSentryEvent({ exception: { values: [{ type: 'E' }] } })).toEqual({
       exception: { values: [{ type: 'E' }] },
       sdk: NO_IP_INFERENCE,
+      user: NO_GEO_LOOKUP,
     });
   });
 
-  it('tells ingestion never to infer an IP address or geo location, keeping the other SDK facts', () => {
+  it('tells ingestion never to infer an IP address and sends an empty geo so no lookup runs, keeping the other SDK facts', () => {
     const out = sanitizeSentryEvent({
       ...event(),
       sdk: { name: 'sentry.javascript.node', version: '1.0.0', settings: { other: 'kept', infer_ip: 'auto' } },
@@ -261,8 +268,8 @@ describe('sanitizeSentryEvent', () => {
       version: '1.0.0',
       settings: { other: 'kept', infer_ip: 'never' },
     });
-    expect(JSON.stringify(out)).not.toMatch(/ip_address|"geo"|192\.168/);
-    expect(sanitizeSentryEvent({})).toEqual({ sdk: NO_IP_INFERENCE });
+    expect(JSON.stringify(out)).not.toMatch(/ip_address|192\.168|alice/);
+    expect(sanitizeSentryEvent({})).toEqual({ sdk: NO_IP_INFERENCE, user: NO_GEO_LOOKUP });
   });
 
   it('applies the extra scrubber to every string', () => {
@@ -270,7 +277,7 @@ describe('sanitizeSentryEvent', () => {
       { message: 'my-secret-key inside' },
       { extra: (text) => text.replace('my-secret-key', 'X') },
     );
-    expect(out).toEqual({ message: 'X inside', sdk: NO_IP_INFERENCE });
+    expect(out).toEqual({ message: 'X inside', sdk: NO_IP_INFERENCE, user: NO_GEO_LOOKUP });
   });
 });
 
