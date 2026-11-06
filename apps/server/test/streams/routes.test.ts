@@ -112,7 +112,7 @@ describe('GET /api/streams/movie/:tmdbId', () => {
     expect(body.streams).toHaveLength(5);
     expect(body.streams.every((s) => s.cached)).toBe(true);
     expect(body.streams.map((s) => s.resolution)).toEqual(['2160p', '1080p', '1080p', '720p', '480p']);
-    expect(body.streams.map((s) => s.source)).toEqual(['Remux', 'Remux', 'WEB-DL', 'BluRay', 'DVD']);
+    expect(body.streams.map((s) => s.source)).toEqual(['Remux', 'WEB-DL', 'Remux', 'BluRay', 'DVD']);
     expect(body.streams[0]).toMatchObject({ videoCodec: 'hevc', hdr: 'dv', audio: 'DTS-HD MA 5.1' });
     expect(body.recommendedId).toBe(body.streams[0]?.id);
     for (const s of body.streams) {
@@ -197,7 +197,7 @@ describe('recommendedId when nothing fits', () => {
     const deviceId = await registerDevice('p480');
     const { body } = await getStreams(`/api/streams/movie/278?deviceId=${deviceId}`);
     const picked = body.streams.find((s) => s.id === body.recommendedId);
-    expect(picked?.filename).toBe('A.2024.1080p.BluRay.x264-GRP.mkv');
+    expect(picked?.filename).toBe('A.2024.1080p.WEB-DL.x264-GRP.mkv');
   });
 });
 

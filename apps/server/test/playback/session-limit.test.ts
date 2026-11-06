@@ -2,11 +2,11 @@
 import path from 'node:path';
 import type { ActivityResponse } from '@homestream/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { EncoderExit, EncoderHandle, EncoderProcessOptions } from '../../src/playback/encoderProcess.js';
 import { MAX_SESSIONS } from '../../src/playback/manager.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
+import { FakeEncoders } from './fakeEncoder.js';
 import { bootHarness, PROFILES, startSession, type Harness, type HarnessOptions, type ProfileName } from './harness.js';
 
 const PROBE: ProbeResult = {
@@ -15,43 +15,6 @@ const PROBE: ProbeResult = {
   audio: [{ index: 1, codec: 'ac3', channels: 6, language: 'eng', title: '', default: true }],
   subtitles: [],
 };
-
-type EncoderMode = 'run' | 'fail';
-
-/** Stands in for the ffmpeg child: stays "running" until stopped, or exits with code 1 at once when told to fail. */
-class FakeEncoder implements EncoderHandle {
-  readonly pid = undefined;
-  readonly exited: Promise<EncoderExit>;
-  running = true;
-  private finish!: (exit: EncoderExit) => void;
-
-  constructor(mode: EncoderMode) {
-    this.exited = new Promise((resolve) => {
-      this.finish = resolve;
-    });
-    if (mode === 'fail') setImmediate(() => this.end(1));
-  }
-
-  stop(): Promise<void> {
-    this.end(0);
-    return Promise.resolve();
-  }
-
-  private end(code: number): void {
-    if (!this.running) return;
-    this.running = false;
-    this.finish({ code, signal: null, stderrTail: 'fake encoder' });
-  }
-}
-
-class FakeEncoders {
-  mode: EncoderMode = 'run';
-  started = 0;
-  readonly create = (_options: EncoderProcessOptions): EncoderHandle => {
-    this.started += 1;
-    return new FakeEncoder(this.mode);
-  };
-}
 
 let root: string;
 const harnesses: Harness[] = [];
@@ -167,11 +130,29 @@ describe('concurrent session limit of two', () => {
     expect(encoders.started).toBe(4);
   });
 
-  it('releases the slot of a session whose encoder failed, while the failed record still exists', async () => {
+  it('releases the slot of a start whose encoder failed before the first segment', async () => {
     const { harness, encoders } = await boot();
     encoders.mode = 'fail';
     const broken = await start(harness, 'chromecast4k');
+    // One automatic retry, then the start fails and nothing is left of it.
+    expect(broken.status).toBe(502);
+    expect(broken.body).toMatchObject({ error: { code: 'encoder_failed' } });
+    expect(encoders.started).toBe(2);
+    expect(await activityCount(harness)).toBe(0);
+    expect(harness.app.ctx.playback.list()).toEqual([]);
+
+    encoders.mode = 'run';
+    const results = [await start(harness, 'desktop'), await start(harness, 'emulator')];
+    expect(results.map((result) => result.status)).toEqual([201, 201]);
+    await expectRefusedThird(harness, encoders);
+  });
+
+  it('releases the slot of a session whose encoder failed after the first segment, while the failed record still exists', async () => {
+    const { harness, encoders } = await boot();
+    const broken = await start(harness, 'chromecast4k');
     expect(broken.status).toBe(201);
+    encoders.mode = 'fail';
+    encoders.handles[0]?.crash();
     await waitFor(async () => (await harness.app.inject(`/api/sessions/${broken.body.sessionId}`)).json().state === 'error');
     // One automatic retry, then the session ends in error.
     expect(encoders.started).toBe(2);

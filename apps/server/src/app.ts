@@ -3,7 +3,7 @@ import Fastify, { LogController, type FastifyBaseLogger, type FastifyError, type
 import { registerConfigSecrets, type Config } from './config.js';
 import type { AppContext } from './context.js';
 import { openDatabase, type Db } from './db/index.js';
-import { AppError, codeForStatus, errorBody } from './errors.js';
+import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { GatewayClient } from './gateway/client.js';
 import { allowEmptyJsonBody } from './http/emptyJsonBody.js';
@@ -31,7 +31,7 @@ export interface BuildAppOptions {
   tmdb?: TmdbService;
   gateway?: GatewayClient;
   /** Test seams for the playback pipeline (ffprobe, CDN link resolution, segment wait). */
-  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'createEncoder' | 'idleTimeoutMs' | 'monitorTickMs'> & {
+  playback?: Pick<PlaybackManagerOptions, 'segmentWaitMs' | 'firstSegmentWaitMs' | 'subtitleHoldMs' | 'maxSessions' | 'createEncoder' | 'idleTimeoutMs' | 'monitorTickMs'> & {
     probe?: ProbeRunner;
     resolveUrl?: UrlResolver;
   };
@@ -107,7 +107,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   app.setErrorHandler((error: FastifyError | AppError, request, reply) => {
     if (error instanceof AppError) {
       if (error.headers) reply.headers(error.headers);
-      return reply.code(error.statusCode).send(errorBody(error.code, error.message, error.hint));
+      const attempts = error instanceof AllStreamsFailedError ? error.attempts : undefined;
+      return reply.code(error.statusCode).send(errorBody(error.code, error.message, error.hint, attempts));
     }
     const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
     if (status >= 500) {

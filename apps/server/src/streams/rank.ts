@@ -8,11 +8,12 @@ export const RESOLUTION_RANK: Record<StreamResolution, number> = {
   unknown: 0,
 };
 
+/** Smaller sources first: a WEB-DL starts faster and downloads less than a Remux of the same resolution. */
 const SOURCE_RANK: Record<string, number> = {
-  Remux: 5,
+  'WEB-DL': 5,
   BluRay: 4,
-  'WEB-DL': 3,
-  WEBRip: 2,
+  WEBRip: 3,
+  Remux: 2,
   HDTV: 1,
 };
 
@@ -21,7 +22,7 @@ export function sourceRank(source: string): number {
 }
 
 /**
- * Cached first, then resolution desc, then source quality desc; the gateway's own order breaks ties.
+ * Cached first, then resolution desc, then source rank (WEB-DL, BluRay, WEBRip, Remux, HDTV); the gateway's own order breaks ties.
  * When at least one stream is cached the uncached ones are dropped.
  */
 export function rankStreams(options: StreamOption[]): StreamOption[] {
@@ -44,6 +45,23 @@ export function deviceMaxRank(profile: Pick<CapabilityProfile, 'maxWidth' | 'max
   const byHeight = profile.maxHeight >= 2160 ? 4 : profile.maxHeight >= 1080 ? 3 : profile.maxHeight >= 720 ? 2 : 1;
   const byWidth = profile.maxWidth >= 3840 ? 4 : profile.maxWidth >= 1920 ? 3 : profile.maxWidth >= 1280 ? 2 : 1;
   return Math.min(byHeight, byWidth);
+}
+
+/**
+ * Streams an automatic start may try, best first: the cached ones that fit the device (unknown resolution always fits).
+ * When none fits, the first-ranked cached streams of the lowest resolution. When nothing is cached, only the recommended
+ * stream (an uncached one is never retried).
+ */
+export function startCandidates(ranked: StreamOption[], maxRank: number | null, limit: number): { streams: StreamOption[]; cached: boolean } {
+  const cached = ranked.filter((option) => option.cached);
+  if (cached.length === 0) {
+    const first = recommendStream(ranked, maxRank);
+    return { streams: first ? [first] : [], cached: false };
+  }
+  const fitting = maxRank === null ? cached : cached.filter((option) => RESOLUTION_RANK[option.resolution] <= maxRank);
+  if (fitting.length > 0) return { streams: fitting.slice(0, limit), cached: true };
+  const lowest = Math.min(...cached.map((option) => RESOLUTION_RANK[option.resolution]));
+  return { streams: cached.filter((option) => RESOLUTION_RANK[option.resolution] === lowest).slice(0, limit), cached: true };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MediaTypeSchema } from './catalog.js';
-import { CapabilityProfileSchema, DeviceKindSchema } from './schemas.js';
+import { CapabilityProfileSchema, DeviceKindSchema, StartAttemptSchema } from './schemas.js';
 
 export const SOURCE_HDR_VALUES = ['dv', 'hdr10', 'hlg', 'sdr'] as const;
 export const SourceHdrSchema = z.enum(SOURCE_HDR_VALUES);
@@ -172,6 +172,10 @@ export const SessionResponseSchema = z.object({
   subtitleTracks: z.array(SubtitleTrackSchema),
   selectedAudioIndex: z.number().int().nullable(),
   selectedSubtitle: SubtitleSelectionSchema.nullable(),
+  /** The stream that plays (for `streamId: "auto"` the one picked after any fallback). */
+  streamId: z.string(),
+  /** Streams an automatic start tried before this one; empty when the first worked or the stream id was explicit. */
+  attempts: z.array(StartAttemptSchema),
   encoder: EncoderStatsSchema,
   error: z.object({ message: z.string(), hint: z.string().optional() }).nullable(),
 });

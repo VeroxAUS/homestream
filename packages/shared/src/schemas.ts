@@ -31,12 +31,22 @@ export type Device = z.infer<typeof DeviceSchema>;
 export const DevicesResponseSchema = z.object({ devices: z.array(DeviceSchema) });
 export type DevicesResponse = z.infer<typeof DevicesResponseSchema>;
 
+/** A stream an automatic start tried and gave up on, with the error code that made it fail. */
+export const StartAttemptSchema = z.object({ streamId: z.string(), code: z.string() });
+export type StartAttempt = z.infer<typeof StartAttemptSchema>;
+
 export const ErrorBodySchema = z.object({
   code: z.string(),
   message: z.string(),
   hint: z.string().optional(),
+  /** `all_streams_failed` only: the candidates that were tried. */
+  attempts: z.array(StartAttemptSchema).optional(),
 });
-export const ErrorResponseSchema = z.object({ error: ErrorBodySchema });
+export const ErrorResponseSchema = z.object({
+  error: ErrorBodySchema,
+  /** Same list as `error.attempts`, for clients that read it at the top level. */
+  attempts: z.array(StartAttemptSchema).optional(),
+});
 export type ErrorBody = z.infer<typeof ErrorBodySchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 

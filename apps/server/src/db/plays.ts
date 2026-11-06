@@ -69,6 +69,11 @@ export function updatePlayDecision(db: Db, sessionId: string, decision: Decision
   db.prepare('UPDATE plays SET decision_json = ? WHERE session_id = ?').run(JSON.stringify(decision), sessionId);
 }
 
+/** Removes the row of a start that was given up before the client ever got a session. */
+export function deletePlay(db: Db, sessionId: string): void {
+  db.prepare('DELETE FROM plays WHERE session_id = ?').run(sessionId);
+}
+
 export function finalizePlay(db: Db, sessionId: string, end: PlayEnd): void {
   db.prepare(
     `UPDATE plays SET ended_at = ?, status = ?, error_message = ?, avg_bitrate_kbps = ?, avg_speed = ?

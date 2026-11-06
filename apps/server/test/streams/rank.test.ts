@@ -1,6 +1,6 @@
 import type { StreamOption } from '@homestream/shared';
 import { describe, expect, it } from 'vitest';
-import { deviceMaxRank, rankStreams, recommendStream } from '../../src/streams/rank.js';
+import { deviceMaxRank, rankStreams, recommendStream, startCandidates } from '../../src/streams/rank.js';
 
 let counter = 0;
 function opt(overrides: Partial<StreamOption>): StreamOption {
@@ -34,7 +34,32 @@ describe('rankStreams', () => {
     const g = opt({ resolution: '1080p', source: 'Unknown' });
     const h = opt({ resolution: '1080p', source: 'BluRay' });
     const i = opt({ resolution: '480p', source: 'BluRay' });
-    expect(ids(rankStreams([a, b, c, d, e, f, g, h, i]))).toEqual(ids([b, c, h, a, d, g, f, i, e]));
+    expect(ids(rankStreams([a, b, c, d, e, f, g, h, i]))).toEqual(ids([b, a, d, h, c, g, f, i, e]));
+  });
+
+  it('ranks sources WEB-DL, BluRay, WEBRip, Remux, HDTV, unknown at the same resolution', () => {
+    const sources = ['Unknown', 'HDTV', 'Remux', 'WEBRip', 'BluRay', 'WEB-DL'];
+    const items = sources.map((source) => opt({ source }));
+    expect(rankStreams(items).map((item) => item.source)).toEqual(['WEB-DL', 'BluRay', 'WEBRip', 'Remux', 'HDTV', 'Unknown']);
+  });
+
+  it('matches the stub-gateway ordering of the validation contract', () => {
+    const a = opt({ resolution: '1080p', source: 'Remux' });
+    const b = opt({ resolution: '1080p', source: 'WEBRip' });
+    const c = opt({ resolution: '1080p', source: 'WEB-DL' });
+    const d = opt({ resolution: '2160p', source: 'WEB-DL' });
+    const e = opt({ resolution: '1080p', source: 'BluRay' });
+    const f = opt({ resolution: '1080p', source: 'HDTV' });
+    const g = opt({ resolution: '1080p', source: 'WEB-DL' });
+    const h = opt({ resolution: '720p', source: 'WEB-DL' });
+    const i = opt({ resolution: '2160p', source: 'Remux' });
+    const j = opt({ resolution: '2160p', source: 'WEB-DL', cached: false });
+    const k = opt({ resolution: '1080p', source: 'WEB-DL', cached: false });
+    const ranked = rankStreams([a, b, c, d, e, f, g, h, i, j, k]);
+    expect(ids(ranked)).toEqual(ids([d, i, c, g, e, b, a, f, h]));
+    expect(recommendStream(ranked, 4)?.id).toBe(d.id);
+    expect(recommendStream(ranked, 3)?.id).toBe(c.id);
+    expect(recommendStream(ranked, 2)?.id).toBe(h.id);
   });
 
   it('puts cached before uncached and hides uncached when anything is cached', () => {
@@ -64,6 +89,41 @@ describe('deviceMaxRank', () => {
     [3840, 1080, 3],
   ])('%ix%i -> rank %i', (maxWidth, maxHeight, rank) => {
     expect(deviceMaxRank({ maxWidth, maxHeight })).toBe(rank);
+  });
+});
+
+describe('startCandidates', () => {
+  const w2160 = opt({ resolution: '2160p', source: 'WEB-DL' });
+  const r2160 = opt({ resolution: '2160p', source: 'Remux' });
+  const w1080 = opt({ resolution: '1080p', source: 'WEB-DL' });
+  const b1080 = opt({ resolution: '1080p', source: 'BluRay' });
+  const w720 = opt({ resolution: '720p', source: 'WEB-DL' });
+  const u = opt({ resolution: 'unknown', source: 'Unknown' });
+  const ranked = [w2160, r2160, w1080, b1080, w720, u];
+
+  it('lists cached device-fitting streams in rank order, capped at the limit', () => {
+    expect(ids(startCandidates(ranked, 4, 3).streams)).toEqual(ids([w2160, r2160, w1080]));
+    expect(ids(startCandidates(ranked, 3, 3).streams)).toEqual(ids([w1080, b1080, w720]));
+    expect(ids(startCandidates(ranked, 2, 5).streams)).toEqual(ids([w720, u]));
+    expect(ids(startCandidates(ranked, null, 2).streams)).toEqual(ids([w2160, r2160]));
+  });
+
+  it('starts with the recommended stream', () => {
+    for (const rank of [4, 3, 2, 1, null]) {
+      expect(startCandidates(ranked, rank, 3).streams[0]?.id).toBe(recommendStream(ranked, rank)?.id);
+    }
+  });
+
+  it('falls back to the lowest resolution when nothing fits', () => {
+    const only = [w2160, r2160, w1080];
+    expect(ids(startCandidates(only, 2, 3).streams)).toEqual(ids([w1080]));
+  });
+
+  it('offers only the recommended stream when nothing is cached', () => {
+    const a = opt({ resolution: '2160p', cached: false });
+    const b = opt({ resolution: '1080p', cached: false });
+    expect(startCandidates([a, b], 3, 3)).toEqual({ streams: [b], cached: false });
+    expect(startCandidates([], 3, 3)).toEqual({ streams: [], cached: false });
   });
 });
 

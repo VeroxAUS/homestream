@@ -68,7 +68,7 @@ function unavailable(): AppError {
     502,
     'stream_unavailable',
     'Could not open the selected stream.',
-    'Pick another stream (a cached ⚡ one is fastest), or check the TorBox account on the health dashboard.',
+    'Try again in a moment. If it keeps failing, check the TorBox account on the health dashboard.',
   );
 }
 

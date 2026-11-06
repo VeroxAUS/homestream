@@ -1,4 +1,4 @@
-import type { ErrorResponse } from '@homestream/shared';
+import type { ErrorResponse, StartAttempt } from '@homestream/shared';
 import type { ZodError } from 'zod';
 import { redact } from './redact.js';
 
@@ -15,10 +15,25 @@ export class AppError extends Error {
   }
 }
 
-export function errorBody(code: string, message: string, hint?: string): ErrorResponse {
+/** Every candidate of an automatic start failed. */
+export class AllStreamsFailedError extends AppError {
+  constructor(readonly attempts: StartAttempt[]) {
+    super(
+      502,
+      'all_streams_failed',
+      `None of the ${attempts.length === 1 ? 'one available stream' : `${attempts.length} best streams`} could be started.`,
+      'Try again in a moment. If it keeps failing, check the TorBox account, ffmpeg and GPU tiles on the health dashboard.',
+    );
+    this.name = 'AllStreamsFailedError';
+  }
+}
+
+export function errorBody(code: string, message: string, hint?: string, attempts?: StartAttempt[]): ErrorResponse {
   const error: ErrorResponse['error'] = { code, message: redact(message) };
   if (hint) error.hint = redact(hint);
-  return { error };
+  if (!attempts) return { error };
+  error.attempts = attempts;
+  return { error, attempts };
 }
 
 export function invalidRequest(error: ZodError): AppError {

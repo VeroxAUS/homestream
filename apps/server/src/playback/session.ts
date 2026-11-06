@@ -5,6 +5,7 @@ import type {
   EncoderStats,
   SessionResponse,
   SessionState,
+  StartAttempt,
   SubtitleSelection,
   SubtitleTrack,
 } from '@homestream/shared';
@@ -50,6 +51,11 @@ export interface SessionRecord {
   selectedSubtitle: SubtitleSelection | null;
   requestedStartSec: number;
   startedAt: number;
+  /** Id of the gateway stream that plays, and the ones an automatic start gave up on before it. */
+  streamId: string;
+  attempts: StartAttempt[];
+  /** True from the encoder launch until its first segment exists; an opening session is invisible to clients and can still be thrown away. */
+  opening: boolean;
 
   state: SessionState;
   error: { message: string; hint?: string } | null;
@@ -140,6 +146,8 @@ export function toSessionResponse(rec: SessionRecord): SessionResponse {
     subtitleTracks: subtitleTracksOf(rec),
     selectedAudioIndex: rec.selectedAudioIndex,
     selectedSubtitle: rec.selectedSubtitle,
+    streamId: rec.streamId,
+    attempts: rec.attempts,
     encoder: rec.stats,
     error: rec.error,
   };

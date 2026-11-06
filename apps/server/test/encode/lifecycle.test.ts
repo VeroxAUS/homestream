@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ActivityResponse } from '@homestream/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -11,11 +11,11 @@ import {
   generateSources,
   listFfmpegCommandLines,
   probeSegment,
-  run,
   startSession,
   type Harness,
   type HarnessOptions,
 } from '../playback/harness.js';
+import { buildFailingFfmpeg, readCounter } from '../playback/failingFfmpeg.js';
 
 const TIMEOUT = 180_000;
 
@@ -243,7 +243,7 @@ describe('session limit', () => {
 });
 
 describe('ffmpeg failure', () => {
-  it('retries once, then ends in state error with a hint, an error event and a failed play record', async () => {
+  it('retries once, then fails the start with 502 encoder_failed and leaves no session, directory, play record or error event', async () => {
     const wrapperDir = path.join(root, 'wrapper');
     const exe = path.join(wrapperDir, 'failing-ffmpeg.exe');
     const counter = path.join(wrapperDir, 'count.txt');
@@ -252,56 +252,22 @@ describe('ffmpeg failure', () => {
     const harness = await boot({ source: 'sdr', env: { FFMPEG_PATH: exe } });
     const events: BusEvent[] = [];
     harness.bus.subscribe((event) => events.push(event));
-    const { body } = await startSession(harness, 'movie', 'chromecast4k');
-    expect(body.state).toBe('starting');
-
-    let session = await getSession(harness, body.sessionId);
-    for (let i = 0; i < 100 && session.state !== 'error'; i += 1) {
-      await sleep(200);
-      session = await getSession(harness, body.sessionId);
-    }
-    expect(session.state).toBe('error');
-    expect(session.error).toMatchObject({ message: expect.any(String), hint: expect.any(String) });
-    expect(session.error.message).not.toMatch(/https?:|\.mkv|\\/);
+    const { status, body } = await startSession(harness, 'movie', 'chromecast4k');
+    expect(status).toBe(502);
+    expect(body).toMatchObject({ error: { code: 'encoder_failed', message: expect.any(String), hint: expect.any(String) } });
+    expect(JSON.stringify(body)).not.toMatch(/https?:|\.mkv/);
+    expect(body).not.toHaveProperty('attempts');
     await sleep(500);
     expect(readCounter(counter)).toBe(2);
 
-    const play = harness.db.prepare('SELECT status, error_message, ended_at FROM plays WHERE session_id = ?').get(body.sessionId) as Record<string, unknown>;
-    expect(play).toMatchObject({ status: 'error', error_message: session.error.message, ended_at: expect.any(Number) });
-    const logged = harness.db.prepare("SELECT level, source, message FROM events WHERE session_id = ? AND level = 'error'").all(body.sessionId);
-    expect(logged).toEqual([{ level: 'error', source: 'ffmpeg', message: session.error.message }]);
-    expect(events.some((event) => event.type === 'log' && event.data.level === 'error' && event.data.sessionId === body.sessionId)).toBe(true);
-    expect(events.some((event) => event.type === 'session.update' && event.data.state === 'error' && event.data.sessionId === body.sessionId)).toBe(true);
-
+    expect(harness.db.prepare('SELECT COUNT(*) AS n FROM plays').get()).toEqual({ n: 0 });
+    expect(harness.db.prepare("SELECT COUNT(*) AS n FROM events WHERE level = 'error'").get()).toEqual({ n: 0 });
+    expect(events.some((event) => event.type === 'session.start')).toBe(false);
     expect(((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions).toEqual([]);
-    const segment = await harness.app.inject(`/hls/${body.sessionId}/seg-3.m4s`);
-    expect(segment.statusCode).toBe(502);
-    expect(segment.json().error).toMatchObject({ code: 'encoder_failed', hint: expect.any(String) });
-
-    await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${body.sessionId}` });
-    expect(harness.db.prepare('SELECT status FROM plays WHERE session_id = ?').get(body.sessionId)).toMatchObject({ status: 'error' });
-    expect(existsSync(path.join(harness.transcodeDir, body.sessionId))).toBe(false);
+    expect(harness.app.ctx.playback.list()).toEqual([]);
+    expect(readdirSync(harness.transcodeDir)).toEqual([]);
   }, TIMEOUT);
 });
-
-async function buildFailingFfmpeg(exe: string, counter: string): Promise<void> {
-  const source = `
-using System;
-using System.IO;
-class W {
-  static int Main(string[] args) {
-    File.AppendAllText(@"${counter}", "x\\n");
-    Console.Error.WriteLine("simulated encoder failure while reading https://cdn.example.test/file?token=abc123456789");
-    return 1;
-  }
-}`;
-  const script = `Add-Type -TypeDefinition @'\n${source}\n'@ -OutputAssembly '${exe}' -OutputType ConsoleApplication`;
-  await run('powershell.exe', ['-NoProfile', '-Command', `New-Item -ItemType Directory -Force '${path.dirname(exe)}' | Out-Null; ${script}`], 120_000);
-}
-
-function readCounter(file: string): number {
-  return existsSync(file) ? readFileSync(file, 'utf8').split('x').length - 1 : 0;
-}
 
 describe('transcode disk cap', () => {
   it('parks the encoder before the cap, keeps the head servable, and resumes when the player catches up', async () => {

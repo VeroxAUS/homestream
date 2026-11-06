@@ -116,7 +116,7 @@ export function parseProbeOutput(raw: unknown): ProbeResult {
       422,
       'no_video_stream',
       'The selected file has no playable video stream.',
-      'Pick a different stream from the list.',
+      'Try again in a moment; if it keeps happening, the release itself is broken.',
     );
   }
 
@@ -169,7 +169,7 @@ export function parseProbeOutput(raw: unknown): ProbeResult {
       422,
       'unknown_duration',
       'The selected file does not report a duration.',
-      'Pick a different stream from the list.',
+      'Try again in a moment; if it keeps happening, the release itself is broken.',
     );
   }
 
@@ -200,7 +200,7 @@ export function createFfprobeRunner(ffprobePath: string, timeoutMs = 60_000): Pr
                 502,
                 'probe_failed',
                 `Could not read the video file: ${detail}`,
-                'The TorBox link may have expired or the file may be damaged. Try another stream.',
+                'The TorBox link may have expired or the file may be damaged. Try again in a moment.',
               ),
             );
             return;

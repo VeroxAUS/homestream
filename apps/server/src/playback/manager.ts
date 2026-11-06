@@ -10,18 +10,20 @@ import type {
   SessionPatchRequest,
   SessionResponse,
   SessionStartRequest,
+  StartAttempt,
 } from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { upsertDevice } from '../db/devices.js';
-import { finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision } from '../db/plays.js';
-import { AppError } from '../errors.js';
+import { deletePlay, finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision } from '../db/plays.js';
+import { AllStreamsFailedError, AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import { leadSeconds } from '../network/readAhead.js';
 import { redact } from '../redact.js';
 import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
-import type { StreamService } from '../streams/service.js';
+import { deviceMaxRank, startCandidates } from '../streams/rank.js';
+import type { ResolvedStream, StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
 import { decide } from './decision.js';
 import { EncoderProcess, type EncoderHandle, type EncoderProcessOptions } from './encoderProcess.js';
@@ -57,6 +59,10 @@ import { burnTarget, planPatch, requireAudio, requireSubtitle } from './tracks.j
 import { renderSegment } from './vtt.js';
 
 export const SEGMENT_WAIT_MS = 30_000;
+export const FIRST_SEGMENT_WAIT_MS = 30_000;
+/** Candidates an automatic start tries before it gives up. */
+export const MAX_START_ATTEMPTS = 3;
+const FIRST_SEGMENT_POLL_MS = 25;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
 export const SEEK_WINDOW_SEGMENTS = 5;
 /** Two streams at a time keeps the GPU to at most two encoders (AGENTS.md GPU safety rule 1). */
@@ -85,6 +91,8 @@ export interface PlaybackManagerOptions {
   /** Every ffprobe/ffmpeg input of a session is a loopback URL served by this proxy. */
   proxy: SourceProxy;
   segmentWaitMs?: number;
+  /** How long a start waits for the encoder's first segment before it counts as failed. */
+  firstSegmentWaitMs?: number;
   subtitleHoldMs?: number;
   maxSessions?: number;
   /** Test seam: replaces the ffmpeg child of the session encoder. */
@@ -114,6 +122,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Errors about the request or the server itself: another stream would fail the same way. */
+const NOT_THE_STREAMS_FAULT = new Set(['invalid_audio_index', 'invalid_subtitle_index', 'subtitle_mode_unsupported', 'shutting_down']);
+
+function isStreamFault(error: unknown): boolean {
+  return !(error instanceof AppError && NOT_THE_STREAMS_FAULT.has(error.code));
+}
+
 /** ffmpeg echoes the input URL (with its token) in many errors; none of that may reach users or logs. */
 function scrub(text: string): string {
   return redact(text).replace(/\b(?:https?|ftp):\/\/\S+/gi, '<url>');
@@ -127,6 +142,7 @@ export class PlaybackManager {
   private readonly proxy: SourceProxy;
   private readonly segmentWaitMs: number;
   private readonly subtitleHoldMs: number;
+  private readonly firstSegmentWaitMs: number;
   private readonly maxSessions: number;
   private readonly registry: PidRegistry;
   private readonly monitor: SessionMonitor;
@@ -139,6 +155,7 @@ export class PlaybackManager {
     this.proxy = options.proxy;
     this.segmentWaitMs = options.segmentWaitMs ?? SEGMENT_WAIT_MS;
     this.subtitleHoldMs = options.subtitleHoldMs ?? SUBTITLE_HOLD_MS;
+    this.firstSegmentWaitMs = options.firstSegmentWaitMs ?? FIRST_SEGMENT_WAIT_MS;
     this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
     this.registry = new PidRegistry(path.join(options.config.dataDir, PID_FILE_NAME));
     this.watchdog = new MemoryWatchdog({
@@ -148,7 +165,7 @@ export class PlaybackManager {
     this.monitor = new SessionMonitor(
       {
         liveSessions: () => this.liveRecords(),
-        allSessions: () => [...this.sessions.values()].filter((rec) => !rec.stopping),
+        allSessions: () => [...this.sessions.values()].filter((rec) => !rec.stopping && !rec.opening),
         stopIdle: (rec) => this.stopIdle(rec),
         stopForDisk: (rec) => this.stopForDisk(rec),
         park: (rec) => this.park(rec),
@@ -199,14 +216,67 @@ export class PlaybackManager {
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
     const device = upsertDevice(db, body.device, clientIp).capabilities;
 
+    const plan = await this.planStart(body, details.imdbId, device);
+    const attempts: StartAttempt[] = [];
+    for (const streamId of plan.streamIds) {
+      try {
+        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts });
+      } catch (error) {
+        // An explicit stream id gets one try, and a refused request or a shutdown is not the stream's fault.
+        if (!plan.auto || !isStreamFault(error)) throw error;
+        const code = error instanceof AppError ? error.code : 'start_failed';
+        attempts.push({ streamId, code });
+        this.event({
+          level: 'warn',
+          source: 'session',
+          message: `Stream ${attempts.length} of ${plan.streamIds.length} could not be started (${code}); ${attempts.length < plan.streamIds.length ? 'trying the next one' : 'no more candidates'}.`,
+          details: { streamId, code, detail: scrub(error instanceof Error ? error.message : String(error)) },
+        });
+        // An uncached title has a single candidate; its own error (for example "not cached yet") says more than a list of failures.
+        if (!plan.cached) throw error;
+      }
+    }
+    throw new AllStreamsFailedError(attempts);
+  }
+
+  /** The stream ids an automatic start tries in order (the best-ranked cached streams that fit the device), or the one explicit id. */
+  private async planStart(
+    body: SessionStartRequest,
+    imdbId: string | null,
+    device: CapabilityProfile,
+  ): Promise<{ streamIds: string[]; auto: boolean; cached: boolean }> {
+    if (body.streamId !== 'auto') return { streamIds: [body.streamId], auto: false, cached: true };
+    if (!imdbId) throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title.');
+    const query =
+      body.mediaType === 'movie'
+        ? ({ type: 'movie', imdbId } as const)
+        : ({ type: 'tv', imdbId, season: body.season as number, episode: body.episode as number } as const);
+    const listed = await this.options.streams.list(query, device.deviceId);
+    const picked = startCandidates(listed.streams, deviceMaxRank(device), MAX_START_ATTEMPTS);
+    if (picked.streams.length === 0) {
+      throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title or check the gateway on the health dashboard.');
+    }
+    return { streamIds: picked.streams.map((stream) => stream.id), auto: true, cached: picked.cached };
+  }
+
+  /** One candidate: resolve, probe, start the encoder and wait for its first segment. Leaves nothing behind when it fails. */
+  private async attemptStart(
+    body: SessionStartRequest,
+    clientIp: string | null,
+    context: { streamId: string; device: CapabilityProfile; details: { title: string }; attempts: StartAttempt[] },
+  ): Promise<SessionResponse> {
+    const { streams } = this.options;
     const id = randomUUID();
     const t0 = Date.now();
-    const stream = await this.pickStream(body, details.imdbId, device.deviceId);
+    const stream = await streams.getStreamById(context.streamId);
+    if (!stream) {
+      throw new AppError(404, 'stream_not_found', 'That stream is no longer available.', 'Use streamId "auto", or list the streams again to get current ids.');
+    }
     const t1 = Date.now();
     // A prefetch of the same stream has already resolved the link, warmed the proxy and run ffprobe.
     const source = await this.proxy.acquire(stream.url, id);
     try {
-      return await this.startWithSource(body, clientIp, { id, stream, source, device, details, timings: { t0, t1 } });
+      return await this.startWithSource(body, clientIp, { ...context, id, stream, source, timings: { t0, t1 } });
     } catch (error) {
       source.release();
       throw error;
@@ -218,10 +288,11 @@ export class PlaybackManager {
     clientIp: string | null,
     context: {
       id: string;
-      stream: Awaited<ReturnType<PlaybackManager['pickStream']>>;
+      stream: ResolvedStream;
       source: SourceHandle;
       device: CapabilityProfile;
       details: { title: string };
+      attempts: StartAttempt[];
       timings: { t0: number; t1: number };
     },
   ): Promise<SessionResponse> {
@@ -267,6 +338,9 @@ export class PlaybackManager {
       selectedSubtitle: subtitle,
       requestedStartSec: body.startPositionSec ?? 0,
       startedAt: now,
+      streamId: stream.id,
+      attempts: [...context.attempts],
+      opening: true,
       state: 'starting',
       error: null,
       errorCode: null,
@@ -317,6 +391,15 @@ export class PlaybackManager {
     this.ensureTimer();
     this.launch(rec, startSegment);
     this.startSubtitles(rec);
+    const tFirst = Date.now();
+    try {
+      await this.waitForFirstSegment(rec);
+    } catch (error) {
+      await this.abandon(rec);
+      throw error;
+    }
+    rec.opening = false;
+    Object.assign(timingsMs, { firstSegment: Date.now() - tFirst });
     this.options.logger.info({ sessionId: id, decision, timingsMs }, 'Playback session started');
     this.event({
       level: 'info',
@@ -329,6 +412,53 @@ export class PlaybackManager {
     return toSessionResponse(rec);
   }
 
+  /**
+   * Waits until the first segment of the new session exists, so a start that cannot produce video fails here instead of
+   * after the client has been told it works. The encoder's own retry runs inside this wait.
+   */
+  private async waitForFirstSegment(rec: SessionRecord): Promise<void> {
+    const first = path.join(rec.dir, segmentFileName(rec.startSegment, rec.format));
+    const deadline = Date.now() + this.firstSegmentWaitMs;
+    for (;;) {
+      if (existsSync(first)) {
+        this.markReady(rec);
+        return;
+      }
+      if (rec.stopping) throw new AppError(503, 'shutting_down', 'The server is shutting down.', 'Try again in a moment.');
+      if (rec.state === 'error') {
+        throw new AppError(502, rec.errorCode ?? 'encoder_failed', rec.error?.message ?? 'The encoder failed.', rec.error?.hint);
+      }
+      if (rec.encoderDone && !rec.process?.running) {
+        throw new AppError(502, 'encoder_failed', 'The encoder finished without producing any video.', 'Try again in a moment.');
+      }
+      if (Date.now() >= deadline) {
+        throw new AppError(
+          504,
+          'encoder_timeout',
+          `The encoder produced no video within ${Math.round(this.firstSegmentWaitMs / 1000)} seconds.`,
+          'The source may be slow or the encoder stuck; try again, or check the health dashboard.',
+        );
+      }
+      await sleep(FIRST_SEGMENT_POLL_MS);
+    }
+  }
+
+  /** Throws away a session that never reached its first segment: nothing of it may remain. */
+  private async abandon(rec: SessionRecord): Promise<void> {
+    if (rec.stopping) return;
+    rec.stopping = true;
+    rec.state = 'stopped';
+    // A new generation keeps the exit handler of the stopped encoder from retrying it.
+    rec.generation += 1;
+    this.sessions.delete(rec.id);
+    this.fallingBehind.forget(rec.id);
+    await rec.restart?.catch(() => undefined);
+    await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
+    rec.source.release();
+    await this.removeDir(rec.dir);
+    deletePlay(this.options.db, rec.id);
+  }
+
   get(id: string): SessionResponse {
     return toSessionResponse(this.require(id));
   }
@@ -338,7 +468,7 @@ export class PlaybackManager {
   }
 
   list(): SessionResponse[] {
-    return [...this.sessions.values()].map(toSessionResponse);
+    return [...this.sessions.values()].filter((rec) => !rec.opening).map(toSessionResponse);
   }
 
   /** Sessions that are being played or prepared; a failed encode is no longer live. */
@@ -600,8 +730,9 @@ export class PlaybackManager {
     return rec;
   }
 
+  /** Sessions the clients know about and that are not failed; one still opening is counted by `starting` instead. */
   private liveRecords(): SessionRecord[] {
-    return [...this.sessions.values()].filter((rec) => rec.state !== 'error' && !rec.stopping);
+    return [...this.sessions.values()].filter((rec) => rec.state !== 'error' && !rec.stopping && !rec.opening);
   }
 
   private ensureTimer(): void {
@@ -620,28 +751,6 @@ export class PlaybackManager {
     } catch (error) {
       this.options.logger.warn({ err: error }, 'Could not record an event');
     }
-  }
-
-  private async pickStream(body: SessionStartRequest, imdbId: string | null, deviceId: string) {
-    const { streams } = this.options;
-    let streamId = body.streamId;
-    if (streamId === 'auto') {
-      if (!imdbId) throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title.');
-      const query =
-        body.mediaType === 'movie'
-          ? ({ type: 'movie', imdbId } as const)
-          : ({ type: 'tv', imdbId, season: body.season as number, episode: body.episode as number } as const);
-      const listed = await streams.list(query, deviceId);
-      if (!listed.recommendedId) {
-        throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title or check the gateway on the health dashboard.');
-      }
-      streamId = listed.recommendedId;
-    }
-    const resolved = await streams.getStreamById(streamId);
-    if (!resolved) {
-      throw new AppError(404, 'stream_not_found', 'That stream is no longer available.', 'Reload the stream list and pick another stream.');
-    }
-    return resolved;
   }
 
   private async titleFor(body: SessionStartRequest, name: string): Promise<{ title: string; showTitle: string | null }> {
@@ -906,8 +1015,14 @@ export class PlaybackManager {
     rec.state = 'error';
     rec.error = {
       message: scrub(`The video encoder stopped unexpectedly (code ${code ?? 'none'}). ${lastLine}`.trim()),
-      hint: 'Try another stream. If it keeps happening, check the ffmpeg and GPU tiles on the health dashboard.',
+      hint: 'Try again. If it keeps happening, check the ffmpeg and GPU tiles on the health dashboard.',
     };
+    if (rec.opening) {
+      // The start waiting on this session reports the failure (or tries the next stream); no client ever saw the session.
+      this.options.logger.warn({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed before the first segment');
+      this.event({ level: 'warn', source: 'ffmpeg', message: rec.error.message, details: { code, detail: lastLine }, sessionId: rec.id });
+      return;
+    }
     this.options.logger.error({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed');
     this.event({
       level: 'error',
@@ -937,7 +1052,7 @@ export class PlaybackManager {
     rec.errorCode = 'encoder_memory_limit';
     rec.error = {
       message: ` used  MB of memory (limit  MB) and was stopped to keep your computer responsive.`,
-      hint: 'Playback ended. Try again, switch subtitles off, or choose another stream. If it keeps happening, check the ffmpeg tile on the health dashboard.',
+      hint: 'Playback ended. Try again, or switch subtitles off. If it keeps happening, check the ffmpeg tile on the health dashboard.',
     };
     rec.generation += 1;
     rec.source.setExtractorLimit(null);
