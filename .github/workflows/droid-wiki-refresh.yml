@@ -1,0 +1,189 @@
+name: Droid Wiki Refresh
+
+on:
+  # Once a day (~03:00 AEST) instead of on every push: a full wiki run is slow
+  # and costs Factory credits, and most pushes do not change what the wiki says.
+  schedule:
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Refresh even when main has no changes outside droid-wiki/ since the last successful run'
+        type: boolean
+        default: false
+
+# The job that runs /wiki is read-only: the agent reads the whole repository
+# and the pages restored from the rolling branch, so it must not be able to
+# push or to open pull requests. The wiki-publish job carries the write
+# permissions.
+permissions:
+  contents: read
+
+env:
+  # Rolling branch that carries the generated wiki from one run to the next.
+  WIKI_BRANCH: factory/droid-wiki
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether the wiki needs a refresh
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          should_run=true
+          if [ "$FORCE" = "true" ]; then
+            echo "force=true: refreshing the wiki."
+          else
+            last_sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/droid-wiki-refresh.yml/runs?status=success&branch=$DEFAULT_BRANCH&per_page=1" --jq '.workflow_runs[0].head_sha // empty')
+            if [ -z "$last_sha" ]; then
+              echo "No previous successful run: refreshing the wiki."
+            elif ! git cat-file -e "$last_sha^{commit}" 2>/dev/null; then
+              echo "Last successful run's commit $last_sha is not in the history: refreshing the wiki."
+            else
+              changed=$(git log --oneline "$last_sha..HEAD" -- . ':!droid-wiki')
+              if [ -n "$changed" ]; then
+                echo "Changes outside droid-wiki/ since $last_sha:"
+                echo "$changed"
+              else
+                echo "No changes outside droid-wiki/ since $last_sha: skipping the refresh."
+                should_run=false
+              fi
+            fi
+          fi
+          echo "should_run=$should_run" | tee -a "$GITHUB_OUTPUT"
+
+  wiki-refresh:
+    needs: check
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # One refresh at a time for the whole repository: the wiki is per repo, so
+    # the group must not vary by branch or run.
+    concurrency:
+      group: droid-wiki-refresh
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: /wiki diffs against the commit the previous wiki
+          # was generated from to update only the affected pages.
+          fetch-depth: 0
+
+      - name: Restore the previous wiki from the rolling branch
+        # Copies only droid-wiki/ into the working tree, without switching
+        # branches. Without the branch, the wiki committed on main is used.
+        run: |
+          if git fetch origin "$WIKI_BRANCH" 2>/dev/null && git checkout FETCH_HEAD -- droid-wiki; then
+            echo "Restored droid-wiki/ from $WIKI_BRANCH; the wiki refresh updates only the pages whose code changed."
+          else
+            echo "No previous wiki on $WIKI_BRANCH; starting from droid-wiki/ as checked out."
+          fi
+
+      - name: Install Factory Droid
+        run: curl -fsSL https://app.factory.ai/cli | sh
+
+      - name: Generate wiki
+        run: droid exec --auto high "/wiki"
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+
+      - name: Hand the wiki to the publish job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: droid-wiki
+          # The pages and their metadata only: the video overview and the
+          # screenshots stay out of git. The hidden .wiki-meta.json is what
+          # makes the next refresh incremental.
+          path: |
+            droid-wiki
+            !droid-wiki/video/**
+            !droid-wiki/images/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  wiki-publish:
+    needs: wiki-refresh
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: droid-wiki-refresh
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pick up the generated wiki
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: droid-wiki
+          path: droid-wiki
+
+      - name: Open or update the wiki pull request
+        id: wiki-pr
+        # The wiki is already generated by this point, so a rejected push or
+        # pull request must not fail the run; the next step reports it as a
+        # warning annotation.
+        continue-on-error: true
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          # FACTORY_WIKI_PR_TOKEN is optional: contents: write and
+          # pull-requests: write on this repository. Pull requests opened with
+          # the GITHUB_TOKEN fallback do not trigger other workflows, so
+          # required checks will not run on the wiki pull request.
+          token: ${{ secrets.FACTORY_WIKI_PR_TOKEN || github.token }}
+          branch: ${{ env.WIKI_BRANCH }}
+          base: ${{ github.event.repository.default_branch }}
+          # Git pathspecs; `:!` excludes the same two folders as the upload.
+          add-paths: |
+            droid-wiki/**
+            :!droid-wiki/video/**
+            :!droid-wiki/images/**
+          commit-message: 'docs: refresh wiki'
+          title: 'docs: refresh wiki'
+          body: 'Generated by Droid Wiki Refresh and merged automatically. Never hand-edit droid-wiki/.'
+          labels: droid-wiki
+
+      - name: Report when the wiki could not be pushed
+        if: steps.wiki-pr.outcome == 'failure'
+        run: |
+          echo "::warning::Could not push droid-wiki/ to $WIKI_BRANCH or open the pull request. The wiki was still generated, but the next run has no previous wiki on that branch to start from. Check the branch rules on $WIKI_BRANCH and the contents/pull-requests permissions of the token, and that Actions may create pull requests."
+
+      - name: Merge the wiki pull request
+        id: wiki-merge
+        # Squash-merges and keeps factory/droid-wiki, which the next run
+        # restores the previous wiki from. A protected base branch gets
+        # auto-merge (needs allow_auto_merge); an unprotected one merges now.
+        if: steps.wiki-pr.outcome == 'success' && steps.wiki-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_WIKI_PR_TOKEN || github.token }}
+          PR_NUMBER: ${{ steps.wiki-pr.outputs.pull-request-number }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" --jq .protected || echo false)
+          flags=--squash
+          if [ "$protected" = "true" ]; then
+            flags="--squash --auto"
+          fi
+          # shellcheck disable=SC2086
+          if gh pr merge "$PR_NUMBER" $flags --repo "$GITHUB_REPOSITORY"; then
+            echo "Wiki pull request #$PR_NUMBER merge requested ($flags)."
+          else
+            echo "::warning::Could not merge wiki pull request #$PR_NUMBER ($flags). Merge it by hand or check branch protection and the auto-merge setting."
+          fi
