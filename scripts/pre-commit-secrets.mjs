@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 
@@ -107,27 +108,46 @@ function localEnvValues(root, env) {
   return files.filter((file) => file && existsSync(file)).flatMap((file) => parseEnvValues(readFileSync(file, 'utf8')));
 }
 
+/** Findings of a gitleaks JSON report as `{file, line, rule}`; the matched text is never read. */
+export function parseGitleaksReport(json) {
+  const entries = json.trim() ? JSON.parse(json) : [];
+  return entries.map((entry) => ({ file: entry.File, line: entry.StartLine, rule: entry.RuleID }));
+}
+
+/** Without `--verbose` gitleaks prints no per-finding text at all, so the locations come from a JSON report. */
 function runGitleaks(binary, root) {
-  const result = spawnSync(
-    binary,
-    [
-      'git',
-      '--staged',
-      '--redact',
-      '--no-banner',
-      '--log-level',
-      'error',
-      '--config',
-      path.join(root, '.gitleaks.toml'),
-    ],
-    { cwd: root, encoding: 'utf8', windowsHide: true },
-  );
-  if (result.status === 0) return { ok: true };
-  if (result.status === 1) {
-    process.stderr.write(`${result.stdout}${result.stderr}`);
-    return { ok: false };
+  const reportDir = mkdtempSync(path.join(tmpdir(), 'homestream-gitleaks-'));
+  const reportPath = path.join(reportDir, 'report.json');
+  try {
+    const result = spawnSync(
+      binary,
+      [
+        'git',
+        '--staged',
+        '--redact',
+        '--no-banner',
+        '--log-level',
+        'error',
+        '--config',
+        path.join(root, '.gitleaks.toml'),
+        '--exit-code',
+        '2',
+        '--report-format',
+        'json',
+        '--report-path',
+        reportPath,
+      ],
+      { cwd: root, encoding: 'utf8', windowsHide: true },
+    );
+    if (result.status === 0) return { ok: true, findings: [] };
+    if (result.status === 2) {
+      const findings = existsSync(reportPath) ? parseGitleaksReport(readFileSync(reportPath, 'utf8')) : [];
+      return { ok: false, findings };
+    }
+    return { error: result.error?.message ?? `exit ${result.status}` };
+  } finally {
+    rmSync(reportDir, { recursive: true, force: true });
   }
-  return { error: result.error?.message ?? `exit ${result.status}` };
 }
 
 function report(findings) {
@@ -165,6 +185,7 @@ export function main(cwd = process.cwd(), env = process.env) {
     } else {
       engine = 'gitleaks';
       gitleaksFailed = !result.ok;
+      findings.push(...result.findings);
     }
   }
   if (engine === 'built-in patterns') findings.push(...scanPatterns(lines));

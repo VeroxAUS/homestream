@@ -1,5 +1,6 @@
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { copyFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { makeTempDir, removeDir } from '../helpers.js';
@@ -91,5 +92,41 @@ describe('pre-commit-secrets (built-in scan, gitleaks disabled)', () => {
     expect(runScript(repo, 'pre-commit-secrets.mjs', [], env).status).toBe(0);
     writeAndStage(repo, 'src/fixture.ts', `const fake = "eyJ${'a'.repeat(30)}"; // gitleaks:allow\n`);
     expect(runScript(repo, 'pre-commit-secrets.mjs', [], env).status).toBe(0);
+  });
+});
+
+/** The gitleaks binary on PATH, in GITLEAKS_PATH or in the local tools folder; null when none runs. */
+function gitleaksEnv(): Record<string, string> | null {
+  const candidates = [process.env.GITLEAKS_PATH, 'gitleaks', 'D:\\HomeStream\\tools\\gitleaks\\gitleaks.exe'];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const probe = spawnSync(candidate, ['version'], { windowsHide: true });
+    if (probe.status === 0) return candidate === 'gitleaks' ? {} : { GITLEAKS_PATH: candidate };
+  }
+  return null;
+}
+
+describe.skipIf(gitleaksEnv() === null)('pre-commit-secrets (gitleaks, output captured)', () => {
+  beforeEach(() => {
+    copyFileSync(
+      path.join(import.meta.dirname, '..', '..', '..', '..', '.gitleaks.toml'),
+      path.join(repo, '.gitleaks.toml'),
+    );
+  });
+
+  it('prints file:line and rule id for a finding even though stderr is a pipe, and never the value', () => {
+    const value = `eyJ${randomBytes(12).toString('base64url')}.${randomBytes(18).toString('base64url')}.${randomBytes(18).toString('base64url')}`;
+    writeAndStage(repo, 'src/leak.ts', `const token = "${value}";\n`);
+    const result = runScript(repo, 'pre-commit-secrets.mjs', [], gitleaksEnv() ?? {});
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/\[secrets\] BLOCKED src\/leak\.ts:1 \([a-z-]+\)/);
+    expect(result.stderr + result.stdout).not.toContain(value);
+  });
+
+  it('passes a clean change', () => {
+    writeAndStage(repo, 'src/ok.ts', 'export const answer = 42;\n');
+    const result = runScript(repo, 'pre-commit-secrets.mjs', [], gitleaksEnv() ?? {});
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('gitleaks');
   });
 });
