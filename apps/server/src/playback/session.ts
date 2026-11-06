@@ -3,6 +3,7 @@ import type {
   CapabilityProfile,
   Decision,
   EncoderStats,
+  PingState,
   SessionResponse,
   SessionState,
   StartAttempt,
@@ -28,6 +29,10 @@ export interface SessionMeta {
   episode: number | null;
   streamFilename: string;
   clientIp: string | null;
+  /** Show poster for episodes. */
+  posterUrl: string | null;
+  /** Episode still for episodes (when TMDB has one), else the title's backdrop. */
+  backdropUrl: string | null;
 }
 
 export interface StatSamples {
@@ -92,6 +97,13 @@ export interface SessionRecord {
   pingedAt: number;
   /** Segment the player requested last. */
   playerSegment: number;
+  /** Summed playing time credited from progress pings (paused and buffering time excluded), seconds. */
+  watchedSec: number;
+  /** State the last ping reported and when; a new session counts as playing from its first segment. */
+  pingState: PingState | null;
+  pingClock: number;
+  /** Segment and init bytes handed to clients. */
+  bytesServed: number;
 }
 
 export function toActivitySession(rec: SessionRecord): ActivitySession {
@@ -108,6 +120,7 @@ export function toActivitySession(rec: SessionRecord): ActivitySession {
     deviceName: rec.device.deviceName,
     deviceKind: rec.device.kind,
     clientIp: rec.meta.clientIp,
+    posterUrl: rec.meta.posterUrl,
     streamFilename: rec.meta.streamFilename,
     startedAt: rec.startedAt,
     positionSec: Math.min(rec.positionSec, rec.probe.durationSec),

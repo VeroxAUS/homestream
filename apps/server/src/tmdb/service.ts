@@ -1,4 +1,4 @@
-import type { HomeResponse, MediaSummary, MovieDetails, Season, ShowDetails } from '@homestream/shared';
+import type { HomeResponse, MediaSummary, MediaType, MovieDetails, Season, ShowDetails } from '@homestream/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
@@ -52,7 +52,7 @@ export class TmdbService {
     return !!this.options.config.tmdbReadToken;
   }
 
-  async home(): Promise<Omit<HomeResponse, 'continueWatching'>> {
+  async home(): Promise<Omit<HomeResponse, 'continueWatching' | 'featured'>> {
     const images = await this.images();
     const [trendingMovies, trendingShows, popularMovies, popularShows] = await Promise.all([
       this.cached('list:trending:movie', TTL_MS.list, '/trending/movie/week'),
@@ -77,6 +77,20 @@ export class TmdbService {
       page: '1',
     });
     return normalizeSearch(raw, images);
+  }
+
+  /** First page of TMDB's recommendations for a title; empty when TMDB has none. */
+  async recommendations(type: MediaType, tmdbId: number): Promise<MediaSummary[]> {
+    const images = await this.images();
+    try {
+      const raw = await this.cached(`recommendations:${type}:${tmdbId}`, TTL_MS.recommendations, `/${type}/${tmdbId}/recommendations`, {
+        page: '1',
+      });
+      return normalizeList(raw, type, images);
+    } catch (error) {
+      if (error instanceof TmdbNotFound) return [];
+      throw error;
+    }
   }
 
   async movie(tmdbId: number): Promise<MovieDetails> {

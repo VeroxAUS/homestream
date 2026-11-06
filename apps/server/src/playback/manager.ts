@@ -6,7 +6,11 @@ import type { FastifyBaseLogger } from 'fastify';
 import type {
   ActivitySession,
   CapabilityProfile,
+  MovieDetails,
   NetworkSession,
+  PingState,
+  ProgressResponse,
+  ShowDetails,
   SessionPatchRequest,
   SessionResponse,
   SessionStartRequest,
@@ -15,11 +19,13 @@ import type {
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { upsertDevice } from '../db/devices.js';
-import { deletePlay, finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision } from '../db/plays.js';
+import { deletePlay, finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision, updatePlayProgress } from '../db/plays.js';
+import { upsertProgress } from '../db/progress.js';
 import { AllStreamsFailedError, AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import { leadSeconds } from '../network/readAhead.js';
+import { clampPosition, isCompleted, isResumable, playingSecondsSince } from '../progress/rules.js';
 import { redact } from '../redact.js';
 import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
 import { deviceMaxRank, startCandidates } from '../streams/rank.js';
@@ -105,8 +111,10 @@ export interface PlaybackManagerOptions {
 
 export interface PingUpdate {
   positionSec: number;
-  state?: 'playing' | 'paused' | 'buffering';
+  state?: PingState;
 }
+
+type TitleDetails = Pick<MovieDetails | ShowDetails, 'title' | 'originalLanguage' | 'posterUrl' | 'backdropUrl'>;
 
 type StopReason = 'stopped' | 'idle' | 'disk' | 'shutdown';
 type WaitOutcome = 'ready' | 'lost';
@@ -264,7 +272,7 @@ export class PlaybackManager {
   private async attemptStart(
     body: SessionStartRequest,
     clientIp: string | null,
-    context: { streamId: string; device: CapabilityProfile; details: { title: string; originalLanguage: string | null }; attempts: StartAttempt[] },
+    context: { streamId: string; device: CapabilityProfile; details: TitleDetails; attempts: StartAttempt[] },
   ): Promise<SessionResponse> {
     const { streams } = this.options;
     const id = randomUUID();
@@ -292,7 +300,7 @@ export class PlaybackManager {
       stream: ResolvedStream;
       source: SourceHandle;
       device: CapabilityProfile;
-      details: { title: string; originalLanguage: string | null };
+      details: TitleDetails;
       attempts: StartAttempt[];
       timings: { t0: number; t1: number };
     },
@@ -330,6 +338,8 @@ export class PlaybackManager {
         episode: body.episode ?? null,
         streamFilename: stream.stream.filename,
         clientIp,
+        posterUrl: details.posterUrl,
+        backdropUrl: title.stillUrl ?? details.backdropUrl,
       },
       store: new SegmentStore(dir),
       device,
@@ -366,6 +376,10 @@ export class PlaybackManager {
       positionSec: body.startPositionSec ?? 0,
       pingedAt: 0,
       playerSegment: startSegment,
+      watchedSec: 0,
+      pingState: 'playing',
+      pingClock: now,
+      bytesServed: 0,
     };
 
     await mkdir(dir, { recursive: true });
@@ -405,6 +419,7 @@ export class PlaybackManager {
       throw error;
     }
     rec.opening = false;
+    rec.pingClock = Date.now();
     Object.assign(timingsMs, { firstSegment: Date.now() - tFirst });
     this.options.logger.info({ sessionId: id, decision, timingsMs }, 'Playback session started');
     this.event({
@@ -496,8 +511,11 @@ export class PlaybackManager {
     this.require(id).lastActivity = Date.now();
   }
 
-  /** Records a progress ping: counts as activity, updates the reported position and the playing/paused state. */
-  ping(id: string, update: PingUpdate): void {
+  /**
+   * Records a progress ping: counts as activity, updates the reported position and the playing/paused/buffering state, adds the
+   * playing time since the previous ping to the play record and saves the resume position.
+   */
+  ping(id: string, update: PingUpdate): ProgressResponse {
     const rec = this.require(id);
     const now = Date.now();
     rec.lastActivity = now;
@@ -505,9 +523,48 @@ export class PlaybackManager {
     rec.positionSec = Math.max(0, update.positionSec);
     rec.playerSegment = Math.floor(rec.positionSec / SEGMENT_SECONDS);
     this.followPlayhead(rec);
-    if (update.state && (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused')) {
-      rec.state = update.state === 'paused' ? 'paused' : 'playing';
+    const state = update.state ?? 'playing';
+    if (rec.state === 'ready' || rec.state === 'playing' || rec.state === 'paused' || rec.state === 'buffering') rec.state = state;
+
+    rec.watchedSec += playingSecondsSince(rec.pingState, now - rec.pingClock);
+    rec.pingClock = now;
+    rec.pingState = state;
+    return this.saveProgress(rec, now);
+  }
+
+  private saveProgress(rec: SessionRecord, now: number): ProgressResponse {
+    const { db } = this.options;
+    const { meta } = rec;
+    const durationSec = rec.probe.durationSec;
+    const positionSec = clampPosition(rec.positionSec, durationSec);
+    const completed = isCompleted(positionSec, durationSec);
+    db.exec('BEGIN');
+    try {
+      upsertProgress(db, {
+        mediaKey: meta.mediaKey,
+        tmdbId: meta.tmdbId,
+        type: meta.mediaType,
+        season: meta.season,
+        episode: meta.episode,
+        positionSec,
+        durationSec,
+        updatedAt: now,
+        completed,
+        meta: {
+          title: meta.showTitle ?? meta.title,
+          showTitle: meta.showTitle,
+          episodeTitle: meta.showTitle ? meta.title : null,
+          posterUrl: meta.posterUrl,
+          backdropUrl: meta.backdropUrl,
+        },
+      });
+      updatePlayProgress(db, rec.id, { watchedSec: rec.watchedSec, lastPositionSec: positionSec, completed, bytesServed: rec.bytesServed });
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
     }
+    return { mediaKey: meta.mediaKey, positionSec, durationSec, completed, resumable: isResumable(positionSec, completed) };
   }
 
   /**
@@ -669,7 +726,7 @@ export class PlaybackManager {
     }
     if (file.kind === 'init') {
       if (rec.format !== 'fmp4') throw notFound('This session has no init segment.', 'MPEG-TS sessions are self-contained.');
-      return this.initResponse(rec, contentType);
+      return this.counted(rec, await this.initResponse(rec, contentType));
     }
 
     const expectedExtension = rec.format === 'fmp4' ? 'm4s' : 'ts';
@@ -692,7 +749,7 @@ export class PlaybackManager {
     }
     this.markReady(rec);
     rec.lastActivity = Date.now();
-    return { kind: 'file', path: target, size: statSync(target).size, contentType };
+    return this.counted(rec, { kind: 'file', path: target, size: statSync(target).size, contentType });
   }
 
   /**
@@ -764,15 +821,18 @@ export class PlaybackManager {
     }
   }
 
-  private async titleFor(body: SessionStartRequest, name: string): Promise<{ title: string; showTitle: string | null }> {
-    if (body.mediaType === 'movie') return { title: name, showTitle: null };
+  private async titleFor(
+    body: SessionStartRequest,
+    name: string,
+  ): Promise<{ title: string; showTitle: string | null; stillUrl: string | null }> {
+    if (body.mediaType === 'movie') return { title: name, showTitle: null, stillUrl: null };
     const code = `S${String(body.season).padStart(2, '0')}E${String(body.episode).padStart(2, '0')}`;
     try {
       const season = await this.options.tmdb.season(body.tmdbId, body.season as number);
       const episode = season.episodes.find((item) => item.episodeNumber === body.episode);
-      return { title: episode?.name || `${name} ${code}`, showTitle: name };
+      return { title: episode?.name || `${name} ${code}`, showTitle: name, stillUrl: episode?.stillUrl ?? null };
     } catch {
-      return { title: `${name} ${code}`, showTitle: name };
+      return { title: `${name} ${code}`, showTitle: name, stillUrl: null };
     }
   }
 
@@ -1046,7 +1106,7 @@ export class PlaybackManager {
       endedAt: Date.now(),
       status: 'error',
       errorMessage: rec.error.message,
-      ...this.averages(rec),
+      ...this.endStats(rec),
     });
     this.options.bus.emit('session.update', toActivitySession(rec));
   }
@@ -1075,7 +1135,7 @@ export class PlaybackManager {
       details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb, hint: rec.error.hint },
       sessionId: rec.id,
     });
-    finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'error', errorMessage: rec.error.message, ...this.averages(rec) });
+    finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'error', errorMessage: rec.error.message, ...this.endStats(rec) });
     this.options.bus.emit('session.update', toActivitySession(rec));
     void Promise.all([rec.process?.stop(), rec.subtitles?.stop()]).catch(() => undefined);
   }
@@ -1146,12 +1206,19 @@ export class PlaybackManager {
     }
   }
 
-  private averages(rec: SessionRecord): { avgBitrateKbps: number | null; avgSpeed: number | null } {
+  private endStats(rec: SessionRecord): { avgBitrateKbps: number | null; avgSpeed: number | null; bytesServed: number } {
     const { speedSum, speedCount, bitrateSum, bitrateCount } = rec.statSamples;
     return {
       avgBitrateKbps: bitrateCount === 0 ? null : bitrateSum / bitrateCount,
       avgSpeed: speedCount === 0 ? null : speedSum / speedCount,
+      bytesServed: rec.bytesServed,
     };
+  }
+
+  /** Counts the media bytes handed to the client; the figure feeds the bandwidth statistics. */
+  private counted(rec: SessionRecord, served: ServedFile): ServedFile {
+    if (served.kind === 'file') rec.bytesServed += served.size;
+    return served;
   }
 
   private async stopIdle(rec: SessionRecord): Promise<void> {
@@ -1203,7 +1270,7 @@ export class PlaybackManager {
     await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     rec.source.release();
     await this.removeDir(rec.dir);
-    if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.averages(rec) });
+    if (!wasError) finalizePlay(this.options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...this.endStats(rec) });
     this.options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');
     this.options.bus.emit('session.end', { sessionId: rec.id, reason, state: 'stopped' });
   }

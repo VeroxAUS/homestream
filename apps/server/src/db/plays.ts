@@ -26,6 +26,7 @@ export interface PlayEnd {
   errorMessage?: string | null;
   avgBitrateKbps?: number | null;
   avgSpeed?: number | null;
+  bytesServed?: number;
 }
 
 export function mediaKeyFor(type: 'movie' | 'tv', tmdbId: number, season?: number | null, episode?: number | null): string {
@@ -76,7 +77,30 @@ export function deletePlay(db: Db, sessionId: string): void {
 
 export function finalizePlay(db: Db, sessionId: string, end: PlayEnd): void {
   db.prepare(
-    `UPDATE plays SET ended_at = ?, status = ?, error_message = ?, avg_bitrate_kbps = ?, avg_speed = ?
+    `UPDATE plays SET ended_at = ?, status = ?, error_message = ?, avg_bitrate_kbps = ?, avg_speed = ?, bytes_served = ?
      WHERE session_id = ? AND ended_at IS NULL`,
-  ).run(end.endedAt, end.status, end.errorMessage ?? null, end.avgBitrateKbps ?? null, end.avgSpeed ?? null, sessionId);
+  ).run(
+    end.endedAt,
+    end.status,
+    end.errorMessage ?? null,
+    end.avgBitrateKbps ?? null,
+    end.avgSpeed ?? null,
+    end.bytesServed ?? 0,
+    sessionId,
+  );
+}
+
+export interface PlayProgress {
+  watchedSec: number;
+  lastPositionSec: number;
+  completed: boolean;
+  bytesServed: number;
+}
+
+/** Called on every progress ping; `completed` stays set once any ping of the session reached the completion mark. */
+export function updatePlayProgress(db: Db, sessionId: string, progress: PlayProgress): void {
+  db.prepare(
+    `UPDATE plays SET watched_sec = ?, last_position_sec = ?, completed = MAX(completed, ?), bytes_served = ?
+     WHERE session_id = ?`,
+  ).run(progress.watchedSec, progress.lastPositionSec, progress.completed ? 1 : 0, progress.bytesServed, sessionId);
 }

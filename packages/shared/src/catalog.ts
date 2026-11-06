@@ -59,7 +59,10 @@ export const SeasonSchema = z.object({
 });
 export type Season = z.infer<typeof SeasonSchema>;
 
-/** Filled by the progress feature; shape mirrors architecture §4.5. */
+/**
+ * Shape mirrors architecture §4.5. For episodes `title` is the show's name (like `showTitle`) and `episodeTitle` the episode's;
+ * `backdropUrl` is the episode still (w300) when TMDB has one, else the show backdrop. `upNext` items have `positionSec` 0.
+ */
 export const ContinueWatchingItemSchema = z.object({
   mediaKey: z.string(),
   type: MediaTypeSchema,
@@ -78,8 +81,28 @@ export const ContinueWatchingItemSchema = z.object({
 });
 export type ContinueWatchingItem = z.infer<typeof ContinueWatchingItemSchema>;
 
+export const FEATURED_REASONS = ['trending', 'because_you_watched', 'trending_show', 'popular'] as const;
+export const FeaturedReasonSchema = z.enum(FEATURED_REASONS);
+export type FeaturedReason = z.infer<typeof FeaturedReasonSchema>;
+
+/** Banner item of `GET /api/home` (architecture §4.9). `logoUrl` is omitted by the server in v1; clients must tolerate its absence. */
+export const FeaturedItemSchema = z.object({
+  mediaType: MediaTypeSchema,
+  tmdbId: z.number().int(),
+  title: z.string().min(1),
+  overview: z.string().min(1),
+  backdropUrl: z.string().min(1),
+  logoUrl: z.string().optional(),
+  reason: FeaturedReasonSchema,
+  reasonLabel: z.string().min(1),
+  /** Only with `reason: "because_you_watched"`: the title the recommendation is based on. */
+  basedOn: z.object({ mediaType: MediaTypeSchema, tmdbId: z.number().int(), title: z.string() }).optional(),
+});
+export type FeaturedItem = z.infer<typeof FeaturedItemSchema>;
+
 export const HomeResponseSchema = z.object({
   continueWatching: z.array(ContinueWatchingItemSchema),
+  featured: z.array(FeaturedItemSchema),
   trendingMovies: z.array(MediaSummarySchema),
   trendingShows: z.array(MediaSummarySchema),
   popularMovies: z.array(MediaSummarySchema),

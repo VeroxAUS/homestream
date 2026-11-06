@@ -14,10 +14,7 @@ import { parseId } from './params.js';
 export function registerCatalogRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { tmdb } = ctx;
 
-  app.get('/api/home', async (): Promise<HomeResponse> => {
-    const rows = await tmdb.home();
-    return { continueWatching: [], ...rows };
-  });
+  app.get('/api/home', async (): Promise<HomeResponse> => ctx.home.home());
 
   app.get('/api/search', async (request): Promise<SearchResponse> => {
     const parsed = SearchQuerySchema.safeParse(request.query);

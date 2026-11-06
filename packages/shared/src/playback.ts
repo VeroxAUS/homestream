@@ -131,7 +131,7 @@ export const EncoderStatsSchema = z.object({
 });
 export type EncoderStats = z.infer<typeof EncoderStatsSchema>;
 
-export const SESSION_STATES = ['starting', 'ready', 'playing', 'paused', 'stopped', 'error'] as const;
+export const SESSION_STATES = ['starting', 'ready', 'playing', 'paused', 'buffering', 'stopped', 'error'] as const;
 export const SessionStateSchema = z.enum(SESSION_STATES);
 export type SessionState = z.infer<typeof SessionStateSchema>;
 
@@ -149,6 +149,7 @@ export const ActivitySessionSchema = z.object({
   deviceName: z.string(),
   deviceKind: DeviceKindSchema,
   clientIp: z.string().nullable(),
+  posterUrl: z.string().nullable(),
   streamFilename: z.string(),
   /** Epoch ms. */
   startedAt: z.number(),

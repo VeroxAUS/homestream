@@ -12,7 +12,7 @@ import { RateLimiter } from '../../src/gateway/rateLimiter.js';
 import { createSilentLogger } from '../../src/logger.js';
 import { lowerPriority } from '../../src/playback/priority.js';
 import { createFfprobeRunner, type ProbeRunner } from '../../src/playback/probe.js';
-import { TmdbService } from '../../src/tmdb/service.js';
+import { TmdbService, type FetchLike } from '../../src/tmdb/service.js';
 import { startStubGateway, stubStream, type StubGateway } from '../gateway/stubGateway.js';
 import { makeFakeTmdb } from '../tmdb/fixtures.js';
 import { testConfig } from '../helpers.js';
@@ -122,6 +122,8 @@ export interface HarnessOptions {
   env?: Record<string, string>;
   playback?: BuildAppOptions['playback'];
   prefetch?: BuildAppOptions['prefetch'];
+  /** Replaces the fake TMDB (default: makeFakeTmdb). */
+  tmdbFetch?: FetchLike;
 }
 
 /** App wired to a stub gateway whose stream URLs resolve to local files, so ffprobe/ffmpeg run for real. */
@@ -134,7 +136,7 @@ export async function bootHarness(options: HarnessOptions): Promise<Harness> {
   mkdirSync(config.transcodeDir, { recursive: true });
   const db = openDatabase(config.dataDir);
   const logger = createSilentLogger();
-  const tmdb = new TmdbService({ config, db, logger, fetch: makeFakeTmdb().fetch });
+  const tmdb = new TmdbService({ config, db, logger, fetch: options.tmdbFetch ?? makeFakeTmdb().fetch });
   const gateway = new GatewayClient({
     config, db, logger, limiter: new RateLimiter({ maxRequests: 5, windowMs: 100, marginMs: 5 }), timeoutMs: 5_000,
   });

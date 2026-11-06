@@ -13,13 +13,14 @@ const summary = {
 
 describe('catalog schemas', () => {
   it('accepts movie and show details', () => {
-    expect(MovieDetailsSchema.safeParse({ ...summary, type: 'movie', runtime: 90, genres: ['Drama'], imdbId: 'tt1' }).success).toBe(true);
+    expect(MovieDetailsSchema.safeParse({ ...summary, type: 'movie', runtime: 90, genres: ['Drama'], imdbId: 'tt1', originalLanguage: 'en' }).success).toBe(true);
     expect(
       ShowDetailsSchema.safeParse({
         ...summary,
         type: 'tv',
         genres: [],
         imdbId: null,
+        originalLanguage: null,
         seasons: [{ seasonNumber: 1, name: 'S1', episodeCount: 7, posterUrl: null }],
       }).success,
     ).toBe(true);
@@ -32,7 +33,7 @@ describe('catalog schemas', () => {
   it('accepts a season with episodes and a home response', () => {
     const episode = { episodeNumber: 1, name: 'Pilot', overview: '', stillUrl: null, runtime: null, airDate: null };
     expect(SeasonSchema.safeParse({ seasonNumber: 1, name: 'S1', episodes: [episode] }).success).toBe(true);
-    const empty = { continueWatching: [], trendingMovies: [], trendingShows: [], popularMovies: [], popularShows: [] };
+    const empty = { continueWatching: [], featured: [], trendingMovies: [], trendingShows: [], popularMovies: [], popularShows: [] };
     expect(HomeResponseSchema.safeParse(empty).success).toBe(true);
   });
 

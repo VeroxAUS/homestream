@@ -2,8 +2,10 @@ import type { Config } from './config.js';
 import type { Db } from './db/index.js';
 import type { EventBus } from './events/bus.js';
 import type { GatewayClient } from './gateway/client.js';
+import type { HomeService } from './home/service.js';
 import type { PlaybackManager } from './playback/manager.js';
 import type { PrefetchService } from './prefetch/service.js';
+import type { ContinueWatchingService } from './progress/service.js';
 import type { SourceProxy } from './sourceproxy/proxy.js';
 import type { StreamService } from './streams/service.js';
 import type { TmdbService } from './tmdb/service.js';
@@ -20,4 +22,6 @@ export interface AppContext {
   playback: PlaybackManager;
   sourceProxy: SourceProxy;
   prefetch: PrefetchService;
+  continueWatching: ContinueWatchingService;
+  home: HomeService;
 }

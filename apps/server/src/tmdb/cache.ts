@@ -5,6 +5,7 @@ export const TTL_MS = {
   details: 24 * 60 * 60 * 1000,
   config: 24 * 60 * 60 * 1000,
   search: 10 * 60 * 1000,
+  recommendations: 24 * 60 * 60 * 1000,
 } as const;
 
 export class TmdbCache {

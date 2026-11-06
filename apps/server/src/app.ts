@@ -6,18 +6,22 @@ import { openDatabase, type Db } from './db/index.js';
 import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { GatewayClient } from './gateway/client.js';
+import { HomeService } from './home/service.js';
 import { allowEmptyJsonBody } from './http/emptyJsonBody.js';
 import { createLogger } from './logger.js';
 import { PlaybackManager, type PlaybackManagerOptions } from './playback/manager.js';
 import { createFfprobeRunner, type ProbeRunner } from './playback/probe.js';
 import { createUrlResolver, type UrlResolver } from './playback/resolveUrl.js';
 import { PrefetchService, type PrefetchServiceOptions } from './prefetch/service.js';
+import { ContinueWatchingService } from './progress/service.js';
 import { SourceProxy, type SourceProxyOptions } from './sourceproxy/proxy.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
+import { registerHistoryRoutes } from './routes/history.js';
 import { registerInfoRoutes } from './routes/info.js';
 import { registerPrefetchRoutes } from './routes/prefetch.js';
+import { registerProgressRoutes } from './routes/progress.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerStatic, shouldServeSpaFallback } from './routes/static.js';
 import { registerStreamRoutes } from './routes/streams.js';
@@ -80,7 +84,9 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   });
   const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, proxy: sourceProxy, ...playbackOptions });
   const prefetch = new PrefetchService({ tmdb, streams, proxy: sourceProxy, db, bus, logger, ...options.prefetch });
-  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, sourceProxy, prefetch };
+  const continueWatching = new ContinueWatchingService({ db, tmdb, logger });
+  const home = new HomeService({ db, tmdb, continueWatching, logger });
+  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, sourceProxy, prefetch, continueWatching, home };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -127,6 +133,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerCatalogRoutes(app, ctx);
   registerStreamRoutes(app, ctx);
   registerSessionRoutes(app, ctx);
+  registerProgressRoutes(app, ctx);
+  registerHistoryRoutes(app, ctx);
   registerPrefetchRoutes(app, ctx);
   registerEventRoutes(app, ctx, { heartbeatMs: options.heartbeatMs });
 
