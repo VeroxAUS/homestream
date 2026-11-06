@@ -35,7 +35,7 @@ export interface SourceProxyOptions {
 export interface SourceHandle {
   /** For ffprobe and the encoder. */
   readonly url: string;
-  /** For subtitle extractors: same bytes, throttled while the encoder is short of lead. */
+  /** For subtitle extractors: same bytes, paced to the limit set with `setExtractorLimit`. */
   readonly extractorUrl: string;
   /** ffprobe result for this source, run at most once and shared by every restart and later session. */
   probe(): Promise<ProbeResult>;
@@ -43,7 +43,10 @@ export interface SourceHandle {
   refresh(): Promise<void>;
   /** Player position as a fraction of the duration; blocks well behind it are evicted first. */
   setPlayhead(fraction: number): void;
-  setEncoderStarved(starved: boolean): void;
+  /** Caps the upstream bytes per second the extractor URL may read (null: unlimited); the encoder URL is never capped. */
+  setExtractorLimit(bytesPerSec: number | null): void;
+  /** Size of the source file in bytes. */
+  readonly sizeBytes: number;
   release(): void;
 }
 
@@ -188,9 +191,10 @@ export class SourceProxy {
         entry.playheadByte = Math.max(0, Math.min(1, fraction)) * entry.size;
         entry.touch();
       },
-      setEncoderStarved: (starved) => {
-        entry.starved = starved;
+      setExtractorLimit: (bytesPerSec) => {
+        entry.extractorLimit = bytesPerSec;
       },
+      sizeBytes: entry.size,
       release: () => {
         if (released) return;
         released = true;

@@ -18,7 +18,7 @@ const BURST_AHEAD_SEC = 72;
 const BURST_MAX_MS = 25_000;
 /** A run is stopped once it has read this far into the territory of a later run. */
 const HANDOVER_SEC = 10;
-const MAX_RUNS = 2;
+export const DEFAULT_MAX_RUNS = 2;
 const ENGLISH = /^en(g|glish)?$/i;
 
 export interface TextTrack {
@@ -38,6 +38,17 @@ export function selectTextTracks(probe: Pick<ProbeResult, 'subtitles'>): TextTra
   return text.filter((track) => chosen.has(track.index));
 }
 
+export interface RunEvent {
+  event: 'start' | 'stop';
+  runId: number;
+  kind: RunKind;
+  /** Source second the run reads from. */
+  ss: number;
+  /** Source second the run had read up to (equals `ss` at start). */
+  headSec: number;
+  exitCode?: number | null;
+}
+
 export interface SubtitleExtractorOptions {
   ffmpegPath: string;
   sessionId: string;
@@ -47,6 +58,10 @@ export interface SubtitleExtractorOptions {
   videoIndex: number;
   durationSec: number;
   tracks: readonly number[];
+  /** Extractor processes allowed at once; defaults to 2 (see `maxExtractorRuns`). */
+  maxRuns?: number;
+  /** Debug trail: every extractor process start and stop. */
+  onRunEvent?: (event: RunEvent) => void;
   registry: PidRegistry;
   watchdog?: MemoryWatchdog;
   /** A run was stopped for exceeding the memory limit; the owner ends the session. */
@@ -68,8 +83,11 @@ export class SubtitleExtractor {
   private gaveUp = false;
   private launching: Promise<void> | null = null;
 
+  private readonly maxRuns: number;
+
   constructor(private readonly options: SubtitleExtractorOptions) {
     this.store = new SubtitleStore(options.durationSec, options.tracks);
+    this.maxRuns = Math.max(1, options.maxRuns ?? DEFAULT_MAX_RUNS);
   }
 
   /** Starts the main run; call together with the encoder. */
@@ -128,7 +146,7 @@ export class SubtitleExtractor {
 
   private async launchSeek(sec: number, ss: number): Promise<void> {
     let victim: SubtitleRun | undefined;
-    if (this.processCount >= MAX_RUNS) {
+    if (this.processCount >= this.maxRuns) {
       victim = this.active()
         .filter((run) => run.kind !== 'main')
         .sort((a, b) => sec - b.headSec - (sec - a.headSec))[0];
@@ -136,7 +154,7 @@ export class SubtitleExtractor {
       victim ??= this.active().sort((a, b) => a.headSec - b.headSec)[0];
       await victim?.stop();
     }
-    if (this.stopped || this.gaveUp || this.processCount >= MAX_RUNS) return;
+    if (this.stopped || this.gaveUp || this.processCount >= this.maxRuns) return;
     if (this.store.segmentCovered(Math.floor(sec / 4))) return;
     this.launch('seek', ss, false).needSec = sec + BURST_AHEAD_SEC;
   }
@@ -164,6 +182,7 @@ export class SubtitleExtractor {
       onExit: (current, exit) => this.onExit(current, exit),
     });
     this.runs.push(run);
+    this.options.onRunEvent?.({ event: 'start', runId: id, kind, ss, headSec: ss });
     return run;
   }
 
@@ -173,6 +192,7 @@ export class SubtitleExtractor {
   }
 
   private onExit(run: SubtitleRun, exit: EncoderExit): void {
+    this.options.onRunEvent?.({ event: 'stop', runId: run.id, kind: run.kind, ss: run.ss, headSec: run.headSec, exitCode: exit.code });
     this.store.setCoverage(run.id, run.coverage());
     if (this.stopped || run.stopRequested) {
       if (!this.stopped) this.evaluate();
@@ -218,7 +238,7 @@ export class SubtitleExtractor {
 
   /** Starts a run for the first stretch nobody is reading, once the main run is under way and a process slot is free. */
   private fillGap(): void {
-    if (this.launching || this.processCount >= MAX_RUNS) return;
+    if (this.launching || this.processCount >= this.maxRuns) return;
     const main = this.runs.findLast((run) => run.kind === 'main');
     if (main?.running && main.headSec - main.ss < FILL_DELAY_SEC) return;
     const gap = this.store.firstGap();

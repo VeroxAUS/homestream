@@ -3,10 +3,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createSilentLogger } from '../../src/logger.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { PREFETCH_OWNER, SourceProxy, type SourceHandle } from '../../src/sourceproxy/proxy.js';
-import { STARVED_BYTES_PER_SEC } from '../../src/sourceproxy/serve.js';
 import { expectedBytes, startStubCdn, type StubCdn } from './stubCdn.js';
 
 const MB = 1024 * 1024;
+const STARVED_BYTES_PER_SEC = 2 * MB;
 const PROBE = { durationSec: 10 } as ProbeResult;
 
 let cdn: StubCdn;
@@ -244,18 +244,18 @@ describe('caching', () => {
     expect(cdn.sentBytes).toBe(cached);
   }, 60_000);
 
-  it('throttles extractor reads from upstream only while the encoder is starved', async () => {
+  it('paces extractor reads from upstream to the limit, but never the encoder reads', async () => {
     const { proxy } = rig();
     const handle = await proxy.acquire('gw://starve', 'session-1');
     await settleHead(handle);
     const length = 2 * MB;
 
-    handle.setEncoderStarved(false);
+    handle.setExtractorLimit(null);
     let started = performance.now();
     await read(handle.extractorUrl, `bytes=${45 * MB}-${45 * MB + length - 1}`);
     const free = performance.now() - started;
 
-    handle.setEncoderStarved(true);
+    handle.setExtractorLimit(STARVED_BYTES_PER_SEC);
     started = performance.now();
     await read(handle.extractorUrl, `bytes=${50 * MB}-${50 * MB + length - 1}`);
     const slow = performance.now() - started;
@@ -263,7 +263,7 @@ describe('caching', () => {
     expect(slow).toBeGreaterThanOrEqual((length / STARVED_BYTES_PER_SEC) * 1000 * 0.8);
     expect(slow).toBeGreaterThan(free * 2);
 
-    handle.setEncoderStarved(true);
+    handle.setExtractorLimit(STARVED_BYTES_PER_SEC);
     started = performance.now();
     await read(handle.url, `bytes=${55 * MB}-${55 * MB + length - 1}`);
     expect(performance.now() - started).toBeLessThan((length / STARVED_BYTES_PER_SEC) * 1000 * 0.8);

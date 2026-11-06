@@ -41,6 +41,14 @@ import {
 import type { RawProgress } from './progress.js';
 import { SegmentStore } from './segmentStore.js';
 import { toActivitySession, toSessionResponse, type SessionRecord } from './session.js';
+import {
+  extractorLimit,
+  isHeavySource,
+  limitLabel,
+  maxExtractorRuns,
+  STARVED_BYTES_PER_SEC,
+  type LimitLabel,
+} from './extractorSchedule.js';
 import { SubtitleExtractor, selectTextTracks } from './subtitleExtractor.js';
 import { burnTarget, planPatch, requireAudio, requireSubtitle } from './tracks.js';
 import { renderSegment } from './vtt.js';
@@ -58,10 +66,7 @@ const SUBTITLE_PLAYLIST_TYPE = 'application/vnd.apple.mpegurl';
 const SUBTITLE_SEGMENT_TYPE = 'text/vtt; charset=utf-8';
 /** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */
 const MAX_SERVE_ATTEMPTS = 3;
-const STARVED_LEAD_SEC = 30;
-/** Above the 1.2x floor the encoder must keep, so the throttle bites before the floor is reached. */
-const STARVED_SPEED = 1.6;
-const BURST_FLOOR_SPEED = 1.35;
+const LIMIT_LOG_WINDOW_MS = 120_000;
 const SPEED_WINDOW_MS = 4_000;
 const SPEED_WINDOW_MIN_MS = 1_500;
 const GIB = 1024 ** 3;
@@ -110,6 +115,7 @@ function scrub(text: string): string {
 
 export class PlaybackManager {
   private readonly sessions = new Map<string, SessionRecord>();
+  private readonly limitLabels = new WeakMap<SessionRecord, LimitLabel>();
   private readonly speedWindows = new WeakMap<SessionRecord, Array<{ at: number; outSec: number }>>();
   private readonly proxy: SourceProxy;
   private readonly segmentWaitMs: number;
@@ -649,7 +655,7 @@ export class PlaybackManager {
     rec.stats = { ...rec.stats, headSegment: startSegment, outTimeSec: startSegment * SEGMENT_SECONDS };
     const generation = rec.generation;
 
-    rec.source.setEncoderStarved(true);
+    rec.source.setExtractorLimit(STARVED_BYTES_PER_SEC);
 
     const args = buildFfmpegArgs({
       inputUrl: rec.source.url,
@@ -680,7 +686,7 @@ export class PlaybackManager {
       if (rec.generation !== generation || rec.stopping) return;
       if (exit.code === 0) {
         rec.encoderDone = true;
-        rec.source.setEncoderStarved(false);
+        rec.source.setExtractorLimit(null);
         this.markReady(rec);
         return;
       }
@@ -711,19 +717,39 @@ export class PlaybackManager {
 
   /** Subtitle extraction must not compete with an encoder that has little lead over the player or runs slower than 1.2x. */
   private updateStarved(rec: SessionRecord): void {
-    const lead = (rec.stats.headSegment - rec.playerSegment) * SEGMENT_SECONDS;
-    if (rec.encoderDone) {
-      rec.source.setEncoderStarved(false);
-      return;
+    const limit = extractorLimit({
+      heavy: this.isHeavy(rec),
+      bursting: rec.subtitles?.bursting ?? false,
+      encoder: {
+        done: rec.encoderDone,
+        startSegment: rec.startSegment,
+        headSegment: rec.stats.headSegment,
+        playerSegment: rec.playerSegment,
+        speed: rec.stats.speed,
+        recentSpeed: this.recentSpeed(rec),
+      },
+    });
+    rec.source.setExtractorLimit(limit);
+    const label = limitLabel(limit);
+    if (this.limitLabels.get(rec) !== label) {
+      this.limitLabels.set(rec, label);
+      // The trail is for the start-up phase; later flapping would only add noise.
+      if (Date.now() - rec.startedAt < LIMIT_LOG_WINDOW_MS) this.options.logger.info(
+        {
+          sessionId: rec.id,
+          sinceStartMs: Date.now() - rec.startedAt,
+          extractorLimit: label,
+          headSegment: rec.stats.headSegment,
+          startSegment: rec.startSegment,
+          speed: Number(rec.stats.speed.toFixed(2)),
+        },
+        'Subtitle extractor read limit changed',
+      );
     }
-    // A fresh extractor takes the bandwidth for its first stretch (the viewer waits for those cues) and only backs off when
-    // the encoder's average speed approaches the 1.2x floor; the encoder catches up afterwards.
-    if (rec.subtitles?.bursting) {
-      rec.source.setEncoderStarved(rec.stats.speed > 0 && rec.stats.speed < BURST_FLOOR_SPEED);
-      return;
-    }
-    const speed = this.recentSpeed(rec) || rec.stats.speed;
-    rec.source.setEncoderStarved(lead < STARVED_LEAD_SEC || (speed > 0 && speed < STARVED_SPEED));
+  }
+
+  private isHeavy(rec: SessionRecord): boolean {
+    return isHeavySource({ height: rec.probe.video.height, sizeBytes: rec.source.sizeBytes, durationSec: rec.probe.durationSec });
   }
 
   /** Encoder speed over the last few seconds; ffmpeg's own figure averages the whole run and reacts too late. 0 while unknown. */
@@ -762,6 +788,12 @@ export class PlaybackManager {
       videoIndex: rec.probe.video.index,
       durationSec: rec.probe.durationSec,
       tracks,
+      maxRuns: maxExtractorRuns(this.isHeavy(rec)),
+      onRunEvent: (run) =>
+        this.options.logger.info(
+          { sessionId: rec.id, sinceStartMs: Date.now() - rec.startedAt, ...run },
+          `Subtitle extractor run ${run.event === 'start' ? 'started' : 'stopped'}`,
+        ),
       registry: this.registry,
       watchdog: this.watchdog,
       onMemoryLimit: (hit) => this.onMemoryLimit(rec, 'The subtitle extractor', hit),
@@ -843,7 +875,7 @@ export class PlaybackManager {
       hint: 'Playback ended. Try again, switch subtitles off, or choose another stream. If it keeps happening, check the ffmpeg tile on the health dashboard.',
     };
     rec.generation += 1;
-    rec.source.setEncoderStarved(false);
+    rec.source.setExtractorLimit(null);
     this.options.logger.error({ sessionId: rec.id, pid: hit.pid, usedMb, limitMb }, 'ffmpeg stopped by the memory watchdog');
     this.event({
       level: 'error',

@@ -2,7 +2,8 @@
 // GPU health gate (AGENTS.md "GPU safety"). Usage: node scripts/gpu-health.mjs --since <ISO-8601> [--min-free-gb 4]
 // Prints one JSON line. Exit 0 = healthy, 1 = new GPU driver events, temperature above the limit, free RAM below
 // the minimum (low_memory), or the state could not be read (a gate that cannot look fails closed).
-// With --require-idle it also fails (gpu_busy) when the GPU is >= 25% utilised while no ffmpeg runs, so a game or other heavy GPU app blocks the step.
+// With --require-idle it also fails (gpu_busy) when, while no ffmpeg runs, the median of 5 GPU utilization samples (~5 s) is >= 25%
+// or at least 2 samples are >= 60%, so a game or other heavy GPU app blocks the step but one transient spike from a desktop app does not.
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import os from 'node:os';
@@ -11,8 +12,11 @@ import { pathToFileURL } from 'node:url';
 export const MAX_TEMP_C = 83;
 export const DEFAULT_MIN_FREE_GB = 4;
 export const MAX_IDLE_UTIL_PCT = 25;
-export const IDLE_SAMPLES = 3;
-export const IDLE_SAMPLE_GAP_MS = 1500;
+export const IDLE_SAMPLES = 5;
+export const IDLE_SAMPLE_GAP_MS = 1000;
+/** A sample at or above this counts as a spike; the GPU is busy when at least IDLE_SPIKE_COUNT samples are spikes. */
+export const IDLE_SPIKE_PCT = 60;
+export const IDLE_SPIKE_COUNT = 2;
 const GIB = 1024 ** 3;
 
 const SMI_FIELDS = ['temperature.gpu', 'utilization.gpu', 'utilization.encoder', 'utilization.decoder', 'memory.used', 'power.draw'];
@@ -151,12 +155,18 @@ export function parseFfmpegRunning(stdout) {
 }
 
 /**
- * The busiest sample counts. A missing sample makes the result unknown (null) so the gate fails closed.
+ * `utilPct` is the median of the samples, so one short spike from a desktop app (Discord, Edge) does not count, while
+ * sustained load does. `spikes` counts samples at or above IDLE_SPIKE_PCT, which catches bursty load whose median stays low.
+ * A missing sample makes the result unknown (null) so the gate fails closed.
  * @param {Array<number | null>} samples
  */
 export function summarizeIdle(samples) {
   const valid = samples.filter((s) => typeof s === 'number' && Number.isFinite(s));
-  return { samples, utilPct: valid.length === samples.length && valid.length > 0 ? Math.max(...valid) : null };
+  if (valid.length !== samples.length || valid.length === 0) return { samples, utilPct: null, spikes: null };
+  const sorted = [...valid].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  const utilPct = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return { samples, utilPct, spikes: valid.filter((s) => s >= IDLE_SPIKE_PCT).length };
 }
 
 /** PowerShell for the info-only readings; a failure here never fails the gate. */
@@ -168,7 +178,7 @@ $q = Get-Counter '\\PhysicalDisk(*)\\Current Disk Queue Length' | Select-Object 
 `;
 
 /**
- * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, idle?: {ffmpegRunning: boolean | null, utilPct: number | null, processes: string[]}, errors: string[]}} input
+ * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, idle?: {ffmpegRunning: boolean | null, utilPct: number | null, spikes?: number | null, processes: string[]}, errors: string[]}} input
  */
 export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, idle, errors }) {
   const reasons = [];
@@ -180,9 +190,13 @@ export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB,
     if (idle.ffmpegRunning === null) reasons.push('could not check: ffmpeg process list is unknown');
     else if (!idle.ffmpegRunning) {
       if (idle.utilPct === null) reasons.push('could not check: GPU utilization is unknown');
-      else if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
+      else {
         const apps = idle.processes.length ? ` (GPU processes: ${idle.processes.join(', ')})` : '';
-        reasons.push(`gpu_busy: GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`);
+        if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
+          reasons.push(`gpu_busy: median GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`);
+        } else if ((idle.spikes ?? 0) >= IDLE_SPIKE_COUNT) {
+          reasons.push(`gpu_busy: ${idle.spikes} GPU samples at or above ${IDLE_SPIKE_PCT}% with no ffmpeg running${apps}`);
+        }
       }
     }
   }
@@ -290,7 +304,7 @@ export async function main(argv) {
   const idle = requireIdle
     ? idleResult.status === 'fulfilled'
       ? idleResult.value
-      : { ffmpegRunning: null, utilPct: null, samples: [], processes: [] }
+      : { ffmpegRunning: null, utilPct: null, spikes: null, samples: [], processes: [] }
     : undefined;
   if (eventsResult.status === 'rejected') errors.push(`event log: ${eventsResult.reason.message}`);
   if (gpuResult.status === 'rejected') errors.push(`nvidia-smi: ${gpuResult.reason.message}`);

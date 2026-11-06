@@ -20,7 +20,7 @@ export const TAIL_BYTES = 8 * 1024 * 1024;
 const MAX_ATTEMPTS = 4;
 const RETRY_DELAY_MS = 250;
 
-/** `extractor` reads are throttled while the encoder is short of lead. */
+/** `extractor` reads are paced to the entry's `extractorLimit`. */
 export type Consumer = 'main' | 'extractor';
 
 export interface SourceEntryDeps {
@@ -50,7 +50,8 @@ export class SourceEntry implements BlockOwner {
   readonly blocks = new Map<number, Block>();
   blockBytes = 0;
   playheadByte = 0;
-  starved = false;
+  /** Upstream bytes per second extractor reads may use; null is unlimited. */
+  extractorLimit: number | null = null;
   lastUsed = Date.now();
   readonly refs = new Set<string>();
   /** Opaque ids in the loopback URL; the extractor one marks its reads as low priority. */

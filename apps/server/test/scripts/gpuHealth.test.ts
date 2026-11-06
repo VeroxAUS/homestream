@@ -9,6 +9,8 @@ import {
   MAX_TEMP_C,
   parseArgs,
   parseEvents,
+  IDLE_SAMPLE_GAP_MS,
+  IDLE_SAMPLES,
   MAX_IDLE_UTIL_PCT,
   parseFfmpegRunning,
   parseGpuProcessNames,
@@ -221,10 +223,63 @@ describe('--require-idle', () => {
     expect(evaluate({ events: [], gpu: cool, memory: roomy, errors: [] }).ok).toBe(true);
   });
 
-  it('uses the busiest sample and reports unknown when any sample is missing', () => {
-    expect(summarizeIdle([3, 40, 5]).utilPct).toBe(40);
+  it('summarises samples as their median plus the number of spikes, and reports unknown when any sample is missing', () => {
+    expect(summarizeIdle([3, 40, 5, 4, 6])).toMatchObject({ utilPct: 5, spikes: 0 });
+    expect(summarizeIdle([90, 100, 95, 97, 99])).toMatchObject({ utilPct: 97, spikes: 5 });
+    expect(summarizeIdle([4, 6]).utilPct).toBe(5);
     expect(summarizeIdle([3, null, 5]).utilPct).toBeNull();
+    expect(summarizeIdle([3, null, 5]).spikes).toBeNull();
     expect(summarizeIdle([]).utilPct).toBeNull();
+  });
+
+  describe('transient spikes versus sustained load', () => {
+    const verdict = (samples: Array<number | null>, ffmpegRunning: boolean | null = false) =>
+      evaluate({ events: [], gpu: cool, memory: roomy, idle: { ...summarizeIdle(samples), ffmpegRunning, processes: ['Discord.exe'] }, errors: [] });
+
+    it('samples five times', () => {
+      expect(IDLE_SAMPLES).toBe(5);
+      expect(IDLE_SAMPLES * IDLE_SAMPLE_GAP_MS).toBeGreaterThanOrEqual(4000);
+    });
+
+    it('passes one transient 30-40% sample from a desktop app on an otherwise idle GPU', () => {
+      expect(verdict([3, 38, 2, 4, 3])).toEqual({ ok: true, reasons: [] });
+      expect(verdict([35, 3, 2, 3, 2]).ok).toBe(true);
+      expect(verdict([2, 3, 2, 3, 40]).ok).toBe(true);
+    });
+
+    it('passes one or two brief readings below the spike level, and a single spike of any height', () => {
+      expect(verdict([40, 3, 35, 2, 3]).ok).toBe(true);
+      expect(verdict([3, 2, 100, 3, 2]).ok).toBe(true);
+    });
+
+    it('fails when the median reaches the limit', () => {
+      for (const samples of [[30, 35, 3, 40, 2], [25, 25, 25, 1, 1], [25, 26, 27, 28, 29]]) {
+        const result = verdict(samples);
+        expect(result.ok, samples.join(',')).toBe(false);
+        expect(result.reasons[0]).toMatch(/^gpu_busy: median GPU utilization \d+(\.\d+)?% .*Discord\.exe/);
+      }
+      expect(verdict([24, 24, 24, 24, 24]).ok).toBe(true);
+    });
+
+    it('fails on two samples at or above 60% even when the median is low', () => {
+      const result = verdict([3, 60, 2, 99, 3]);
+      expect(result.ok).toBe(false);
+      expect(result.reasons[0]).toMatch(/^gpu_busy: 2 GPU samples at or above 60%/);
+      expect(verdict([3, 59, 2, 59, 3]).ok).toBe(true);
+    });
+
+    it('fails every time for a game at 90-100%', () => {
+      for (const samples of [[90, 95, 100, 99, 92], [100, 100, 100, 100, 100], [98, 97, 99, 96, 100], [90, 3, 91, 4, 92]]) {
+        expect(verdict(samples).ok, samples.join(',')).toBe(false);
+      }
+    });
+
+    it('stays fail-closed on unknown samples and ignores them only while an ffmpeg runs', () => {
+      expect(verdict([3, null, 2, 3, 2]).reasons[0]).toContain('could not check');
+      expect(verdict([3, 2, 3, 2, null]).ok).toBe(false);
+      expect(verdict([95, 95, 95, 95, 95], true).ok).toBe(true);
+      expect(verdict([3, 2, 3, 2, 3], null).reasons[0]).toContain('could not check');
+    });
   });
 
   it('reads process names from the nvidia-smi table', () => {

@@ -1,11 +1,10 @@
 import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BLOCK_SIZE, type BlockCache } from './blockCache.js';
+import { RatePacer } from './pacer.js';
 import { TAIL_BYTES, type Consumer, type SourceEntry } from './sourceEntry.js';
 import { isAbort, rangeInfo } from './upstream.js';
 
-/** Extractor reads from the CDN are slowed to this rate while the encoder is short of lead. */
-export const STARVED_BYTES_PER_SEC = 2 * 1024 * 1024;
 /** An upstream read stops before the next cached block; looking this far ahead keeps one request per long streak. */
 export const MAX_BLOCK_SCAN = 256;
 const MAX_STALLS = 3;
@@ -175,6 +174,7 @@ async function pumpRemote(
 ): Promise<void> {
   let pos = range.start;
   let stalls = 0;
+  const pacer = consumer === 'extractor' ? new RatePacer() : null;
   const tailRegion = Math.max(entry.headTarget, entry.size - TAIL_BYTES);
 
   while (pos <= range.end && !sink.closed) {
@@ -224,7 +224,10 @@ async function pumpRemote(
         counters.upstreamBytes += part.length;
         counters.servedBytes += part.length;
         collector?.add(part);
-        if (consumer === 'extractor' && entry.starved) await sleep((part.length * 1000) / STARVED_BYTES_PER_SEC);
+        if (pacer && entry.extractorLimit !== null) {
+          const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
+          if (wait > 0) await sleep(wait);
+        }
         await sink.write(part);
         pos += part.length;
         if (pos > bound) break;
