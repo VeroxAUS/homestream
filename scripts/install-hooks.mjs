@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 if (process.env.CI || !existsSync('.git')) {
   console.log('[hooks] skipped (CI or no .git directory)');
 } else {
-  const result = spawnSync('lefthook', ['install'], { stdio: 'inherit', shell: process.platform === 'win32' });
+  // The command is one string: `lefthook` is a .cmd shim on Windows and Node warns when shell is combined with an args array.
+  const result = spawnSync('lefthook install', { stdio: 'inherit', shell: true });
   if (result.status !== 0) console.warn('[hooks] lefthook install failed; run pnpm exec lefthook install');
 }

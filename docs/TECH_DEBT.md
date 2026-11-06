@@ -34,6 +34,10 @@ Thresholds live in `<package>/coverage-thresholds.json` and are raised with `pnp
 
 - `apps/web` has one placeholder test; its thresholds are the baseline and grow with the first real screens.
 
+### Duplicate code
+
+`.jscpd.json` fails above 0.5% duplicated lines. The tree has no clones today, and on about 14,000 lines a pasted 60-line block is under 1%, so a 5% gate would never trip. Tests, `dist` and `apps/tv` are not scanned.
+
 ### Test tiers
 
 - The `gpu` tier needs NVENC and is never run in CI. It is skipped automatically when ffmpeg or an NVIDIA driver is missing.
