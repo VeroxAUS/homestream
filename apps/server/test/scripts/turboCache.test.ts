@@ -39,10 +39,20 @@ function throwawayWorkspace(): string {
 
 /** Runs the tasks and reports which were replayed from the cache and which ran. */
 function lastRun(dir: string): { cached: Set<string>; executed: Set<string> } {
-  const env = { ...process.env, TURBO_TELEMETRY_DISABLED: '1', TURBO_UI: 'false', CI: '' };
+  // GitHub Actions makes turbo group and re-order its log lines, which the parsing below does not expect.
+  const { GITHUB_ACTIONS: _actions, CI: _ci, ...inherited } = process.env;
+  const env = { ...inherited, TURBO_TELEMETRY_DISABLED: '1', TURBO_UI: 'false' };
   const result = spawnSync(
     process.execPath,
-    [turboBin, 'run', ...TASKS, '--cache-dir=.turbo/cache', '--output-logs=hash-only'],
+    [
+      turboBin,
+      'run',
+      ...TASKS,
+      '--cache-dir=.turbo/cache',
+      '--output-logs=hash-only',
+      '--log-order=stream',
+      '--log-prefix=task',
+    ],
     { cwd: dir, env, encoding: 'utf8', windowsHide: true },
   );
   expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
