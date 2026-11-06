@@ -199,6 +199,26 @@ async function applyStep(step, client, created) {
   }
 }
 
+/**
+ * The offline dry run: what `--apply` would create or update, taken from the rules file alone. Whether an item already
+ * exists in Sentry is only known by asking Sentry, which a dry run never does (even when a token is set).
+ */
+export function describeRules(rules) {
+  const lines = [];
+  for (const [kind, items] of [
+    ['detector', rules.detectors],
+    ['workflow', rules.workflows],
+  ]) {
+    for (const { name, project, ...body } of items) {
+      lines.push(`[sentry-alerts] ${kind} "${name}" (project ${project}): would create, or update when it differs`);
+      lines.push(`[sentry-alerts]   ${JSON.stringify(body)}`);
+    }
+  }
+  const total = rules.detectors.length + rules.workflows.length;
+  lines.push(`[sentry-alerts] ${total} item(s) in the rules file (dry run, Sentry was not contacted)`);
+  return lines;
+}
+
 export async function main(argv, root = repoRoot(), env = process.env, fetchImpl = fetch) {
   const args = parseArgs(argv);
   if (!args) {
@@ -212,6 +232,10 @@ export async function main(argv, root = repoRoot(), env = process.env, fetchImpl
     console.error(`[sentry-alerts] ${error instanceof Error ? error.message : 'cannot read the rules'}`);
     return 1;
   }
+  if (!args.apply) {
+    describeRules(rules).forEach((line) => console.log(line));
+    return 0;
+  }
   const resolved = resolveEnv(root, env);
   const token = resolved.SENTRY_API_TOKEN;
   if (!token) {
@@ -219,7 +243,7 @@ export async function main(argv, root = repoRoot(), env = process.env, fetchImpl
     console.log(
       `[sentry-alerts] ${total} item(s) in the rules file are valid. SENTRY_API_TOKEN is not set, so Sentry was not contacted.`,
     );
-    return args.apply ? 1 : 0;
+    return 1;
   }
   const organization = resolved.SENTRY_ORG || rules.organization;
   if (!organization || organization === ORG_PLACEHOLDER) {

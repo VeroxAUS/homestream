@@ -11,6 +11,7 @@ export interface FlagUsage {
   evaluated: Map<string, string>;
 }
 export function loadRegistry(root: string): Promise<FlagRegistryLike>;
+export function evaluatedKeys(text: string): string[];
 export function scanUsage(root: string, keys: string[]): FlagUsage;
 export function checkFlags(
   registry: FlagRegistryLike,

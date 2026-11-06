@@ -15,6 +15,7 @@ export interface SentryClient {
 }
 export function parseArgs(argv: string[]): { apply: boolean; file: string | undefined } | null;
 export function loadRules(file: string): AlertRules;
+export function describeRules(rules: AlertRules): string[];
 export function covers(actual: unknown, wanted: unknown): boolean;
 export function createClient(options: {
   token: string;

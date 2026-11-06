@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ANALYTICS_EVENTS } from '@homestream/shared';
 import type { TelemetryConfig } from '../../src/config.js';
 import {
   HomestreamReadinessSmokeError,
@@ -87,14 +88,34 @@ describe('telemetry:smoke', () => {
     expect(event).not.toHaveProperty('server_name');
   });
 
-  it('sends one PostHog event with the run id in its version and reports the request', async () => {
+  it('sends server_started and a playback_started-shaped event carrying the run id and reports the request', async () => {
     const { code, output } = await smoke({ sentry: false, posthog: true });
     expect(code).toBe(0);
     expect(output).toMatch(/PostHog: POST \/batch\/ -> 200/);
     expect(output).toContain('prefetch-on-details = true');
-    const batch = stub.requests.find((request) => request.path.includes('/batch/'));
-    expect(batch?.body).toContain('"event":"server_started"');
-    expect(batch?.body).toContain('0.0.0-smoke.deadbeef');
+    const events = stub.requests
+      .filter((request) => request.path.includes('/batch/'))
+      .flatMap((request) => (JSON.parse(request.body) as { batch: LooseJson[] }).batch);
+    const names = events.map((event) => event.event);
+    expect(names).toContain('server_started');
+    expect(names.filter((name) => name === 'playback_started')).toHaveLength(1);
+
+    const started = events.find((event) => event.event === 'server_started') as LooseJson;
+    expect(started.properties.version).toBe('0.0.0-smoke.deadbeef');
+    const playback = events.find((event) => event.event === 'playback_started') as LooseJson;
+    expect(playback.properties).toMatchObject({
+      mediaType: 'movie',
+      title: 'Readiness smoke deadbeef',
+      deviceKind: 'web',
+      videoCodec: 'h264',
+      hdr: false,
+      resolution: '1080p',
+      startupMs: 1234,
+    });
+    expect(ANALYTICS_EVENTS.playback_started.properties.safeParse(playback.properties).success).toBe(true);
+    expect(JSON.stringify(playback)).not.toMatch(/https?:|192\.168|C:\\\\/);
+    expect(playback.distinct_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(playback.distinct_id).toBe(started.distinct_id);
     expect(stub.requests.some((request) => request.path.includes('/envelope/'))).toBe(false);
   });
 

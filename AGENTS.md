@@ -88,7 +88,7 @@ Telemetry, flags and profiling (details in [docs/observability.md](docs/observab
 pnpm flags:check            # fails for dead flags and for flags the code evaluates but the registry lacks
 pnpm flags:sync             # creates missing flags in PostHog (needs POSTHOG_PERSONAL_API_KEY, otherwise skips)
 pnpm telemetry:smoke --sentry   # sends one deliberate test error; add --posthog or use neither flag for both
-pnpm sentry:alerts --dry-run    # plan for monitoring/sentry/alert-rules.json; --apply makes Sentry match it
+pnpm sentry:alerts --dry-run    # prints the rules of monitoring/sentry/alert-rules.json, offline; --apply makes Sentry match it
 pnpm profile:server         # CPU profile of a throw-away server into reports/profiles
 ````
 

@@ -14,7 +14,12 @@ import { isMain, repoRoot } from './lib/util.mjs';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.kt', '.mjs']);
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', 'reports', 'test', 'tests', '.turbo']);
 const REGISTRY_FILE = path.join('packages', 'shared', 'src', 'flags.ts');
-const EVALUATION_CALL = /\b(?:flag|getFlag|isFlagEnabled|useFlag)\(\s*['"]([a-z0-9][a-z0-9-]*)['"]/g;
+/** A flag key passed as a literal to an evaluation helper: the server's `flag`, the PostHog SDK and hook names, and the Kotlin client. */
+const EVALUATION_CALL =
+  /\b(?:flag|getFlag|isFlagEnabled|useFlag|isFeatureEnabled|getFeatureFlag|getFeatureFlagResult|getFeatureFlagPayload|useFeatureFlag\w*|flags\.isEnabled)\(\s*['"`]([^'"`\s)]+)['"`]/g;
+/** `evaluateFlags(id, { flagKeys: ['a', 'b'] })` and the array form `evaluateFlags(id, ['a'])`. */
+const FLAG_KEY_LIST = /\b(?:flagKeys\s*:|evaluateFlags\([^,()]*,)\s*\[([^\]]*)\]/g;
+const QUOTED = /['"`]([^'"`\s]+)['"`]/g;
 const POSTHOG_APP_HOST = (ingestionHost) => ingestionHost.replace('.i.posthog.com', '.posthog.com').replace(/\/+$/, '');
 const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 
@@ -45,6 +50,12 @@ function sourceRoots(root) {
   return roots;
 }
 
+export function evaluatedKeys(text) {
+  const keys = [...text.matchAll(EVALUATION_CALL)].map((match) => match[1]);
+  for (const list of text.matchAll(FLAG_KEY_LIST)) keys.push(...[...list[1].matchAll(QUOTED)].map((m) => m[1]));
+  return keys;
+}
+
 /** Which registry keys appear in application code, and which keys the code evaluates. Tests and the registry itself do not count. */
 export function scanUsage(root, keys) {
   const referenced = new Set();
@@ -55,8 +66,7 @@ export function scanUsage(root, keys) {
       if (file === registryFile) continue;
       const text = readFileSync(file, 'utf8');
       for (const key of keys) if (text.includes(`'${key}'`) || text.includes(`"${key}"`)) referenced.add(key);
-      for (const match of text.matchAll(EVALUATION_CALL)) {
-        const key = match[1];
+      for (const key of evaluatedKeys(text)) {
         if (!evaluated.has(key)) evaluated.set(key, path.relative(root, file).replace(/\\/g, '/'));
       }
     }

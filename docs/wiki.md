@@ -20,7 +20,9 @@ When it runs:
 
 Branch protection on `main` requires the CI jobs `Linux` and `Windows`. CI ignores `droid-wiki/**` (`paths-ignore` in `ci.yml`) and a pull request opened with the built-in `GITHUB_TOKEN` triggers no workflow, so those checks would never report and auto-merge would wait forever. After opening the pull request, `wiki-publish` therefore posts a `success` commit status named `Linux` and `Windows` on its head commit (the `REQUIRED_CHECKS` variable of the workflow). That is safe because the pull request only adds `droid-wiki/**`, which no check covers. If you rename a CI job or change the required checks, change `REQUIRED_CHECKS` as well. The repository setting `allow_auto_merge` must be on; `enforce_admins` is off, force pushes and deletions are blocked.
 
-`droid-wiki/video/` and `droid-wiki/images/` are never committed.
+`wiki-publish` does not copy the artifact over the checkout: `scripts/wiki-mirror.mjs` replaces `droid-wiki/` with the artifact, so a page the generator dropped (listed for removal in `page-plan.json`) is deleted in the pull request. It refuses an artifact without `.wiki-meta.json` so a broken download can never empty the wiki.
+
+`droid-wiki/video/` and `droid-wiki/images/` are never committed, and the mirror leaves them alone.
 
 ## Secrets and settings
 

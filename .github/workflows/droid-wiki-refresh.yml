@@ -137,7 +137,15 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: droid-wiki
-          path: droid-wiki
+          path: ${{ runner.temp }}/droid-wiki-artifact
+
+      - name: Mirror the generated wiki into the checkout
+        # Copying the artifact over the checkout would keep every page the generator dropped (page-plan.json marks
+        # them for removal). The checkout's droid-wiki/ is replaced instead, so those pages become deletions in the pull
+        # request; video/ and images/ stay untouched because they are never part of the artifact or of git.
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/droid-wiki-artifact
+        run: node scripts/wiki-mirror.mjs "$ARTIFACT_DIR" droid-wiki
 
       - name: Open or update the wiki pull request
         id: wiki-pr

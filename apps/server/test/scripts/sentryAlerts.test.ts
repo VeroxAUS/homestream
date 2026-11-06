@@ -6,6 +6,7 @@ import {
   buildPlan,
   covers,
   createClient,
+  describeRules,
   loadRules,
   main,
   parseArgs,
@@ -234,6 +235,33 @@ describe('sentry-alerts main', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('a dry run never calls the network, even with a token, and prints the local rules', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('the dry run must not use the network')));
+    const globalFetch = vi.spyOn(globalThis, 'fetch').mockImplementation(fetchImpl);
+    const env = { SENTRY_API_TOKEN: 'personal-token', SENTRY_ORG: 'example-org' } as NodeJS.ProcessEnv;
+    expect(await main(['--dry-run'], realRoot, env, fetchImpl as unknown as typeof fetch)).toBe(0);
+    expect(await main(['--dry-run'], realRoot, {}, fetchImpl as unknown as typeof fetch)).toBe(0);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(globalFetch).not.toHaveBeenCalled();
+    const printed = log.mock.calls.join('\n');
+    const rules = loadRules(path.join(realRoot, 'monitoring', 'sentry', 'alert-rules.json'));
+    for (const rule of [...rules.detectors, ...rules.workflows]) {
+      expect(printed).toContain(`"${rule.name}" (project ${rule.project}): would create, or update when it differs`);
+    }
+    expect(printed).toContain('first_seen_event');
+    expect(printed).not.toContain('personal-token');
+  });
+
+  it('describes each local rule with its body and a total', () => {
+    const lines = describeRules(RULES);
+    expect(lines[0]).toBe(
+      '[sentry-alerts] detector "Error Monitor" (project server): would create, or update when it differs',
+    );
+    expect(lines[1]).toBe('[sentry-alerts]   {"enabled":true}');
+    expect(lines.at(-1)).toContain('2 item(s) in the rules file (dry run, Sentry was not contacted)');
+  });
+
   it('takes the organisation from SENTRY_ORG and refuses the placeholder without it', async () => {
     const root = rulesFile({ organization: '<your-sentry-org>', detectors: [], workflows: [] });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -244,12 +272,12 @@ describe('sentry-alerts main', () => {
       return Promise.resolve(new Response('[]'));
     });
     const env = { SENTRY_API_TOKEN: 'personal-token', SENTRY_ORG: 'example-org' } as NodeJS.ProcessEnv;
-    expect(await main(['--dry-run'], root, env, fetchImpl as unknown as typeof fetch)).toBe(0);
+    expect(await main(['--apply'], root, env, fetchImpl as unknown as typeof fetch)).toBe(0);
     expect(urls.length).toBeGreaterThan(0);
     expect(urls.every((url) => url.startsWith('https://sentry.io/api/0/organizations/example-org/'))).toBe(true);
 
     const withoutOrg = { SENTRY_API_TOKEN: 'personal-token' } as NodeJS.ProcessEnv;
-    expect(await main(['--dry-run'], root, withoutOrg, fetchImpl as unknown as typeof fetch)).toBe(1);
+    expect(await main(['--apply'], root, withoutOrg, fetchImpl as unknown as typeof fetch)).toBe(1);
     expect(error.mock.calls.join('\n')).toContain('SENTRY_ORG is not set');
   });
 
@@ -281,7 +309,7 @@ describe('sentry-alerts main', () => {
 
     const failing = vi.fn(() => Promise.resolve(new Response('no', { status: 500 })));
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(await main(['--dry-run'], root, env, failing as unknown as typeof fetch)).toBe(1);
+    expect(await main(['--apply'], root, env, failing as unknown as typeof fetch)).toBe(1);
     expect(error.mock.calls.join('\n')).toContain('answered 500');
   });
 });

@@ -5,6 +5,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { FLAGS } from '@homestream/shared';
 import {
   checkFlags,
+  evaluatedKeys,
   flagBody,
   loadRegistry,
   main,
@@ -67,6 +68,36 @@ describe('flags:check', () => {
     });
   });
 
+  it.each([
+    ["isFeatureEnabled('unknown-flag')", 'apps/server/src/a.ts'],
+    ['posthog.isFeatureEnabled("unknown-flag", id)', 'apps/web/src/Banner.tsx'],
+    ["await client.getFeatureFlag('unknown-flag', distinctId)", 'apps/server/src/b.ts'],
+    ["client.getFeatureFlagPayload('unknown-flag', id)", 'apps/server/src/c.ts'],
+    ["const on = useFeatureFlagEnabled('unknown-flag');", 'apps/web/src/Row.tsx'],
+    ["const flags = await client.evaluateFlags(id, { flagKeys: ['alpha', 'unknown-flag'] });", 'apps/server/src/d.ts'],
+    ["client.evaluateFlags(id, [\n  'unknown-flag',\n])", 'apps/server/src/e.ts'],
+    ["if (flags.isEnabled('unknown-flag')) {}", 'apps/server/src/f.ts'],
+    ['PostHog.isFeatureEnabled("unknown-flag")', 'apps/tv/app/src/main/java/App.kt'],
+    ['val v = PostHog.getFeatureFlag("unknown-flag")', 'apps/tv/app/src/main/java/Banner.kt'],
+  ])('detects the unknown key in %s', (source, file) => {
+    const root = tempRoot({ [file]: source, 'apps/server/src/ref.ts': "const a = 'alpha';" });
+    const usage = scanUsage(root, Object.keys(REGISTRY));
+    expect(checkFlags(REGISTRY, usage).unknown).toEqual([{ key: 'unknown-flag', file }]);
+  });
+
+  it('accepts declared keys in every evaluation form and ignores dynamic keys', () => {
+    const root = tempRoot({
+      'apps/server/src/a.ts': [
+        "isFeatureEnabled('alpha'); client.getFeatureFlag('beta', id);",
+        "client.evaluateFlags(id, { flagKeys: ['alpha', 'beta'] });",
+        'flags.getFlag(key); isFeatureEnabled(name);',
+      ].join('\n'),
+    });
+    const usage = scanUsage(root, Object.keys(REGISTRY));
+    expect(checkFlags(REGISTRY, usage).unknown).toEqual([]);
+    expect(evaluatedKeys('isFeatureEnabled(name)')).toEqual([]);
+  });
+
   it('exits non-zero for dead or unknown flags and zero when the registry is clean', async () => {
     const registryModule = `export const FLAGS = { alpha: { type: 'boolean', default: true, description: 'A', status: 'active' } };`;
     const dirty = tempRoot({
@@ -79,7 +110,12 @@ describe('flags:check', () => {
     });
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const mutated = tempRoot({
+      'packages/shared/src/flags.ts': registryModule,
+      'apps/server/src/a.ts': "telemetry.flag('alpha'); isFeatureEnabled('unknown-flag')",
+    });
     expect(await main(['check'], dirty)).toBe(1);
+    expect(await main(['check'], mutated)).toBe(1);
     const reported = error.mock.calls.map((call) => String(call[0])).join('\n');
     expect(reported).toContain('alpha: dead flag');
     expect(reported).toContain('ghost: unknown flag');

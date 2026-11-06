@@ -93,6 +93,38 @@ describe('pre-commit-secrets (built-in scan, gitleaks disabled)', () => {
     expect(result.stderr + result.stdout).not.toContain(value);
   });
 
+  it.each([
+    ['an unquoted value with a trailing comment', (v: string) => `SOME_SERVICE_TOKEN=${v} # production token\n`],
+    ['a double-quoted value with a trailing comment', (v: string) => `SOME_SERVICE_TOKEN="${v}"   # prod\n`],
+    ['a single-quoted value', (v: string) => `SOME_SERVICE_TOKEN='${v}'\n`],
+    ['an exported value with surrounding whitespace', (v: string) => `export SOME_SERVICE_TOKEN =   ${v}   \n`],
+    ['a CRLF line ending', (v: string) => `SOME_SERVICE_TOKEN=${v}\r\n`],
+  ])('blocks the effective value of %s and never prints it', (_label, line) => {
+    const value = `lit-${randomBytes(10).toString('hex')}`;
+    const envDir = makeTempDir('precommit-env');
+    roots.push(envDir);
+    const envFile = path.join(envDir, 'test.env');
+    writeFileSync(envFile, line(value));
+    writeAndStage(repo, 'notes.md', `copied: ${value}\n`);
+    const result = runScript(repo, 'pre-commit-secrets.mjs', [], { ...env, HOMESTREAM_ENV_FILE: envFile });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('notes.md:1');
+    expect(result.stderr).toContain('SOME_SERVICE_TOKEN');
+    expect(result.stderr + result.stdout).not.toContain(value);
+  });
+
+  it('does not treat the comment or the quotes as part of the needle, and skips commented-out keys', () => {
+    const value = `lit-${randomBytes(10).toString('hex')}`;
+    const envDir = makeTempDir('precommit-env');
+    roots.push(envDir);
+    const envFile = path.join(envDir, 'test.env');
+    writeFileSync(envFile, `# COMMENTED_TOKEN=${value}\nSOME_SERVICE_TOKEN="${value}-x" # note about it\n`);
+    writeAndStage(repo, 'notes.md', `unrelated text ${value} and the word note\n`);
+    expect(runScript(repo, 'pre-commit-secrets.mjs', [], { ...env, HOMESTREAM_ENV_FILE: envFile }).status).toBe(0);
+    writeAndStage(repo, 'notes.md', `the real one ${value}-x\n`);
+    expect(runScript(repo, 'pre-commit-secrets.mjs', [], { ...env, HOMESTREAM_ENV_FILE: envFile }).status).toBe(1);
+  });
+
   it('blocks a staged .env file but accepts .env.example with empty values', () => {
     writeAndStage(repo, '.env.example', 'TORBOX_API_KEY=\nTMDB_READ_TOKEN=\n');
     expect(runScript(repo, 'pre-commit-secrets.mjs', [], env).status).toBe(0);

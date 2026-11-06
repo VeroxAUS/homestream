@@ -66,7 +66,7 @@ Telemetry code lives in `apps/server/src/telemetry`. It is off unless a key is s
 
 ```powershell
 pnpm telemetry:smoke --sentry     # one deliberate HomestreamReadinessSmokeError with a unique run id
-pnpm telemetry:smoke --posthog    # one server_started event whose version carries the run id
+pnpm telemetry:smoke --posthog    # server_started (version carries the run id) and one playback_started-shaped event (title carries it)
 ```
 
 The command prints the run id, never exits non-zero for a missing key or an unreachable service, and sends nothing when telemetry is off. Search the run id in Sentry or PostHog to find the report.

@@ -8,15 +8,19 @@
       "outputs": ["dist/**"]
     },
     "typecheck": {
+      "dependsOn": ["^typecheck"],
       "outputs": []
     },
     "lint": {
+      "dependsOn": ["^lint"],
       "outputs": []
     },
     "test": {
+      "dependsOn": ["^test"],
       "cache": false
     },
     "test:ci": {
+      "dependsOn": ["^test:ci"],
       "outputs": []
     }
   }

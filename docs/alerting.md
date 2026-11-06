@@ -7,11 +7,11 @@ What raises an alarm, where the rules live and how to change them. For the signa
 Rules live in `monitoring/sentry/alert-rules.json` and are applied with `scripts/sentry-alerts.mjs`:
 
 ```powershell
-pnpm sentry:alerts --dry-run   # print what would be created or changed, change nothing
+pnpm sentry:alerts --dry-run   # print the rules in the file that --apply would create or update; never calls Sentry
 pnpm sentry:alerts --apply     # make Sentry match the file; safe to repeat
 ```
 
-The script uses `SENTRY_API_TOKEN` (the personal token with `alerts:read` and `alerts:write`) from `.env` or the environment. The organisation token `SENTRY_AUTH_TOKEN` cannot manage alerts. Without a token the command only checks the rules file.
+`--apply` uses `SENTRY_API_TOKEN` (the personal token with `alerts:read` and `alerts:write`) from `.env` or the environment, and `SENTRY_ORG`. The organisation token `SENTRY_AUTH_TOKEN` cannot manage alerts. `--dry-run` needs neither: it validates the rules file and prints each rule without any network call, even when a token is set, so it cannot say which rules Sentry already has. `--apply` reports that per rule.
 
 This organisation uses Sentry's workflow-based alerting. The older alert-rule endpoints (`/projects/{org}/{project}/rules/` and `/organizations/{org}/alert-rules/`) answer 404, so the script talks to `/organizations/<your-sentry-org>/workflows/` (alerts) and `/organizations/<your-sentry-org>/detectors/` (monitors) at `https://sentry.io/api/0/`. Items are matched by name and project, so applying twice changes nothing the second time: a missing workflow is created, a workflow that drifted is updated, the rest is left alone.
 

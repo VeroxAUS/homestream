@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
 import { git, isMain, repoRoot, splitNul } from './lib/util.mjs';
 
 /**
@@ -54,17 +55,15 @@ export function addedLines(diff) {
   return added;
 }
 
+/**
+ * The effective values of a dotenv file, parsed by the same parser the server uses for its settings (node:util
+ * parseEnv): a trailing `# comment`, quotes and surrounding whitespace are not part of the value, so the needle is
+ * exactly what would be copied into another file.
+ */
 export function parseEnvValues(content) {
-  const values = [];
-  for (const raw of content.split(/\r?\n/)) {
-    if (raw.trimStart().startsWith('#')) continue;
-    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(raw);
-    if (!match) continue;
-    const [, key, rawValue] = match;
-    const value = rawValue.replace(/^(['"])(.*)\1$/, '$2');
-    if (value.length >= MIN_ENV_VALUE_LENGTH && !NON_SECRET_ENV_KEYS.has(key)) values.push({ key, value });
-  }
-  return values;
+  return Object.entries(parseEnv(content))
+    .filter(([key, value]) => value.length >= MIN_ENV_VALUE_LENGTH && !NON_SECRET_ENV_KEYS.has(key))
+    .map(([key, value]) => ({ key, value }));
 }
 
 const scannable = ({ file, text }) => !text.includes(ALLOW_MARKER) && !SCAN_SKIP_PATHS.some((skip) => skip.test(file));

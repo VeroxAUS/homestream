@@ -33,7 +33,7 @@ HomeStream uses PostHog feature flags to switch between behaviours that already 
 2. Read it with `await telemetry.flag('your-flag')` (the key and the value type are checked by TypeScript). Never read a flag in a loop or on the segment path.
 3. Add it to the table above.
 4. Test both values and the case where the flag service is unavailable (see `apps/server/test/telemetry/telemetryOn.test.ts` and `test/integration/telemetryApp.test.ts`).
-5. Run `pnpm flags:check` (fails for a flag that is declared active but never read, and for a key the code evaluates but the registry does not declare).
+5. Run `pnpm flags:check` (fails for a flag that is declared active but never read, and for a key the code evaluates but the registry does not declare). It recognises a literal key passed to `flag`, `getFlag`, `isFlagEnabled`, `isFeatureEnabled`, `getFeatureFlag`, `getFeatureFlagPayload`, `useFeatureFlag*`, `flags.isEnabled` and `evaluateFlags` (`flagKeys: [...]`) in `.ts`, `.tsx`, `.kt` and `.mjs` files under `apps` and `packages`; a key held in a variable is not checked.
 6. Run `pnpm flags:sync` to create the flag in PostHog.
 7. Follow the [homestream-telemetry skill](../.factory/skills/homestream-telemetry/SKILL.md) for anything that also sends an event.
 

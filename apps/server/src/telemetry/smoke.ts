@@ -29,6 +29,9 @@ export const SMOKE_NEEDLES = {
   userPath: 'C:\\Users\\SmokeUser\\Videos\\movie.mkv',
 } as const;
 
+/** Invented title and id of the playback_started-shaped smoke event; the run id in the title makes it unique. */
+const SMOKE_PLAYBACK = { tmdbId: 1, titlePrefix: 'Readiness smoke' } as const;
+
 export function parseSmokeArgs(argv: readonly string[]): SmokeOptions | null {
   const flags = argv.filter((arg) => arg !== '--');
   if (flags.some((flag) => flag !== '--sentry' && flag !== '--posthog')) return null;
@@ -60,7 +63,7 @@ export async function smokeMain(
 }
 
 /**
- * Sends one deliberate error to Sentry and one event to PostHog, flushes, and reports what happened. Always returns 0:
+ * Sends one deliberate error to Sentry and two events (server_started, playback_started) to PostHog, flushes, and reports what happened. Always returns 0:
  * a missing key or an unreachable service is a message, not a failure, so the command is safe in any environment.
  */
 export async function runSmoke(options: SmokeOptions, deps: SmokeDeps): Promise<number> {
@@ -106,8 +109,19 @@ export async function runSmoke(options: SmokeOptions, deps: SmokeDeps): Promise<
         packaged: false,
         nodeMajor: Number(process.versions.node.split('.')[0]),
       });
+      telemetry.capture('playback_started', {
+        mediaType: 'movie',
+        tmdbId: SMOKE_PLAYBACK.tmdbId,
+        title: `${SMOKE_PLAYBACK.titlePrefix} ${runId}`,
+        deviceKind: 'web',
+        videoCodec: 'h264',
+        hdr: false,
+        toneMapped: false,
+        resolution: '1080p',
+        startupMs: 1234,
+      });
       out(
-        `PostHog: queued server_started (version 0.0.0-smoke.${runId}); prefetch-on-details = ${String(await telemetry.flag('prefetch-on-details'))}.`,
+        `PostHog: queued server_started (version 0.0.0-smoke.${runId}) and playback_started (title "${SMOKE_PLAYBACK.titlePrefix} ${runId}"); prefetch-on-details = ${String(await telemetry.flag('prefetch-on-details'))}.`,
       );
     }
     await telemetry.shutdown();
