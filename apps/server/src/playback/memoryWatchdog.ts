@@ -14,6 +14,20 @@ export interface MemoryLimitHit {
   limitBytes: number;
 }
 
+/** The user-facing text for a stopped process, with the sizes in whole MB. */
+export function describeMemoryLimitHit(
+  who: string,
+  hit: MemoryLimitHit,
+): { usedMb: number; limitMb: number; message: string } {
+  const usedMb = Math.round(hit.rssBytes / MIB);
+  const limitMb = Math.round(hit.limitBytes / MIB);
+  return {
+    usedMb,
+    limitMb,
+    message: `${who} used ${usedMb} MB of memory (limit ${limitMb} MB) and was stopped to keep your computer responsive.`,
+  };
+}
+
 /** Pure decision: a process is over the limit once its working set is strictly above it. */
 export function exceedsMemoryLimit(rssBytes: number, limitMb: number): boolean {
   return rssBytes > limitMb * MIB;

@@ -5,6 +5,7 @@ import { EncoderProcess } from '../../src/playback/encoderProcess.js';
 import {
   MemoryWatchdog,
   createWorkingSetSampler,
+  describeMemoryLimitHit,
   exceedsMemoryLimit,
   imageNameOf,
   parsePsRss,
@@ -55,6 +56,33 @@ describe('exceedsMemoryLimit', () => {
     [101 * MIB, 100, true],
   ])('%d bytes against %d MiB is %s', (bytes, limit, expected) => {
     expect(exceedsMemoryLimit(bytes, limit)).toBe(expected);
+  });
+});
+
+describe('describeMemoryLimitHit', () => {
+  it('renders who stopped and both sizes in whole MB', () => {
+    const result = describeMemoryLimitHit('The video encoder', {
+      pid: 7,
+      rssBytes: 4500.4 * MIB,
+      limitBytes: 4096 * MIB,
+    });
+    expect(result).toEqual({
+      usedMb: 4500,
+      limitMb: 4096,
+      message:
+        'The video encoder used 4500 MB of memory (limit 4096 MB) and was stopped to keep your computer responsive.',
+    });
+    expect(result.message).not.toMatch(/\s{2}|undefined|NaN/);
+  });
+
+  it('rounds sub-MB limits instead of printing fractions', () => {
+    const { message } = describeMemoryLimitHit('The subtitle extractor', {
+      pid: 1,
+      rssBytes: 1.6 * MIB,
+      limitBytes: MIB,
+    });
+    expect(message).toContain('used 2 MB');
+    expect(message).toContain('limit 1 MB');
   });
 });
 

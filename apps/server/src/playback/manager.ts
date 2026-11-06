@@ -46,7 +46,13 @@ import { decide } from './decision.js';
 import { EncoderProcess, type EncoderHandle, type EncoderProcessOptions } from './encoderProcess.js';
 import { FallingBehindWatch } from './fallingBehind.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
-import { MemoryWatchdog, imageNameOf, createWorkingSetSampler, type MemoryLimitHit } from './memoryWatchdog.js';
+import {
+  MemoryWatchdog,
+  describeMemoryLimitHit,
+  imageNameOf,
+  createWorkingSetSampler,
+  type MemoryLimitHit,
+} from './memoryWatchdog.js';
 import { SessionMonitor } from './monitor.js';
 import type { PlaybackObserver, SessionSubject } from './observer.js';
 import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
@@ -1332,12 +1338,11 @@ export class PlaybackManager {
    */
   private onMemoryLimit(rec: SessionRecord, who: string, hit: MemoryLimitHit): void {
     if (rec.stopping || rec.state === 'error') return;
-    const usedMb = Math.round(hit.rssBytes / 1024 ** 2);
-    const limitMb = Math.round(hit.limitBytes / 1024 ** 2);
+    const { usedMb, limitMb, message } = describeMemoryLimitHit(who, hit);
     rec.state = 'error';
     rec.errorCode = 'encoder_memory_limit';
     rec.error = {
-      message: ` used  MB of memory (limit  MB) and was stopped to keep your computer responsive.`,
+      message,
       hint: 'Playback ended. Try again, or switch subtitles off. If it keeps happening, check the ffmpeg tile on the health dashboard.',
     };
     rec.generation += 1;
