@@ -1,0 +1,34 @@
+{
+  "mode": "full",
+  "repo": "HomeStream",
+  "repoUrl": "https://github.com/VeroxAUS/homestream.git",
+  "summary": "TypeScript ESM pnpm monorepo. Implemented Fastify LAN server, placeholder React/Vite web app, shared Zod contracts. SQLite uses node:sqlite. Playback uses FFmpeg/ffprobe, HLS, track selection, progressive WebVTT and bitmap burn-in. Stream discovery uses configured gateway and TMDB.",
+  "architecture": "index.ts starts config/logging/app/orphan recovery/loopback proxy/public listener/mDNS. app.ts composes db, event bus, TMDB, gateway, streams, source proxy, playback, prefetch and routes.",
+  "patterns": "Strict NodeNext TypeScript, .js import specifiers, type-only imports, AppError envelopes, redacted Pino logs, injected test seams, explicit close ownership.",
+  "contributors": "origin/main exists; git history currently contains only human VeroxAUS. No CODEOWNERS found; omit maintainers page for solo history. Domain pages use Active contributors: VeroxAUS.",
+  "coverage": {
+    "apps/server": "apps/server.md",
+    "apps/web": "apps/web.md",
+    "apps/desktop": "Not present; workspace glob only, mention in overview/tooling.",
+    "packages/shared": "packages/shared.md",
+    "server/src/db": "reference/data-models.md",
+    "server/src/events": "how-to-monitor.md and api/index.md",
+    "server/src/gateway": "systems/gateway.md",
+    "server/src/playback": "systems/playback/index.md and agent-selected focused subpages",
+    "server/src/prefetch": "features/prefetch.md",
+    "server/src/routes": "api/index.md",
+    "server/src/sourceproxy": "systems/source-proxy.md",
+    "server/src/streams": "features/stream-selection.md",
+    "server/src/tmdb": "features/catalog.md",
+    "server top-level modules": "apps/server.md, security.md, how-to-monitor.md, reference/configuration.md",
+    "tests": "how-to-contribute/testing.md",
+    "build/lint/test configs": "how-to-contribute/tooling.md",
+    ".planning-research": "Historical research only; do not quote probes or credential-bearing findings as implementation.",
+    "node_modules/dist": "Generated artifacts/dependencies excluded from source documentation."
+  },
+  "warnings": [
+    "droid CLI not on PATH; access preflight and remote wiki-read failed. Generate full wiki locally; upload unavailable.",
+    "No README, AGENTS, CONTRIBUTING, CI workflows, custom lint plugins, desktop, TV, or QA configuration found.",
+    "Working tree contains pre-existing modifications to apps/server/src/playback/ffmpegArgs.ts and its test. Do not modify either."
+  ]
+}

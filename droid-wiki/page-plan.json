@@ -1,0 +1,35 @@
+{
+  "foundation": ["overview/index.md", "overview/architecture.md", "overview/getting-started.md", "overview/glossary.md", "how-to-contribute/patterns-and-conventions.md"],
+  "assignments": [
+    {
+      "criticality": "critical",
+      "pages": ["systems/index.md", "systems/playback/index.md", "systems/playback/encoding.md", "systems/playback/subtitles.md", "systems/playback/lifecycle.md", "systems/source-proxy.md"],
+      "brief": "Trace the playback lifecycle and byte pipeline from real source. Split playback into focused pages as needed, keeping encoding.md available for foundation links.",
+      "sources": ["apps/server/src/playback", "apps/server/src/sourceproxy", "apps/server/test/playback", "apps/server/test/encode", "apps/server/test/sourceproxy"],
+      "related": ["api/index.md", "features/prefetch.md", "features/stream-selection.md", "reference/data-models.md"]
+    },
+    {
+      "criticality": "normal",
+      "pages": ["apps/index.md", "apps/server.md", "apps/web.md", "packages/index.md", "packages/shared.md", "features/index.md", "features/catalog.md", "features/stream-selection.md", "features/prefetch.md", "systems/gateway.md"],
+      "brief": "Document implemented runtimes, shared contracts, catalog, discovery/ranking, gateway policy and speculative warming. Keep the placeholder client and absent desktop distinction explicit.",
+      "sources": ["apps/server/src/tmdb", "apps/server/src/streams", "apps/server/src/gateway", "apps/server/src/prefetch", "apps/web", "packages/shared", "apps/server/src/app.ts", "apps/server/src/index.ts"],
+      "related": ["overview/architecture.md", "systems/source-proxy.md", "systems/playback/index.md", "api/index.md"]
+    },
+    {
+      "criticality": "normal",
+      "pages": ["by-the-numbers.md", "lore.md"],
+      "brief": "Measure tracked working-tree source, git activity, bot co-authorship, complexity and exports with reproducible methods. Tell the dated eight-commit history without inventing eras or removed features.",
+      "sources": ["git history", "apps", "packages", "package.json"],
+      "related": ["overview/index.md", "overview/architecture.md"]
+    }
+  ],
+  "remaining": ["how-to-contribute/index.md", "how-to-contribute/development-workflow.md", "how-to-contribute/testing.md", "how-to-contribute/debugging.md", "how-to-contribute/tooling.md", "api/index.md", "deployment.md", "security.md", "how-to-monitor.md", "reference/index.md", "reference/configuration.md", "reference/data-models.md", "reference/dependencies.md"],
+  "remainingBrief": "Read corresponding routes, config, database, logging, tests, and manifests. Document actual behavior and absent automation; do not claim deployment pipelines, authentication, metrics backends, or PR policy exist.",
+  "skipped": {
+    "maintainers.md": "Solo human contributor history",
+    "primitives": "Shared contracts page covers domain types without duplicate lens",
+    "fun-facts.md": "Short same-day history; avoid forced trivia",
+    "background": "Lore and implementation pages cover available evidence",
+    "cleanup-opportunities": "No verified actionable findings yet; add only if source analysis establishes them"
+  }
+}

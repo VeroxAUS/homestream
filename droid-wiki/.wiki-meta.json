@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-11-05T07:07:06.910Z",
+  "commitHash": "b2a0afd75d49a46d24a6895ef17ce4d4f6d7ecaf",
+  "branch": "main",
+  "pageCount": 36,
+  "topLevelSections": [
+    "overview",
+    "by-the-numbers",
+    "lore",
+    "how-to-contribute",
+    "apps",
+    "systems",
+    "features",
+    "packages",
+    "api",
+    "deployment",
+    "security",
+    "how-to-monitor",
+    "reference"
+  ],
+  "pageOrder": [
+    "overview/index.md",
+    "overview/architecture.md",
+    "overview/getting-started.md",
+    "overview/glossary.md",
+    "by-the-numbers.md",
+    "lore.md",
+    "how-to-contribute/index.md",
+    "how-to-contribute/development-workflow.md",
+    "how-to-contribute/testing.md",
+    "how-to-contribute/debugging.md",
+    "how-to-contribute/patterns-and-conventions.md",
+    "how-to-contribute/tooling.md",
+    "apps/index.md",
+    "apps/server.md",
+    "apps/web.md",
+    "systems/index.md",
+    "systems/playback/index.md",
+    "systems/playback/encoding.md",
+    "systems/playback/lifecycle.md",
+    "systems/playback/subtitles.md",
+    "systems/source-proxy.md",
+    "systems/gateway.md",
+    "features/index.md",
+    "features/catalog.md",
+    "features/stream-selection.md",
+    "features/prefetch.md",
+    "packages/index.md",
+    "packages/shared.md",
+    "api/index.md",
+    "deployment.md",
+    "security.md",
+    "how-to-monitor.md",
+    "reference/index.md",
+    "reference/configuration.md",
+    "reference/data-models.md",
+    "reference/dependencies.md"
+  ],
+  "sourceSnapshot": {
+    "includesUncommittedChanges": true,
+    "paths": [
+      "apps/server/src/playback/ffmpegArgs.ts",
+      "apps/server/test/playback/ffmpegArgs.test.ts"
+    ]
+  },
+  "videoOverview": {
+    "status": "skipped",
+    "warnings": ["User declined video overview generation"]
+  },
+  "warnings": [
+    "Factory upload preflight unavailable: droid CLI is not on PATH.",
+    "Remote wiki-read failed: droid command not found. Full local generation used.",
+    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa before requesting screenshots.",
+    "Upload not attempted because the droid CLI is unavailable."
+  ]
+}
