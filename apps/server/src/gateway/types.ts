@@ -7,7 +7,17 @@ export interface GatewayStream {
   url: string;
   filename: string;
   videoSize: number;
+  /** From AIOStreams `streamData` (sent only to clients whose User-Agent starts with "AIO"); absent otherwise. */
+  cached?: boolean;
+  /** Lower-case torrent info hash; the key that links the stream to a TorBox item. */
+  infoHash?: string;
+  fileIdx?: number;
+  /** `debrid` or `usenet`. */
+  kind?: string;
 }
+
+/** Sent on every gateway request so AIOStreams adds `streamData` to the stream objects. */
+export const GATEWAY_USER_AGENT = 'AIOStreams-HomeStream/1.0';
 
 export type StreamQuery =
   | { type: 'movie'; imdbId: string }

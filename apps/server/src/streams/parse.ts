@@ -193,7 +193,7 @@ export function parseStream(raw: GatewayStream): StreamOption {
     audio: parseAudio(norm),
     source: parseSource(norm),
     sizeBytes: raw.videoSize,
-    cached: isCachedName(raw.name),
+    cached: raw.cached ?? isCachedName(raw.name),
     filename: raw.filename,
     languages: parseLanguages(raw.filename, norm),
   };

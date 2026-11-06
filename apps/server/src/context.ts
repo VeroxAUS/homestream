@@ -1,5 +1,6 @@
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
+import type { DownloadService } from './downloads/service.js';
 import type { EventBus } from './events/bus.js';
 import type { GatewayClient } from './gateway/client.js';
 import type { HealthService } from './health/service.js';
@@ -21,6 +22,7 @@ export interface AppContext {
   gateway: GatewayClient;
   streams: StreamService;
   playback: PlaybackManager;
+  downloads: DownloadService;
   sourceProxy: SourceProxy;
   prefetch: PrefetchService;
   continueWatching: ContinueWatchingService;

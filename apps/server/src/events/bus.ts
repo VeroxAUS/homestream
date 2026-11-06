@@ -7,6 +7,10 @@ export interface EventMap {
   'session.update': Record<string, unknown>;
   'session.end': Record<string, unknown>;
   log: Record<string, unknown>;
+  'download.started': Record<string, unknown>;
+  'download.progress': Record<string, unknown>;
+  'download.ready': Record<string, unknown>;
+  'download.failed': Record<string, unknown>;
 }
 
 export type EventType = keyof EventMap;

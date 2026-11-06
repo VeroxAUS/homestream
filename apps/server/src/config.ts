@@ -12,6 +12,7 @@ export type RequiredKey = (typeof REQUIRED_KEYS)[number];
 const KNOWN_KEYS = [
   ...REQUIRED_KEYS,
   'TORBOX_API_KEY',
+  'TORBOX_API_URL',
   'PORT',
   'DATA_DIR',
   'TRANSCODE_DIR',
@@ -67,6 +68,8 @@ export interface Config {
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
   torboxApiKey: string | null;
+  /** TorBox API origin used by the download poller; only tests and local stubs change it. */
+  torboxApiUrl: string;
   webDir: string | null;
   configFile: ConfigFileInfo;
   missingKeys: RequiredKey[];
@@ -132,6 +135,20 @@ function positiveInteger(raw: string | undefined, fallback: number, name: string
   return value;
 }
 
+export const DEFAULT_TORBOX_API_URL = 'https://api.torbox.app';
+
+function httpOrigin(raw: string | undefined, fallback: string, name: string, warnings: string[]): string {
+  if (raw === undefined) return fallback;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin;
+  } catch {
+    // reported below
+  }
+  warnings.push(`${name} is not an http(s) URL; using ${fallback}.`);
+  return fallback;
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): Config {
   const env = options.env ?? process.env;
   const warnings: string[] = [];
@@ -186,6 +203,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,
     torboxApiKey: values.TORBOX_API_KEY ?? null,
+    torboxApiUrl: httpOrigin(values.TORBOX_API_URL, DEFAULT_TORBOX_API_URL, 'TORBOX_API_URL', warnings),
     webDir: values.HOMESTREAM_WEB_DIR ?? options.defaultWebDir ?? null,
     configFile,
     missingKeys,

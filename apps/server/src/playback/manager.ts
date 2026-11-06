@@ -6,6 +6,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type {
   ActivitySession,
   CapabilityProfile,
+  DownloadStartedResponse,
   MovieDetails,
   NetworkSession,
   PingState,
@@ -18,6 +19,7 @@ import type {
 } from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
+import type { DownloadService } from '../downloads/service.js';
 import { upsertDevice } from '../db/devices.js';
 import { deletePlay, finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision, updatePlayProgress } from '../db/plays.js';
 import { upsertProgress } from '../db/progress.js';
@@ -95,6 +97,8 @@ export interface PlaybackManagerOptions {
   logger: FastifyBaseLogger;
   tmdb: TmdbService;
   streams: StreamService;
+  /** TorBox caching for titles without a cached stream; without it such a title fails like before (`stream_not_cached`). */
+  downloads?: Pick<DownloadService, 'existing' | 'begin'>;
   /** Every ffprobe/ffmpeg input of a session is a loopback URL served by this proxy. */
   proxy: SourceProxy;
   segmentWaitMs?: number;
@@ -198,7 +202,13 @@ export class PlaybackManager {
     }
   }
 
-  async start(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse> {
+  /** Resolves to a session (201) or, for a title TorBox has to cache first, to the tracked download (202). */
+  async start(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse | DownloadStartedResponse> {
+    if (body.streamId === 'auto') {
+      // A repeat Play needs no session slot, gateway lookup or TMDB call.
+      const pending = this.options.downloads?.existing(body);
+      if (pending) return pending;
+    }
     this.reserveSlot();
     try {
       return await this.startSession(body, clientIp);
@@ -219,13 +229,18 @@ export class PlaybackManager {
     this.starting += 1;
   }
 
-  private async startSession(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse> {
-    const { db, tmdb } = this.options;
+  private async startSession(body: SessionStartRequest, clientIp: string | null): Promise<SessionResponse | DownloadStartedResponse> {
+    const { db, tmdb, downloads } = this.options;
 
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
     const device = upsertDevice(db, body.device, clientIp).capabilities;
 
     const plan = await this.planStart(body, details.imdbId, device);
+    if (downloads && plan.auto && !plan.cached && details.imdbId) {
+      // Nothing is cached: TorBox is asked to cache the best-ranked stream. A link that turns out to be playable falls through.
+      const started = await downloads.begin({ body, title: details.title, imdbId: details.imdbId, streamId: plan.streamIds[0] as string });
+      if (started) return started;
+    }
     const attempts: StartAttempt[] = [];
     for (const streamId of plan.streamIds) {
       try {

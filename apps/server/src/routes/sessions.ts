@@ -3,6 +3,7 @@ import {
   SessionPatchRequestSchema,
   SessionStartRequestSchema,
   type ActivityResponse,
+  type DownloadStartedResponse,
   type SessionResponse,
 } from '@homestream/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -17,11 +18,11 @@ const SUBTITLE_PLAYLIST = 'index.m3u8';
 export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { playback } = ctx;
 
-  app.post('/api/sessions', async (request, reply): Promise<SessionResponse> => {
+  app.post('/api/sessions', async (request, reply): Promise<SessionResponse | DownloadStartedResponse> => {
     const parsed = SessionStartRequestSchema.safeParse(request.body);
     if (!parsed.success) throw invalidRequest(parsed.error);
-    const session = await playback.start(parsed.data, stripIpv6Prefix(request.ip));
-    return reply.code(201).send(session);
+    const result = await playback.start(parsed.data, stripIpv6Prefix(request.ip));
+    return reply.code('status' in result ? 202 : 201).send(result);
   });
 
   app.get('/api/activity', async (): Promise<ActivityResponse> => ({ sessions: playback.activity() }));

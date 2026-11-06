@@ -49,6 +49,7 @@ async function main(): Promise<void> {
   );
 
   app.ctx.health.start();
+  app.ctx.downloads.start();
 
   const discovery = startDiscovery({
     name: config.serverName,

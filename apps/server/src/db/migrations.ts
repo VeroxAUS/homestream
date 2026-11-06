@@ -114,4 +114,52 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_events_level_source ON events (level, source);
     `,
   },
+  {
+    // Admits the 'downloads' event source (same rebuild as version 2) and adds the TorBox caching queue.
+    // No gateway/CDN URL is ever stored here: the playback link is re-resolved from query_key when needed.
+    version: 3,
+    sql: `
+      CREATE TABLE events_v3 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        level TEXT NOT NULL CHECK (level IN ('info', 'warn', 'error')),
+        source TEXT NOT NULL CHECK (source IN ('gateway', 'tmdb', 'torbox', 'ffmpeg', 'session', 'health', 'server', 'prefetch', 'downloads')),
+        message TEXT NOT NULL,
+        details_json TEXT,
+        session_id TEXT
+      );
+      INSERT INTO events_v3 (id, ts, level, source, message, details_json, session_id)
+        SELECT id, ts, level, source, message, details_json, session_id FROM events;
+      DROP TABLE events;
+      ALTER TABLE events_v3 RENAME TO events;
+      CREATE INDEX idx_events_ts ON events (ts DESC);
+      CREATE INDEX idx_events_level_source ON events (level, source);
+
+      CREATE TABLE pending_downloads (
+        id TEXT PRIMARY KEY,
+        media_key TEXT NOT NULL,
+        media_type TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
+        tmdb_id INTEGER NOT NULL,
+        season INTEGER,
+        episode INTEGER,
+        query_key TEXT NOT NULL,
+        title TEXT NOT NULL,
+        info_hash TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed')),
+        state TEXT NOT NULL CHECK (state IN ('pending', 'downloading', 'ready', 'failed')),
+        progress REAL NOT NULL DEFAULT 0,
+        eta_sec INTEGER,
+        reason TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        next_poll_at INTEGER NOT NULL,
+        progress_changed_at INTEGER NOT NULL,
+        last_event_at INTEGER,
+        ready_since INTEGER,
+        notified_at INTEGER
+      );
+      CREATE UNIQUE INDEX pending_downloads_active ON pending_downloads (media_key) WHERE status = 'pending';
+      CREATE INDEX idx_pending_downloads_created ON pending_downloads (created_at DESC);
+    `,
+  },
 ];

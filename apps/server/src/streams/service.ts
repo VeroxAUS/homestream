@@ -12,6 +12,8 @@ export interface ResolvedStream {
   /** Raw gateway playback URL. Server-side only. */
   url: string;
   stream: StreamOption;
+  /** The gateway record, including the TorBox info hash when AIOStreams sent it. Server-side only. */
+  raw: GatewayStream;
 }
 
 export class StreamService {
@@ -22,6 +24,11 @@ export class StreamService {
 
   async list(query: StreamQuery, deviceId?: string): Promise<StreamsResponse> {
     return this.rank(await this.gateway.lookup(query), query, deviceId);
+  }
+
+  /** Like `list`, but skips the gateway cache (and refreshes it), so a download that just finished shows as cached. */
+  async refresh(query: StreamQuery): Promise<StreamsResponse> {
+    return this.rank(await this.gateway.lookup(query, { fresh: true }), query);
   }
 
   /** Like `list`, but only from a fresh gateway cache entry: never waits for or triggers a lookup. Null when not cached. */
@@ -57,6 +64,6 @@ export class StreamService {
       if (!query) return null;
       raw = (await this.gateway.lookup(query)).find((stream) => stream.id === id);
     }
-    return raw ? { id, url: raw.url, stream: parseStream(raw) } : null;
+    return raw ? { id, url: raw.url, stream: parseStream(raw), raw } : null;
   }
 }

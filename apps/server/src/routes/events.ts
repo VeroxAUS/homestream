@@ -39,10 +39,17 @@ export function registerEventRoutes(app: FastifyInstance, ctx: AppContext, optio
       raw.write(frame('heartbeat', { ts: Date.now() }));
     }, heartbeatMs);
 
+    ctx.downloads.clientConnected();
+    ctx.downloads.replayUnnotified();
+
+    let closed = false;
     const cleanup = (): void => {
+      if (closed) return;
+      closed = true;
       clearInterval(timer);
       unsubscribe();
       open.delete(raw);
+      ctx.downloads.clientDisconnected();
     };
     request.raw.on('close', cleanup);
     raw.on('error', cleanup);

@@ -3,6 +3,7 @@ import Fastify, { LogController, type FastifyBaseLogger, type FastifyError, type
 import { registerConfigSecrets, type Config } from './config.js';
 import type { AppContext } from './context.js';
 import { openDatabase, type Db } from './db/index.js';
+import { DownloadService, type DownloadServiceOptions } from './downloads/service.js';
 import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
 import { logEvent } from './events/record.js';
@@ -20,6 +21,7 @@ import { PrefetchService, type PrefetchServiceOptions } from './prefetch/service
 import { ContinueWatchingService } from './progress/service.js';
 import { SourceProxy, type SourceProxyOptions } from './sourceproxy/proxy.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
+import { registerDownloadRoutes } from './routes/downloads.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerHealthRoutes } from './routes/health.js';
@@ -57,6 +59,8 @@ export interface BuildAppOptions {
     | 'readAheadResumeSec'
   >;
   prefetch?: Pick<PrefetchServiceOptions, 'streamIdBudgetMs'>;
+  /** Test seams for the TorBox poller: HTTP calls, clock and time limits. */
+  downloads?: Pick<DownloadServiceOptions, 'torboxFetch' | 'now' | 'limits'>;
   /** Test seams for the health checks: network, child processes, disk space and timing. */
   health?: { fetch?: HealthFetch; run?: CommandRunner; diskProbe?: DiskProbe; now?: () => number; intervalMs?: number; liveIntervalMs?: number };
   heartbeatMs?: number;
@@ -90,12 +94,13 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     onEvent: (event) => logEvent({ db, bus }, { ...event, source: 'session' }),
     ...options.sourceProxy,
   });
-  const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, proxy: sourceProxy, ...playbackOptions });
+  const downloads = new DownloadService({ config, db, bus, logger, gateway, streams, ...options.downloads });
+  const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, downloads, proxy: sourceProxy, ...playbackOptions });
   const prefetch = new PrefetchService({ tmdb, streams, proxy: sourceProxy, db, bus, logger, ...options.prefetch });
   const continueWatching = new ContinueWatchingService({ db, tmdb, logger });
   const home = new HomeService({ db, tmdb, continueWatching, logger });
   const health = new HealthService({ config, db, bus, logger, gateway, tmdb, playback, sourceProxy, ...options.health });
-  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, sourceProxy, prefetch, continueWatching, home, health };
+  const ctx: AppContext = { config, db, bus, logger, tmdb, gateway, streams, playback, downloads, sourceProxy, prefetch, continueWatching, home, health };
 
   const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
   app.decorate('ctx', ctx);
@@ -142,6 +147,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
   registerCatalogRoutes(app, ctx);
   registerStreamRoutes(app, ctx);
   registerSessionRoutes(app, ctx);
+  registerDownloadRoutes(app, ctx);
   registerProgressRoutes(app, ctx);
   registerHistoryRoutes(app, ctx);
   registerPrefetchRoutes(app, ctx);
@@ -150,6 +156,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
 
   app.addHook('onClose', async () => {
     health.stop();
+    downloads.close();
     await playback.close();
     await sourceProxy.close();
     if (!options.gateway) gateway.close();

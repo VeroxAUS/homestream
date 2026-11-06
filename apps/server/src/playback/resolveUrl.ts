@@ -18,15 +18,21 @@ function unavailable(reason: string): AppError {
 
 const PLACEHOLDER_PATH = /^\/static\/([^/]+)\.mp4$/i;
 
+/** Lower-case clip name (`downloading`, `429`, ...) when `target` is one of the gateway's placeholder clips, else null. */
+export function placeholderName(target: URL, gatewayHost: string): string | null {
+  if (target.host !== gatewayHost) return null;
+  const match = PLACEHOLDER_PATH.exec(target.pathname);
+  return match ? (match[1] as string).toLowerCase() : null;
+}
+
 /**
  * When the gateway cannot serve a file it redirects to a short clip of its own (`/static/<reason>.mp4`) instead of failing.
  * Returns the error for that clip, or null when `target` is something else.
  */
 function placeholderError(target: URL, gatewayHost: string): AppError | null {
-  if (target.host !== gatewayHost) return null;
-  const match = PLACEHOLDER_PATH.exec(target.pathname);
-  if (!match) return null;
-  switch ((match[1] as string).toLowerCase()) {
+  const name = placeholderName(target, gatewayHost);
+  if (!name) return null;
+  switch (name) {
     case 'downloading':
       return new AppError(
         409,

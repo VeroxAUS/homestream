@@ -75,6 +75,25 @@ describe('database', () => {
     db.close();
   });
 
+  it('accepts download events and keeps one pending download per title', () => {
+    const db = openDatabase(':memory:');
+    db.prepare("INSERT INTO events (ts, level, source, message) VALUES (1, 'info', 'downloads', 'x')").run();
+    const columns = (db.prepare('PRAGMA table_info(pending_downloads)').all() as { name: string }[]).map((c) => c.name);
+    expect(columns).toEqual(expect.arrayContaining(['id', 'media_key', 'query_key', 'info_hash', 'status', 'progress', 'created_at', 'next_poll_at']));
+    const insert = (id: string, status: string): void => {
+      db.prepare(
+        `INSERT INTO pending_downloads (id, media_key, media_type, tmdb_id, query_key, title, status, state, created_at, updated_at, next_poll_at, progress_changed_at)
+         VALUES (?, 'movie:1', 'movie', 1, 'movie:tt1', 'T', ?, 'pending', 1, 1, 1, 1)`,
+      ).run(id, status);
+    };
+    insert('a', 'pending');
+    expect(() => insert('b', 'pending')).toThrow();
+    insert('c', 'failed');
+    insert('d', 'ready');
+    expect((db.prepare('SELECT COUNT(*) AS n FROM pending_downloads').get() as { n: number }).n).toBe(3);
+    db.close();
+  });
+
   it('rejects an event with an unknown level', () => {
     const db = openDatabase(':memory:');
     expect(() =>

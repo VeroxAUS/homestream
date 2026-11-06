@@ -175,6 +175,25 @@ describe('parseGatewayResponse', () => {
     expect(parsed[0]).toMatchObject({ filename: 'My Movie 2020 1080p.mkv', videoSize: 0, name: 'a' });
   });
 
+  it('keeps the cached flag, info hash, file index and type from streamData, and falls back to its size', () => {
+    const hash = 'AbCdEf0123456789AbCdEf0123456789AbCdEf01';
+    const parsed = parseGatewayResponse({
+      streams: [
+        {
+          name: 'a',
+          url: 'https://cdn.example.test/p/one.mkv',
+          streamData: { type: 'debrid', service: { id: 'torbox', cached: false }, torrent: { infoHash: hash, fileIdx: 3 }, size: 1234 },
+        },
+        { name: 'b', url: 'https://cdn.example.test/p/two.mkv', streamData: { service: { cached: 'yes' }, torrent: { infoHash: 'short' } } },
+        { name: 'c', url: 'https://cdn.example.test/p/three.mkv', behaviorHints: { videoSize: 99 }, streamData: { size: 5 } },
+      ],
+    });
+    expect(parsed[0]).toMatchObject({ cached: false, infoHash: hash.toLowerCase(), fileIdx: 3, kind: 'debrid', videoSize: 1234 });
+    expect(parsed[1]?.cached).toBeUndefined();
+    expect(parsed[1]?.infoHash).toBeUndefined();
+    expect(parsed[2]?.videoSize).toBe(99);
+  });
+
   it('rejects a body without a streams array', () => {
     expect(() => parseGatewayResponse({ error: 'x' })).toThrow();
     expect(() => parseGatewayResponse(null)).toThrow();

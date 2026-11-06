@@ -1,10 +1,10 @@
 import {
   SearchQuerySchema,
   type HomeResponse,
-  type MovieDetails,
+  type MovieDetailsWithDownload,
   type Season,
   type SearchResponse,
-  type ShowDetails,
+  type ShowDetailsWithDownloads,
 } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.js';
@@ -30,12 +30,18 @@ export function registerCatalogRoutes(app: FastifyInstance, ctx: AppContext): vo
     return { results: await tmdb.search(parsed.data.q) };
   });
 
-  app.get<{ Params: { tmdbId: string } }>('/api/movie/:tmdbId', async (request): Promise<MovieDetails> => {
-    return tmdb.movie(parseId(request.params.tmdbId, 'tmdbId', 1));
+  app.get<{ Params: { tmdbId: string } }>('/api/movie/:tmdbId', async (request): Promise<MovieDetailsWithDownload> => {
+    const tmdbId = parseId(request.params.tmdbId, 'tmdbId', 1);
+    const details = await tmdb.movie(tmdbId);
+    const download = ctx.downloads.forMovie(tmdbId);
+    return download ? { ...details, download } : details;
   });
 
-  app.get<{ Params: { tmdbId: string } }>('/api/tv/:tmdbId', async (request): Promise<ShowDetails> => {
-    return tmdb.show(parseId(request.params.tmdbId, 'tmdbId', 1));
+  app.get<{ Params: { tmdbId: string } }>('/api/tv/:tmdbId', async (request): Promise<ShowDetailsWithDownloads> => {
+    const tmdbId = parseId(request.params.tmdbId, 'tmdbId', 1);
+    const details = await tmdb.show(tmdbId);
+    const downloads = ctx.downloads.forShow(tmdbId);
+    return downloads.length > 0 ? { ...details, downloads } : details;
   });
 
   app.get<{ Params: { tmdbId: string; n: string } }>(
