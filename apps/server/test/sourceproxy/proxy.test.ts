@@ -225,22 +225,22 @@ describe('caching', () => {
     expect(cdn.sentBytes).toBe(again);
   }, 60_000);
 
-  it('does not block-cache extractor reads but still serves them from existing blocks', async () => {
+  it('shares blocks between extractor and encoder reads: whichever reads first pays, the other is served from memory', async () => {
     const { proxy } = rig();
     const handle = await proxy.acquire('gw://extract', 'session-1');
     await settleHead(handle);
     const range = `bytes=${40 * MB}-${42 * MB - 1}`;
 
+    const sent = cdn.sentBytes;
     const viaExtractor = await read(handle.extractorUrl, range);
     expect(viaExtractor.body.equals(expectedBytes(40 * MB, 42 * MB - 1))).toBe(true);
-    const sent = cdn.sentBytes;
-    await read(handle.extractorUrl, range);
     expect(cdn.sentBytes - sent).toBeGreaterThanOrEqual(2 * MB);
 
-    await read(handle.url, range);
     const cached = cdn.sentBytes;
     const viaExtractorAgain = await read(handle.extractorUrl, range);
     expect(viaExtractorAgain.body.equals(expectedBytes(40 * MB, 42 * MB - 1))).toBe(true);
+    const viaEncoder = await read(handle.url, range);
+    expect(viaEncoder.body.equals(expectedBytes(40 * MB, 42 * MB - 1))).toBe(true);
     expect(cdn.sentBytes).toBe(cached);
   }, 60_000);
 

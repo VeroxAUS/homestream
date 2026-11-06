@@ -38,7 +38,14 @@ export interface BuildAppOptions {
   /** Test seams for the source proxy's lifetime and cache limits. */
   sourceProxy?: Pick<
     SourceProxyOptions,
-    'prefetchTtlMs' | 'maxPrefetchEntries' | 'sweepIntervalMs' | 'globalCapBytes' | 'perSourceCapBytes'
+    | 'prefetchTtlMs'
+    | 'maxPrefetchEntries'
+    | 'sweepIntervalMs'
+    | 'globalCapBytes'
+    | 'perSourceCapBytes'
+    | 'maxDownloadMbps'
+    | 'readAheadSec'
+    | 'readAheadResumeSec'
   >;
   prefetch?: Pick<PrefetchServiceOptions, 'streamIdBudgetMs'>;
   heartbeatMs?: number;
@@ -66,6 +73,9 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     probe: probe ?? createFfprobeRunner(config.ffprobePath),
     port: config.sourceProxyPort,
     logger,
+    maxDownloadMbps: config.maxDownloadMbps,
+    readAheadSec: config.readAheadSec,
+    readAheadResumeSec: config.readAheadResumeSec,
     ...options.sourceProxy,
   });
   const playback = new PlaybackManager({ config, db, bus, logger, tmdb, streams, proxy: sourceProxy, ...playbackOptions });

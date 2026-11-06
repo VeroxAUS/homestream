@@ -3,6 +3,7 @@ import path from 'node:path';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { startDiscovery } from './discovery.js';
+import { recordConfigWarnings } from './events/configWarnings.js';
 import { createLogger } from './logger.js';
 import { displayGatewayUrl } from './redact.js';
 import { SERVER_VERSION, serverRoot } from './version.js';
@@ -35,6 +36,8 @@ async function main(): Promise<void> {
   }
 
   const app = await buildApp(config, { logger });
+  // Settings problems are also kept as warn events so they show up in the log view, not only in the console.
+  recordConfigWarnings({ db: app.ctx.db, bus: app.ctx.bus }, config.warnings);
   await app.ctx.playback.recoverOrphans();
   const proxyPort = await app.ctx.sourceProxy.listen();
   await app.listen({ port: config.port, host: config.host });

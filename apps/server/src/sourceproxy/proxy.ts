@@ -3,15 +3,18 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { FastifyBaseLogger } from 'fastify';
 import { AppError } from '../errors.js';
+import { DownloadGate } from '../network/downloadGate.js';
+import { DEFAULT_MAX_DOWNLOAD_MBPS, DEFAULT_READ_AHEAD_RESUME_SEC, DEFAULT_READ_AHEAD_SEC } from '../network/limits.js';
+import type { ReadAheadState } from '../network/readAhead.js';
 import type { ProbeResult, ProbeRunner } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
 import { BlockCache, GLOBAL_CAP_BYTES, PER_SOURCE_CAP_BYTES, type BlockCacheStats } from './blockCache.js';
 import { newCounters, serveSource, type ProxyCounters } from './serve.js';
-import { SourceEntry, type Consumer } from './sourceEntry.js';
+import { PREFETCH_OWNER, SourceEntry, type Consumer } from './sourceEntry.js';
 import { UpstreamClient } from './upstream.js';
 
+export { PREFETCH_OWNER };
 export const LOOPBACK_HOST = '127.0.0.1';
-export const PREFETCH_OWNER = 'prefetch';
 export const PREFETCH_TTL_MS = 10 * 60 * 1000;
 /** Prefetches nobody has played yet; the oldest is dropped beyond this. */
 export const MAX_PREFETCH_ENTRIES = 3;
@@ -29,6 +32,11 @@ export interface SourceProxyOptions {
   prefetchTtlMs?: number;
   maxPrefetchEntries?: number;
   sweepIntervalMs?: number;
+  /** Cap on all upstream bytes together. */
+  maxDownloadMbps?: number;
+  /** Seconds of media an encoder may read ahead of the player, and the lead below which it reads again. */
+  readAheadSec?: number;
+  readAheadResumeSec?: number;
 }
 
 /** What a session or prefetch holds on to: loopback URLs for ffprobe/ffmpeg plus the cached probe and playback hints. */
@@ -37,6 +45,18 @@ export interface SourceHandle {
   readonly url: string;
   /** For subtitle extractors: same bytes, paced to the limit set with `setExtractorLimit`. */
   readonly extractorUrl: string;
+  /** The extractor URL for one extractor run, so that run can be held at the end of the read-ahead window. */
+  extractorRunUrl(runId: number): string;
+  /** Holds or releases the reads of an extractor run (see `extractorRunUrl`). */
+  setExtractorHold(runId: number, held: boolean): void;
+  /** Seconds of encoded video ahead of the player; the encoder's reads stop at the read-ahead window and resume below the resume lead. */
+  setLead(leadSec: number): void;
+  /** Encoder start, seek or restart: the window is measured from here again. */
+  resetReadAhead(): void;
+  readonly readAhead: ReadAheadState;
+  readonly leadSec: number;
+  /** This source's own upstream download rate, Mbps, 5 s average. */
+  rateMbps(): number;
   /** ffprobe result for this source, run at most once and shared by every restart and later session. */
   probe(): Promise<ProbeResult>;
   /** Re-resolves the gateway link now (a real failure, as opposed to the automatic re-resolve on expiry). */
@@ -55,6 +75,15 @@ export interface SourceProxyStats extends ProxyCounters {
   cache: BlockCacheStats;
 }
 
+export interface ProxyNetwork {
+  /** All upstream downloads together, Mbps, 5 s average. */
+  rateMbps: number;
+  capMbps: number;
+  readAheadSec: number;
+  resumeSec: number;
+  limitedForSec: number;
+}
+
 function newKey(): string {
   return randomBytes(12).toString('base64url');
 }
@@ -64,6 +93,7 @@ export class SourceProxy {
   private readonly pending = new Map<string, Promise<SourceEntry>>();
   private readonly byKey = new Map<string, { entry: SourceEntry; consumer: Consumer }>();
   private readonly cache: BlockCache;
+  private readonly gate: DownloadGate;
   private readonly upstream = new UpstreamClient();
   private readonly counters = newCounters();
   private readonly server: http.Server;
@@ -73,6 +103,7 @@ export class SourceProxy {
 
   constructor(private readonly options: SourceProxyOptions) {
     this.cache = new BlockCache(options.globalCapBytes ?? GLOBAL_CAP_BYTES, options.perSourceCapBytes ?? PER_SOURCE_CAP_BYTES);
+    this.gate = new DownloadGate(options.maxDownloadMbps ?? DEFAULT_MAX_DOWNLOAD_MBPS);
     this.server = http.createServer((req, res) => void this.handle(req, res));
     this.server.keepAliveTimeout = 60_000;
     this.server.requestTimeout = 0;
@@ -118,7 +149,7 @@ export class SourceProxy {
     if (!entry) {
       let pending = this.pending.get(rawUrl);
       if (!pending) {
-        pending = this.create(rawUrl).finally(() => this.pending.delete(rawUrl));
+        pending = this.create(rawUrl, owner).finally(() => this.pending.delete(rawUrl));
         this.pending.set(rawUrl, pending);
       }
       entry = await pending;
@@ -134,10 +165,21 @@ export class SourceProxy {
     return { ...this.counters, sources: this.entries.size, cache: this.cache.stats() };
   }
 
+  network(): ProxyNetwork {
+    return {
+      rateMbps: this.gate.mbps(5000),
+      capMbps: this.gate.capMbps,
+      readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
+      resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
+      limitedForSec: this.gate.limitedForSec(),
+    };
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
     if (this.sweeper) clearInterval(this.sweeper);
+    this.gate.close();
     for (const entry of [...this.entries.values()]) this.drop(entry);
     this.upstream.close();
     await new Promise<void>((resolve) => {
@@ -150,7 +192,7 @@ export class SourceProxy {
     });
   }
 
-  private async create(rawUrl: string): Promise<SourceEntry> {
+  private async create(rawUrl: string, owner: string): Promise<SourceEntry> {
     const resolved = await this.options.resolveUrl(rawUrl);
     const entry = new SourceEntry(rawUrl, resolved, { main: newKey(), extractor: newKey() }, {
       upstream: this.upstream,
@@ -159,7 +201,11 @@ export class SourceProxy {
         this.counters.linkRefreshes += 1;
         this.options.logger.info('Stream link refreshed after it stopped working');
       },
+      gate: this.gate,
+      readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
+      resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
     });
+    entry.firstOwner = owner;
     try {
       await entry.warm();
     } catch (error) {
@@ -178,6 +224,17 @@ export class SourceProxy {
     return {
       url: `${base}${entry.keys.main}`,
       extractorUrl: `${base}${entry.keys.extractor}`,
+      extractorRunUrl: (runId) => `${base}${entry.keys.extractor}?run=${runId}`,
+      setExtractorHold: (runId, held) => entry.setExtractorHold(runId, held),
+      setLead: (leadSec) => entry.setLead(owner, leadSec),
+      resetReadAhead: () => entry.resetReadAhead(owner),
+      get readAhead() {
+        return entry.readAhead;
+      },
+      get leadSec() {
+        return entry.leadOf(owner);
+      },
+      rateMbps: () => entry.meter.mbps(5000, Date.now()),
       probe: () => {
         entry.touch();
         entry.probe ??= this.options.probe(`${base}${entry.keys.main}`).catch((error: unknown) => {
@@ -199,6 +256,7 @@ export class SourceProxy {
         if (released) return;
         released = true;
         entry.refs.delete(owner);
+        entry.forgetLead(owner);
         if (entry.refs.size === 0) this.drop(entry);
       },
     };
@@ -241,11 +299,13 @@ export class SourceProxy {
       res.end();
     };
     if (req.method !== 'GET' && req.method !== 'HEAD') return fail(405);
-    const match = KEY_PATTERN.exec((req.url ?? '').split('?')[0] ?? '');
+    const [path = '', query = ''] = (req.url ?? '').split('?');
+    const match = KEY_PATTERN.exec(path);
     const target = match ? this.byKey.get(match[1] as string) : undefined;
     if (!target) return fail(404);
+    const run = /(?:^|&)run=(\d{1,9})(?:&|$)/.exec(query);
     try {
-      await serveSource(req, res, target.entry, target.consumer, this.cache, this.counters);
+      await serveSource(req, res, target.entry, target.consumer, run ? Number(run[1]) : null, this.cache, this.counters);
     } catch {
       if (!res.headersSent) fail(502);
       else res.destroy();

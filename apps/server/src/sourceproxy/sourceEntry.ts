@@ -3,7 +3,10 @@ import { existsSync, statSync } from 'node:fs';
 import { AppError } from '../errors.js';
 import type { ProbeResult } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
-import type { Block, BlockOwner } from './blockCache.js';
+import { RANK_ENCODER, RANK_EXTRACTOR, RANK_PREFETCH, type DownloadGate, type Priority } from '../network/downloadGate.js';
+import { RateMeter } from '../network/rateMeter.js';
+import { ReadAheadWindow, type ReadAheadState } from '../network/readAhead.js';
+import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
 import type {
   UpstreamClient} from './upstream.js';
 import {
@@ -15,10 +18,19 @@ import {
   UpstreamStatusError,
 } from './upstream.js';
 
+/** Owner id of the prefetch holder of a source; sessions use their session id. */
+export const PREFETCH_OWNER = 'prefetch';
 export const HEAD_BYTES = 16 * 1024 * 1024;
 export const TAIL_BYTES = 8 * 1024 * 1024;
 const MAX_ATTEMPTS = 4;
 const RETRY_DELAY_MS = 250;
+/**
+ * ffmpeg keeps a few seconds of input in its demuxer and encoder after its last finished segment, so the window is closed
+ * this much early: the finished-segment lead then stays within the configured window.
+ */
+export const ENCODER_PIPELINE_SEC = 4;
+/** An extractor needing bytes this close ahead of an encoder stream waits for that stream to bring them (about a second at 60 Mbps). */
+const SHARE_AHEAD_BYTES = 8 * 1024 * 1024;
 
 /** `extractor` reads are paced to the entry's `extractorLimit`. */
 export type Consumer = 'main' | 'extractor';
@@ -27,6 +39,24 @@ export interface SourceEntryDeps {
   upstream: UpstreamClient;
   resolve: UrlResolver;
   onRefresh: () => void;
+  /** The shared cap on upstream bytes. */
+  gate: DownloadGate;
+  readAheadSec: number;
+  resumeSec: number;
+}
+
+/**
+ * An upstream stream being read for a consumer. A consumer that needs bytes just ahead of another one's position waits for
+ * that stream to bring them instead of fetching them a second time.
+ */
+export interface Front {
+  consumer: Consumer;
+  /** First byte it was asked for. */
+  begin: number;
+  /** Next byte this stream will deliver. */
+  pos: number;
+  /** Last byte it was asked for. */
+  end: number;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -52,6 +82,14 @@ export class SourceEntry implements BlockOwner {
   playheadByte = 0;
   /** Upstream bytes per second extractor reads may use; null is unlimited. */
   extractorLimit: number | null = null;
+  /** This source's own upstream download rate. */
+  readonly meter = new RateMeter();
+  /** Seconds of video the encoder has buffered ahead of the player; the smaller, the earlier it gets bandwidth when the cap binds. */
+  lead = 0;
+  /** Streams currently reading from upstream for a consumer. */
+  readonly fronts = new Set<Front>();
+  /** Who asked for this source first; its warm-up downloads happen before that owner is registered. */
+  firstOwner: string | null = null;
   lastUsed = Date.now();
   readonly refs = new Set<string>();
   /** Opaque ids in the loopback URL; the extractor one marks its reads as low priority. */
@@ -79,6 +117,11 @@ export class SourceEntry implements BlockOwner {
   private refreshing: Promise<void> | null = null;
   private cdnUrl: string;
   private readonly local: boolean;
+  private readonly window: ReadAheadWindow;
+  /** Extractor runs (by id) whose reads are held at the end of their window. */
+  private readonly extractorHolds = new Set<number>();
+  private readonly leads = new Map<string, number>();
+  private readonly holdWaiters = new Set<() => void>();
 
   constructor(
     readonly rawUrl: string,
@@ -89,6 +132,7 @@ export class SourceEntry implements BlockOwner {
     this.cdnUrl = resolvedUrl;
     this.keys = keys;
     this.local = !/^https?:\/\//i.test(resolvedUrl);
+    this.window = new ReadAheadWindow(Math.max(1, deps.readAheadSec - ENCODER_PIPELINE_SEC), deps.resumeSec);
   }
 
   get isLocal(): boolean {
@@ -102,6 +146,101 @@ export class SourceEntry implements BlockOwner {
 
   touch(): void {
     this.lastUsed = Date.now();
+  }
+
+  get readAhead(): ReadAheadState {
+    return this.window.state;
+  }
+
+  /**
+   * Records one owner's encoder lead over its player. Sessions playing the same stream share the encoder URL, so the
+   * smallest lead decides: reading stops only when every one of them is a full window ahead.
+   */
+  setLead(owner: string, leadSec: number): void {
+    this.leads.set(owner, leadSec);
+    this.applyLeads();
+  }
+
+  /** A start, seek or encoder restart: measured from here, so the next stretch downloads freely again. */
+  resetReadAhead(owner: string): void {
+    this.leads.set(owner, 0);
+    this.window.reset();
+    this.applyLeads();
+    this.wakeHolds();
+  }
+
+  leadOf(owner: string): number {
+    return this.leads.get(owner) ?? 0;
+  }
+
+  forgetLead(owner: string): void {
+    if (this.leads.delete(owner)) this.applyLeads();
+  }
+
+  private applyLeads(): void {
+    this.lead = this.leads.size === 0 ? 0 : Math.min(...this.leads.values());
+    if (this.window.update(this.lead)) this.wakeHolds();
+  }
+
+  setExtractorHold(runId: number, held: boolean): void {
+    if (held === this.extractorHolds.has(runId)) return;
+    if (held) this.extractorHolds.add(runId);
+    else {
+      this.extractorHolds.delete(runId);
+      this.wakeHolds();
+    }
+  }
+
+  /** True when reads for this consumer must wait: they would fetch past the end of the read-ahead window. Plain files never wait. */
+  isHeld(consumer: Consumer, runId: number | null): boolean {
+    if (this.local || this.closed) return false;
+    return consumer === 'main' ? this.window.waiting : runId !== null && this.extractorHolds.has(runId);
+  }
+
+  /** Resolves when `isHeld` may have changed, or `signal` aborts. */
+  waitForRelease(signal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        this.holdWaiters.delete(done);
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      if (signal.aborted) {
+        done();
+        return;
+      }
+      this.holdWaiters.add(done);
+      signal.addEventListener('abort', done, { once: true });
+    });
+  }
+
+  private wakeHolds(): void {
+    for (const wake of [...this.holdWaiters]) wake();
+  }
+
+  /** Another stream is about to deliver byte `pos`: it is just ahead of that stream's position. */
+  streamApproaching(pos: number, self: Front | null): boolean {
+    const blockStart = Math.floor(pos / BLOCK_SIZE) * BLOCK_SIZE;
+    for (const front of this.fronts) {
+      if (front === self || pos > front.end || blockStart < front.begin) continue;
+      // The block holding `pos` lands in the cache once the stream has delivered its last byte.
+      const ahead = front.pos <= pos && pos - front.pos <= SHARE_AHEAD_BYTES;
+      const inProgress = front.pos > blockStart && front.pos <= blockStart + BLOCK_SIZE;
+      if (ahead || inProgress) return true;
+    }
+    return false;
+  }
+
+  /** Counts downloaded bytes against the cap; resolves when they may be passed on. */
+  async download(bytes: number, consumer: Consumer, signal?: AbortSignal): Promise<void> {
+    await this.deps.gate.acquire(bytes, () => this.priority(consumer), signal);
+    this.meter.add(bytes, Date.now());
+  }
+
+  private priority(consumer: Consumer): Priority {
+    if (consumer === 'extractor') return { rank: RANK_EXTRACTOR, lead: this.lead };
+    const prefetchOnly = this.refs.size > 0 ? [...this.refs].every((owner) => owner === PREFETCH_OWNER) : this.firstOwner === PREFETCH_OWNER;
+    return { rank: prefetchOnly ? RANK_PREFETCH : RANK_ENCODER, lead: this.lead };
   }
 
   private readonly fillWaiters: Array<{ done: () => boolean; resolve: () => void }> = [];
@@ -140,6 +279,7 @@ export class SourceEntry implements BlockOwner {
     this.headSettled = true;
     this.tailSettled = true;
     this.notifyFill();
+    this.wakeHolds();
   }
 
   /** Learns the size and starts filling head and tail in parallel. Settles once the size is known. */
@@ -183,7 +323,7 @@ export class SourceEntry implements BlockOwner {
         if (this.closed) throw new Error('source released');
         this.headFilled = filled;
         this.notifyFill();
-      });
+      }, (bytes) => this.download(bytes, 'main'));
     });
     const tail = this.open(`bytes=-${TAIL_BYTES}`).then(async (response) => {
       const info = rangeInfo(response);
@@ -200,7 +340,7 @@ export class SourceEntry implements BlockOwner {
         if (this.closed) throw new Error('source released');
         this.tailFilled = filled;
         this.notifyFill();
-      });
+      }, (bytes) => this.download(bytes, 'main'));
     });
 
     // Bytes that arrived before a failure stay servable, the rest is read on demand.

@@ -94,9 +94,16 @@ export function rangeInfo(response: IncomingMessage): RangeInfo | null {
   return { start: Number(match[1]), total: match[3] === '*' ? null : Number(match[3]) };
 }
 
-/** Reads at most `limit` bytes of a response, then abandons the rest. */
-/** Copies the body into `target` as it arrives, reporting how many bytes are valid after every chunk. Returns the total. */
-export async function readInto(response: IncomingMessage, target: Buffer, onProgress: (filled: number) => void): Promise<number> {
+/**
+ * Copies the body into `target` as it arrives, reporting how many bytes are valid after every chunk. Returns the total.
+ * `beforeChunk` is awaited with the size of each chunk before it is kept, which is where the download cap holds a reader back.
+ */
+export async function readInto(
+  response: IncomingMessage,
+  target: Buffer,
+  onProgress: (filled: number) => void,
+  beforeChunk?: (bytes: number) => Promise<void>,
+): Promise<number> {
   let filled = 0;
   // A body that fits is read to its end so the keep-alive socket goes back to the pool instead of being torn down.
   const expected = Number(response.headers['content-length']);
@@ -104,6 +111,7 @@ export async function readInto(response: IncomingMessage, target: Buffer, onProg
   try {
     for await (const chunk of response as AsyncIterable<Buffer>) {
       const take = Math.min(chunk.length, target.length - filled);
+      if (beforeChunk) await beforeChunk(chunk.length);
       if (take > 0) {
         chunk.copy(target, filled, 0, take);
         filled += take;

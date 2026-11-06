@@ -21,7 +21,7 @@ const COVER_TAIL_BYTES = 1024;
 const TAIL_INTERVAL_MS = 250;
 const READ_CHUNK = 1024 * 1024;
 
-export type RunKind = 'main' | 'head' | 'seek' | 'fill';
+export type RunKind = 'main' | 'head' | 'seek';
 
 export interface ExtractJob {
   inputUrl: string;

@@ -2,12 +2,15 @@ import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BLOCK_SIZE, type BlockCache } from './blockCache.js';
 import { RatePacer } from './pacer.js';
-import { TAIL_BYTES, type Consumer, type SourceEntry } from './sourceEntry.js';
+import { TAIL_BYTES, type Consumer, type Front, type SourceEntry } from './sourceEntry.js';
 import { isAbort, rangeInfo } from './upstream.js';
 
 /** An upstream read stops before the next cached block; looking this far ahead keeps one request per long streak. */
 export const MAX_BLOCK_SCAN = 256;
 const MAX_STALLS = 3;
+/** How long a reader waits for another stream to bring the bytes it needs before it fetches them itself. */
+const SHARE_WAIT_MS = 1500;
+const SHARE_POLL_MS = 20;
 
 export interface ProxyCounters {
   requests: number;
@@ -164,9 +167,21 @@ async function pumpFile(entry: SourceEntry, range: ByteRange, sink: Sink, counte
   }
 }
 
+/** Waits for another stream to deliver the bytes at `pos` into memory; false when none is coming or it took too long. */
+async function waitForSharedBytes(entry: SourceEntry, cache: BlockCache, pos: number, end: number, sink: Sink): Promise<boolean> {
+  const deadline = Date.now() + SHARE_WAIT_MS;
+  while (!sink.closed && Date.now() < deadline) {
+    if (fromMemory(entry, cache, pos, end)) return true;
+    if (!entry.streamApproaching(pos, null)) return false;
+    await sleep(SHARE_POLL_MS);
+  }
+  return false;
+}
+
 async function pumpRemote(
   entry: SourceEntry,
   consumer: Consumer,
+  runId: number | null,
   cache: BlockCache,
   range: ByteRange,
   sink: Sink,
@@ -176,9 +191,16 @@ async function pumpRemote(
   let stalls = 0;
   const pacer = consumer === 'extractor' ? new RatePacer() : null;
   const tailRegion = Math.max(entry.headTarget, entry.size - TAIL_BYTES);
+  const lifetime = new AbortController();
+  sink.onClose(() => lifetime.abort());
 
   while (pos <= range.end && !sink.closed) {
     entry.touch();
+    // The reader stays connected and simply gets no more bytes until the window opens again.
+    if (entry.isHeld(consumer, runId)) {
+      await entry.waitForRelease(lifetime.signal);
+      continue;
+    }
     if (pos < entry.headTarget) await entry.headHas(pos);
     else if (pos >= tailRegion) await entry.tailHas(pos);
     if (sink.closed) return;
@@ -191,21 +213,18 @@ async function pumpRemote(
       pos += cached.length;
       continue;
     }
+    if (entry.streamApproaching(pos, null) && (await waitForSharedBytes(entry, cache, pos, range.end, sink))) continue;
+    if (sink.closed) return;
 
     const bound = upstreamBound(entry, cache, pos, range.end);
-    const abort = new AbortController();
-    sink.onClose(() => abort.abort());
-    const collector =
-      consumer === 'main'
-        ? new BlockCollector(pos, (index, data) => {
-            if (!entry.closed) cache.put(entry, index, data);
-          })
-        : null;
+    const collector = new BlockCollector(pos, (index, data) => {
+      if (!entry.closed) cache.put(entry, index, data);
+    });
 
     let response: IncomingMessage;
     try {
       counters.upstreamRequests += 1;
-      response = await entry.open(`bytes=${pos}-${bound}`, abort.signal);
+      response = await entry.open(`bytes=${pos}-${bound}`, lifetime.signal);
     } catch (error) {
       if (sink.closed || isAbort(error)) return;
       throw error;
@@ -216,26 +235,33 @@ async function pumpRemote(
     }
 
     const before = pos;
+    const front: Front = { consumer, begin: pos, pos, end: bound };
+    entry.fronts.add(front);
     let failure: unknown = null;
     try {
       for await (const chunk of response as AsyncIterable<Buffer>) {
         if (sink.closed) break;
         const part = chunk.length > bound + 1 - pos ? chunk.subarray(0, bound + 1 - pos) : chunk;
-        counters.upstreamBytes += part.length;
-        counters.servedBytes += part.length;
-        collector?.add(part);
         if (pacer && entry.extractorLimit !== null) {
           const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
           if (wait > 0) await sleep(wait);
         }
+        await entry.download(part.length, consumer, lifetime.signal);
+        if (sink.closed) break;
+        counters.upstreamBytes += part.length;
+        counters.servedBytes += part.length;
+        collector.add(part);
         await sink.write(part);
         pos += part.length;
-        if (pos > bound) break;
+        front.pos = pos;
+        if (pos > bound || entry.isHeld(consumer, runId)) break;
       }
     } catch (error) {
       if (sink.closed || isAbort(error)) return;
       failure = error;
     } finally {
+      entry.fronts.delete(front);
+      // Closing the connection when the window is full also drops what the socket buffered, so no more bytes arrive while waiting.
       if (!response.complete) response.destroy();
     }
     if (sink.closed) return;
@@ -253,6 +279,7 @@ export async function serveSource(
   res: ServerResponse,
   entry: SourceEntry,
   consumer: Consumer,
+  runId: number | null,
   cache: BlockCache,
   counters: ProxyCounters,
 ): Promise<void> {
@@ -278,7 +305,7 @@ export async function serveSource(
   const sink = sinkFor(res);
   try {
     if (entry.isLocal) await pumpFile(entry, range, sink, counters);
-    else await pumpRemote(entry, consumer, cache, range, sink, counters);
+    else await pumpRemote(entry, consumer, runId, cache, range, sink, counters);
     res.end();
   } catch {
     // The status line is already out; a torn connection is how the reader finds out. Details stay in the counters.

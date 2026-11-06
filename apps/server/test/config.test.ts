@@ -60,6 +60,37 @@ describe('loadConfig', () => {
     expect(bad.warnings.join(' ')).toContain('FFMPEG_MAX_RSS_MB');
   });
 
+  it('reads the download limits from the file, lets process env override them, and defaults to 150 / 180 / 120', () => {
+    const none = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('limits-default.env', '# nothing\n') }, repoRoot: null });
+    expect([none.maxDownloadMbps, none.readAheadSec, none.readAheadResumeSec]).toEqual([150, 180, 120]);
+
+    const file = envFile('limits.env', 'MAX_DOWNLOAD_MBPS=45\nREAD_AHEAD_SEC=240\nREAD_AHEAD_RESUME_SEC=150\n');
+    const fromFile = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });
+    expect([fromFile.maxDownloadMbps, fromFile.readAheadSec, fromFile.readAheadResumeSec]).toEqual([45, 240, 150]);
+    expect(fromFile.warnings).toEqual([]);
+
+    const overridden = loadConfig({ env: { HOMESTREAM_ENV_FILE: file, MAX_DOWNLOAD_MBPS: '50' }, repoRoot: null });
+    expect([overridden.maxDownloadMbps, overridden.readAheadSec, overridden.readAheadResumeSec]).toEqual([50, 240, 150]);
+  });
+
+  it.each([
+    ['MAX_DOWNLOAD_MBPS=abc', 'MAX_DOWNLOAD_MBPS', [150, 180, 120]],
+    ['MAX_DOWNLOAD_MBPS=0', 'MAX_DOWNLOAD_MBPS', [150, 180, 120]],
+    ['MAX_DOWNLOAD_MBPS=-10', 'MAX_DOWNLOAD_MBPS', [150, 180, 120]],
+    ['MAX_DOWNLOAD_MBPS=2', 'MAX_DOWNLOAD_MBPS', [150, 180, 120]],
+    ['READ_AHEAD_SEC=fast', 'READ_AHEAD_SEC', [150, 180, 120]],
+    ['READ_AHEAD_SEC=0', 'READ_AHEAD_SEC', [150, 180, 120]],
+    ['READ_AHEAD_RESUME_SEC=-1', 'READ_AHEAD_RESUME_SEC', [150, 180, 120]],
+    ['READ_AHEAD_SEC=180\nREAD_AHEAD_RESUME_SEC=200', 'READ_AHEAD_RESUME_SEC', [150, 180, 120]],
+  ])('keeps the server up and falls back to the default with a warning naming the key for %j', (content, key, expected) => {
+    const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile('limits-bad.env', `${content}\n`) }, repoRoot: null });
+    expect([config.maxDownloadMbps, config.readAheadSec, config.readAheadResumeSec]).toEqual(expected);
+    expect(config.warnings).toHaveLength(1);
+    expect(config.warnings[0]).toContain(key);
+    expect(config.warnings[0]).toContain('invalid');
+    expect(config.warnings[0]).toMatch(/default/);
+  });
+
   it('names only the keys that are missing', () => {
     const file = envFile('partial.env', 'GATEWAY_MANIFEST_URL=https://gw.test/stremio/a/b/manifest.json\n');
     const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });

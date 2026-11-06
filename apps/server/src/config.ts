@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
+import { resolveDownloadLimits } from './network/limits.js';
 import { DEFAULT_MAX_RSS_MB } from './playback/memoryWatchdog.js';
 import { registerSecret, registerSecretUrl } from './redact.js';
 
@@ -22,6 +23,9 @@ const KNOWN_KEYS = [
   'FFMPEG_MAX_RSS_MB',
   'SERVER_NAME',
   'SOURCE_PROXY_PORT',
+  'MAX_DOWNLOAD_MBPS',
+  'READ_AHEAD_SEC',
+  'READ_AHEAD_RESUME_SEC',
   'HOMESTREAM_WEB_DIR',
 ] as const;
 
@@ -50,6 +54,12 @@ export interface Config {
   ffmpegBurnThreads: number;
   /** Working-set limit per ffmpeg process in MiB; the memory watchdog stops a process above it. */
   ffmpegMaxRssMb: number;
+  /** Hard cap on all upstream CDN downloads together, in megabits per second. */
+  maxDownloadMbps: number;
+  /** The encoder runs at most this many seconds ahead of the player before its reads wait. */
+  readAheadSec: number;
+  /** Reading resumes once the lead is below this many seconds. */
+  readAheadResumeSec: number;
   serverName: string;
   gatewayManifestUrl: string | null;
   tmdbReadToken: string | null;
@@ -150,6 +160,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
   }
   if (sourceProxyPort > 65535) sourceProxyPort = 0;
 
+  const limits = resolveDownloadLimits(values, warnings);
   const missingKeys = REQUIRED_KEYS.filter((key) => !values[key]);
 
   const config: Config = {
@@ -164,6 +175,9 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     ffmpegThreads: positiveInteger(values.FFMPEG_THREADS, 4, 'FFMPEG_THREADS', warnings),
     ffmpegBurnThreads: positiveInteger(values.FFMPEG_BURN_THREADS, 8, 'FFMPEG_BURN_THREADS', warnings),
     ffmpegMaxRssMb: positiveInteger(values.FFMPEG_MAX_RSS_MB, DEFAULT_MAX_RSS_MB, 'FFMPEG_MAX_RSS_MB', warnings),
+    maxDownloadMbps: limits.maxDownloadMbps,
+    readAheadSec: limits.readAheadSec,
+    readAheadResumeSec: limits.readAheadResumeSec,
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     gatewayManifestUrl: values.GATEWAY_MANIFEST_URL ?? null,
     tmdbReadToken: values.TMDB_READ_TOKEN ?? null,

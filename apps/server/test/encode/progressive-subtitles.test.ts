@@ -206,7 +206,7 @@ describe('progressive text subtitles', () => {
     expect(full.body).toContain('Second text cue');
 
     const later = (await startSession(harness, 'movie', 'desktop', { startPositionSec: 400 })).body;
-    // Seconds 0-34 are read by the fill run only after the main run has read a minute; the request is held until then.
+    // Nothing reads the part before the start position by itself; asking for it starts an on-demand run there.
     const early = await fetchEventually(harness, `/hls/${later.sessionId}/subs/${TEXT_ENG}/seg-2.vtt`);
     expect(early.statusCode).toBe(200);
     expect(cueLines(early.body)).toEqual(['00:00:10.000 --> 00:00:12.000']);
@@ -271,6 +271,8 @@ describe('progressive text subtitles', () => {
     expect(after.subtitleTracks.map((track) => track.url)).toEqual(before.map((track) => track.url));
     expect(await extractorCount(harness, sessionId)).toBeLessThanOrEqual(2);
 
+    // The part before the start position is only read when it is asked for.
+    expect((await fetchEventually(harness, `/hls/${sessionId}/subs/${TEXT_ENG}/seg-0.vtt`)).statusCode).toBe(200);
     await waitForStatus(harness, sessionId, 'complete');
     for (let i = 0; i < 40 && (await extractorCount(harness, sessionId)) > 0; i += 1) await sleep(250);
     await expectNoExtractors(harness, sessionId);

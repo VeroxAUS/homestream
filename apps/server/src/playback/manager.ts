@@ -6,6 +6,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type {
   ActivitySession,
   CapabilityProfile,
+  NetworkSession,
   SessionPatchRequest,
   SessionResponse,
   SessionStartRequest,
@@ -17,12 +18,14 @@ import { finalizePlay, insertPlay, mediaKeyFor, updatePlayDecision } from '../db
 import { AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
+import { leadSeconds } from '../network/readAhead.js';
 import { redact } from '../redact.js';
 import type { SourceHandle, SourceProxy } from '../sourceproxy/proxy.js';
 import type { StreamService } from '../streams/service.js';
 import type { TmdbService } from '../tmdb/service.js';
 import { decide } from './decision.js';
 import { EncoderProcess } from './encoderProcess.js';
+import { FallingBehindWatch } from './fallingBehind.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
 import { MemoryWatchdog, imageNameOf, createWorkingSetSampler, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SessionMonitor } from './monitor.js';
@@ -117,6 +120,7 @@ export class PlaybackManager {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly limitLabels = new WeakMap<SessionRecord, LimitLabel>();
   private readonly speedWindows = new WeakMap<SessionRecord, Array<{ at: number; outSec: number }>>();
+  private readonly fallingBehind = new FallingBehindWatch();
   private readonly proxy: SourceProxy;
   private readonly segmentWaitMs: number;
   private readonly subtitleHoldMs: number;
@@ -459,7 +463,10 @@ export class PlaybackManager {
         };
       }
       if (rec.stopping) throw notFound('This session has ended.');
-      extractor.ensureExtractorFor(segment * SEGMENT_SECONDS);
+      // Cues beyond the read-ahead window are not read yet: the request keeps getting 503 until the player is closer.
+      if (segment * SEGMENT_SECONDS <= this.reachSec(rec) + this.options.config.readAheadSec) {
+        extractor.ensureExtractorFor(segment * SEGMENT_SECONDS);
+      }
       if (Date.now() >= deadline || signal?.aborted) break;
       await sleep(POLL_MS);
     }
@@ -481,6 +488,7 @@ export class PlaybackManager {
   }
 
   async monitorTick(): Promise<void> {
+    this.observeSpeeds();
     await this.monitor.tick();
   }
 
@@ -597,6 +605,7 @@ export class PlaybackManager {
     const interval = this.options.monitorTickMs ?? MONITOR_TICK_MS;
     if (this.timer || interval <= 0) return;
     this.timer = setInterval(() => {
+      this.observeSpeeds();
       void this.monitor.tick().catch((error: unknown) => this.options.logger.warn({ err: error }, 'Session housekeeping failed'));
     }, interval);
     this.timer.unref();
@@ -653,6 +662,9 @@ export class PlaybackManager {
     rec.store.forget(startSegment);
     this.speedWindows.delete(rec);
     rec.stats = { ...rec.stats, headSegment: startSegment, outTimeSec: startSegment * SEGMENT_SECONDS };
+    // The read-ahead window is measured from where this run starts, so a start, seek or restart downloads at full speed again.
+    rec.source.resetReadAhead();
+    this.fallingBehind.forget(rec.id);
     const generation = rec.generation;
 
     rec.source.setExtractorLimit(STARVED_BYTES_PER_SEC);
@@ -706,13 +718,57 @@ export class PlaybackManager {
       rec.statSamples.speedCount += 1;
     }
     this.trackSpeed(rec);
+    this.syncReadAhead(rec);
     this.updateStarved(rec);
     this.markReady(rec);
   }
 
   private followPlayhead(rec: SessionRecord): void {
     rec.source.setPlayhead(rec.positionSec / rec.probe.durationSec);
+    this.syncReadAhead(rec);
     this.updateStarved(rec);
+  }
+
+  /** Seconds of encoded video ahead of the player; the player's position cannot be before the start of the current run. */
+  private leadSec(rec: SessionRecord): number {
+    return leadSeconds(rec.stats.headSegment, SEGMENT_SECONDS, Math.max(rec.positionSec, rec.startSegment * SEGMENT_SECONDS));
+  }
+
+  /** How far the subtitle extractors may read: the player's position, including a segment it has just asked for after a seek. */
+  private reachSec(rec: SessionRecord): number {
+    return Math.max(rec.positionSec, rec.playerSegment * SEGMENT_SECONDS);
+  }
+
+  private syncReadAhead(rec: SessionRecord): void {
+    rec.source.setLead(this.leadSec(rec));
+    rec.subtitles?.syncHolds();
+  }
+
+  /** Per-session download figures for the health `network` check. */
+  networkSessions(): NetworkSession[] {
+    return this.liveRecords().map((rec) => ({
+      sessionId: rec.id,
+      rateMbps: rec.source.rateMbps(),
+      readAhead: rec.source.readAhead,
+      leadSec: rec.source.leadSec,
+    }));
+  }
+
+  /** Sessions whose encoder has been slower than real time for over 30 s while catching up; one waiting at its window never counts. */
+  fallingBehindSessions(): string[] {
+    this.observeSpeeds();
+    return this.fallingBehind.fallingBehind(Date.now());
+  }
+
+  private observeSpeeds(): void {
+    const now = Date.now();
+    for (const rec of this.liveRecords()) {
+      this.fallingBehind.observe(
+        rec.id,
+        { speed: this.recentSpeed(rec), readAhead: rec.source.readAhead, idle: rec.encoderDone || rec.parked || !rec.process?.running },
+        now,
+      );
+    }
   }
 
   /** Subtitle extraction must not compete with an encoder that has little lead over the player or runs slower than 1.2x. */
@@ -784,7 +840,13 @@ export class PlaybackManager {
       ffmpegPath: this.options.config.ffmpegPath,
       sessionId: rec.id,
       sessionDir: rec.dir,
-      inputUrl: () => rec.source.extractorUrl,
+      inputUrl: (runId) => rec.source.extractorRunUrl(runId),
+      readAhead: {
+        holdSec: this.options.config.readAheadSec,
+        resumeSec: this.options.config.readAheadResumeSec,
+        playheadSec: () => this.reachSec(rec),
+        setHold: (runId, held) => rec.source.setExtractorHold(runId, held),
+      },
       videoIndex: rec.probe.video.index,
       durationSec: rec.probe.durationSec,
       tracks,
@@ -1007,6 +1069,7 @@ export class PlaybackManager {
     const wasError = rec.state === 'error';
     rec.state = 'stopped';
     this.sessions.delete(rec.id);
+    this.fallingBehind.forget(rec.id);
     await rec.restart?.catch(() => undefined);
     await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     rec.source.release();
