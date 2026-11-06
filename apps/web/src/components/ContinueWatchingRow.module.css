@@ -1,0 +1,169 @@
+.row {
+  margin-top: 28px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.heading {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.count {
+  color: var(--mut);
+  font-size: 13px;
+}
+
+.scroller {
+  display: flex;
+  gap: var(--row-gap);
+  margin: 14px -4px 0;
+  padding: 8px 4px 18px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a35 transparent;
+}
+
+.item {
+  flex: none;
+}
+
+.card {
+  position: relative;
+  width: 340px;
+  height: 191px;
+  border-radius: var(--r);
+  box-shadow: var(--sh-card);
+  transition: transform var(--t-card) var(--ease);
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-6px) scale(1.03);
+  will-change: transform;
+}
+
+.link {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  background: var(--s2);
+  border-radius: var(--r);
+}
+
+.link:focus-visible {
+  outline-offset: 3px;
+}
+
+.art,
+.art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.75));
+}
+
+.info {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub {
+  overflow: hidden;
+  color: #d0d0d8;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remaining {
+  display: flex;
+  justify-content: space-between;
+  color: #c8c8d2;
+  font-size: 12px;
+}
+
+.upNext {
+  display: flex;
+  margin-top: 2px;
+}
+
+.playBadge,
+.remove {
+  position: absolute;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  opacity: 0;
+  transition: opacity var(--t-fast) linear;
+}
+
+.playBadge {
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  pointer-events: none;
+}
+
+.remove {
+  left: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+}
+
+.card:hover .playBadge,
+.card:focus-within .playBadge,
+.card:hover .remove,
+.card:focus-within .remove {
+  opacity: 1;
+}
+
+.remove:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+@media (hover: none) {
+  .remove {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover,
+  .card:focus-within {
+    transform: none;
+  }
+}

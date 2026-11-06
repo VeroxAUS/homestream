@@ -16,15 +16,28 @@ Run from the repository root.
 | `... size`                            | Bundle budget (size-limit) against `dist/`; run `build` first                                   |
 | `... test:e2e`                        | Playwright end-to-end tests (see below)                                                         |
 
+## Screens and conventions
+
+- Routes (`src/App.tsx`, all lazy): `/` Home, `/search`, `/movie/:id`, `/tv/:id` (`?season=&episode=`), `/play/...` (placeholder until the player is built), `/dashboard/{health,activity,history,graphs,stats}` and `/settings`. The server answers every one of these paths with `index.html`, so deep links and reloads work.
+- Design tokens (dark theme, red accent) are in `src/styles/tokens.css`; Inter is self-hosted from `src/styles/fonts/`. No `backdrop-filter`, no icon fonts: icons are inline SVG (`components/Icon.tsx`).
+- Data comes from TanStack Query hooks in `src/api/queries.ts`, all built on `apiGet` and the shared schemas. Pending downloads show a "Downloading n%" badge instead of Play and update from the `/api/events` stream (`src/events/`), which opens after Home is shown.
+- A play link carries the resume point as `?start=<seconds>` (`?start=0` to start over); the player reads it.
+- This browser registers itself with `POST /api/devices` after Home is shown: a random id kept in `localStorage`, kind `desktop` when `window.homestream.isDesktop`, otherwise `web`, and the fixed profile H.264 only, SDR, 3840x2160, stereo. The device name is editable on the Settings page.
+- Component tests mock `fetch` with `mockApi` from `src/test/render.tsx` and use the shared-type fixtures in `src/test/fixtures.ts`.
+
 ## Bundle budget
 
 `.size-limit.json` holds the budget. CI runs `build` and `size` on every push, and `pnpm readiness:audit` fails when the budget file or the `size` script is missing.
 
 | Chunk                             | Budget (gzip) | Contents                                                               |
 | --------------------------------- | ------------- | ---------------------------------------------------------------------- |
-| Initial JavaScript (`index-*.js`) | 150 kB        | React, the shared schemas and the app shell                            |
+| Initial JavaScript (`index-*.js`) | 150 kB        | React, router, TanStack Query, the shared schemas and the app shell    |
+| All CSS                           | 24 kB         | Tokens, global styles and the CSS modules                              |
+| Route chunks (`*Page-*.js`)       | 40 kB each    | One chunk per page, loaded on navigation                               |
+| Inter font (`Inter-*.woff2`)      | 50 kB         | The one self-hosted font file, preloaded from `index.html`             |
 | Telemetry (`telemetry-*.js`)      | 100 kB        | Sentry and PostHog, loaded after Home is shown and the browser is idle |
 
+The build also writes `.br` and `.gz` copies of every text asset (`vite.plugins.ts`); the server sends them when the client accepts them, and serves `/assets/*` with a one-year immutable cache header and everything else with `no-cache`.
 Features that add heavy code (player, charts) load it lazily and add an entry for their chunk to `.size-limit.json` in the same change.
 
 ## API calls, logging and errors
@@ -39,7 +52,7 @@ Full description of what is sent: [docs/PRIVACY.md](../../docs/PRIVACY.md). Code
 - **Off by default.** The keys (`SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST`) are read when the UI is built (from the environment or the repository `.env`) and baked into the bundle. A build without them contains no key and makes no telemetry request, not even for the telemetry chunk. `HOMESTREAM_TELEMETRY=off` at build time switches everything off, and `localStorage['homestream.telemetry'] = 'off'` does the same in one browser.
 - **Does not slow Home.** `src/telemetry/index.ts` is part of the initial bundle and imports neither Sentry nor PostHog. It waits for the performance mark `hs:home-content` (exported as `HOME_CONTENT_MARK`; the Home screen sets it when its rows are rendered, `App` sets it once the server answered) and for browser idle time, then loads the `telemetry-*.js` chunk.
 - **Sentry** (`@sentry/react`, project `homestream-web`): errors only, no tracing, replay or session tracking. Release `homestream@<version>`, tags `app=web`, `process=renderer`, `device.kind=web|desktop` and the `route` template. Events pass through the shared sanitizer (`sanitizeSentryEvent`): no user, IP, cookies, headers or query strings; script locations lose their origin (`app:///assets/...`).
-- **PostHog** (`posthog-js`, slim build): autocapture, session recording, surveys, flags and automatic page views are off, `person_profiles` is `identified_only`, and a `before_send` hook drops every event that is not in the typed catalog of `@homestream/shared`. Report a page with `usePageView(location.pathname)` once in the top-level layout: it sends the catalog event `page_viewed` with the **route template** (`/movie/:id`), never the real path. Add events to the catalog and to docs/PRIVACY.md first, then call `captureEvent` in `src/telemetry/posthog.ts`.
+- **PostHog** (`posthog-js`, slim build): autocapture, session recording, surveys and automatic page views are off, and the only flag read is `banner-rotation-interval` (`watchFlag`; it sets the banner interval to 9 s or 12 s, and a failed lookup keeps 9 s), `person_profiles` is `identified_only`, and a `before_send` hook drops every event that is not in the typed catalog of `@homestream/shared`. Report a page with `usePageView(location.pathname)` once in the top-level layout: it sends the catalog event `page_viewed` with the **route template** (`/movie/:id`), never the real path. Add events to the catalog and to docs/PRIVACY.md first, then call `captureEvent` in `src/telemetry/posthog.ts`.
 - **Source maps** are produced only for release builds (`HOMESTREAM_RELEASE_BUILD=1` with `SENTRY_AUTH_TOKEN` and `SENTRY_ORG`), uploaded with `@sentry/vite-plugin` under release `homestream@<version>`, and deleted from `dist/` afterwards. Ordinary builds contain no source maps.
 - **Test trigger.** A build made with `HOMESTREAM_TELEMETRY_STUB=1` honors `?__telemetry_test=<run id>` and reports one deliberate error tagged with the run id. Other builds ignore the parameter.
 

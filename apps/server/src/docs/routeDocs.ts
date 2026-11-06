@@ -28,6 +28,7 @@ import {
   SessionResponseSchema,
   SessionStartRequestSchema,
   ShowDetailsWithDownloadsSchema,
+  ShowProgressResponseSchema,
   StatsGraphsResponseSchema,
   StatsQuerySchema,
   StatsSummaryResponseSchema,
@@ -188,6 +189,15 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
   'GET /api/progress/:mediaKey': doc(
     { summary: 'Saved progress of a title', tag: 'progress', params: MEDIA_KEY, errors: [404] },
     ok(ProgressResponseSchema),
+  ),
+  'GET /api/tv/:tmdbId/progress': doc(
+    {
+      summary: 'Saved progress of every episode of a show',
+      tag: 'progress',
+      params: TMDB_ID,
+      errors: [400],
+    },
+    ok(ShowProgressResponseSchema),
   ),
   'GET /api/continue-watching': doc(
     { summary: 'Continue watching row', tag: 'progress', errors: [502, 503] },

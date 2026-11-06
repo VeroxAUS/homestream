@@ -4569,6 +4569,102 @@
         }
       }
     },
+    "/api/tv/{tmdbId}/progress": {
+      "get": {
+        "summary": "Saved progress of every episode of a show",
+        "tags": [
+          "progress"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "tmdbId",
+            "required": true,
+            "description": "TMDB id, a positive whole number."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mediaKey": {
+                            "type": "string"
+                          },
+                          "positionSec": {
+                            "type": "number"
+                          },
+                          "durationSec": {
+                            "type": "number"
+                          },
+                          "completed": {
+                            "type": "boolean"
+                          },
+                          "resumable": {
+                            "type": "boolean"
+                          },
+                          "season": {
+                            "type": "integer"
+                          },
+                          "episode": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "mediaKey",
+                          "positionSec",
+                          "durationSec",
+                          "completed",
+                          "resumable",
+                          "season",
+                          "episode"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/continue-watching": {
       "get": {
         "summary": "Continue watching row",

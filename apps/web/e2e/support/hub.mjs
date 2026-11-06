@@ -20,7 +20,8 @@ const SHOWS = [
   { id: 1399, name: 'Stub Thrones', first_air_date: '2011-04-17', vote_average: 8.4, overview: 'A stub show.' },
 ];
 
-const captured = { sentry: [], posthog: [] };
+const captured = { sentry: [], posthog: [], flagRequests: [] };
+let featureFlags = {};
 
 function send(response, status, body, headers = {}) {
   const isBuffer = Buffer.isBuffer(body);
@@ -130,9 +131,14 @@ async function sentryHandler(request, response) {
     if (request.method === 'DELETE') {
       captured.sentry.length = 0;
       captured.posthog.length = 0;
+      captured.flagRequests.length = 0;
       return send(response, 200, { ok: true });
     }
     return send(response, 200, captured);
+  }
+  if (url.pathname === '/__flags' && request.method === 'POST') {
+    featureFlags = JSON.parse((await readBody(request)).toString('utf8') || '{}');
+    return send(response, 200, { ok: true });
   }
   const body = await readBody(request);
   if (/\/envelope\/?$/.test(url.pathname)) {
@@ -146,15 +152,16 @@ async function sentryHandler(request, response) {
 async function posthogHandler(request, response) {
   const url = new URL(request.url ?? '/', `http://${HOST}`);
   const body = await readBody(request);
-  if (request.method === 'POST' && body.length > 0) {
+  const isFlags = url.pathname.startsWith('/flags') || url.pathname.startsWith('/decide');
+  if (isFlags && body.length > 0) captured.flagRequests.push(body.toString('utf8'));
+  if (!isFlags && request.method === 'POST' && body.length > 0) {
     try {
       captured.posthog.push(...decodePostHog(body));
     } catch {
       // not an event batch
     }
   }
-  if (url.pathname.startsWith('/flags') || url.pathname.startsWith('/decide'))
-    return send(response, 200, { featureFlags: {} });
+  if (isFlags) return send(response, 200, { featureFlags, featureFlagPayloads: {}, errorsWhileComputingFlags: false });
   return send(response, 200, { status: 1 });
 }
 

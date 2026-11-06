@@ -8,6 +8,7 @@ import { baseTestConfig, ciTestConfig, coverageReporters, sharedSrcAlias } from 
 import coverageThresholds from './coverage-thresholds.json' with { type: 'json' };
 import pkg from './package.json' with { type: 'json' };
 import { nonEmpty, telemetryFromEnv, type BuildEnv } from './src/telemetry/buildEnv.ts';
+import { preCompress, preloadFont } from './vite.plugins.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -22,7 +23,7 @@ export default defineConfig(({ mode }) => {
   // Source maps are produced only when they will be uploaded to Sentry and deleted from dist right after, so a build
   // never ships them: release builds (HOMESTREAM_RELEASE_BUILD=1) with an organization token.
   const uploadSourceMaps = env.HOMESTREAM_RELEASE_BUILD === '1' && !!nonEmpty(env.SENTRY_AUTH_TOKEN) && !telemetry.off;
-  const plugins: PluginOption[] = [react()];
+  const plugins: PluginOption[] = [react(), preloadFont(), preCompress()];
   if (uploadSourceMaps) {
     plugins.push(
       sentryVitePlugin({

@@ -1,0 +1,29 @@
+.row {
+  margin-top: 34px;
+}
+
+.belowFold {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+
+.heading {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.scroller {
+  display: flex;
+  gap: var(--row-gap);
+  margin: 14px -4px 0;
+  padding: 8px 4px 18px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a35 transparent;
+}
+
+.item {
+  flex: none;
+}

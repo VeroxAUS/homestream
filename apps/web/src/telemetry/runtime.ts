@@ -1,6 +1,7 @@
 import type { PageRoute } from '@homestream/shared';
 import type { TelemetryConfig } from './config';
-import { captureEvent, startPostHog } from './posthog';
+import { setBannerIntervalMs } from '../lib/bannerInterval';
+import { captureEvent, startPostHog, watchFlag } from './posthog';
 import { captureTestError, deviceKind, flushSentry, setSentryRoute, startSentry } from './sentry';
 
 const TEST_RUN_PARAM = '__telemetry_test';
@@ -15,6 +16,8 @@ export function startTelemetry(next: TelemetryConfig): void {
   config = next;
   startSentry(next);
   posthogOn = startPostHog(next);
+  if (posthogOn)
+    watchFlag('banner-rotation-interval', (variant) => setBannerIntervalMs(Number.parseInt(variant, 10) * 1000));
 }
 
 export function recordPageView(route: PageRoute): void {

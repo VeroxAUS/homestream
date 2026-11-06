@@ -1,0 +1,36 @@
+.page {
+  padding: 0 var(--gutter) 64px;
+}
+
+.skeletonBanner {
+  height: 440px;
+  margin-top: 36px;
+  background: var(--s2);
+  border-radius: var(--r-lg);
+}
+
+.skeletonRow {
+  margin-top: 34px;
+}
+
+.skeletonHeading {
+  width: 220px;
+  height: 22px;
+  background: var(--s2);
+  border-radius: 6px;
+}
+
+.skeletonCards {
+  display: flex;
+  gap: var(--row-gap);
+  margin-top: 22px;
+  overflow: hidden;
+}
+
+.skeletonCard {
+  flex: none;
+  width: 176px;
+  height: 264px;
+  background: var(--s2);
+  border-radius: var(--r);
+}

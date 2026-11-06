@@ -1,0 +1,28 @@
+.badge {
+  position: relative;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  height: 46px;
+  padding: 0 22px;
+  overflow: hidden;
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.icon {
+  color: var(--warn);
+}
+
+.bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent-hi);
+  transform-origin: left;
+}

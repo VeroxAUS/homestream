@@ -12,10 +12,10 @@ HomeStream uses PostHog feature flags to switch between behaviours that already 
 
 ## Flags in use
 
-| Flag                       | Type                    | Default | Status  | Owner  | What it changes                                                                                                                                         |
-| -------------------------- | ----------------------- | ------- | ------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prefetch-on-details`      | boolean                 | `true`  | active  | server | Whether `POST /api/prefetch` warms up the stream the next Play would pick. Off makes the endpoint answer `streamId: null` without touching the gateway. |
-| `banner-rotation-interval` | multivariate `9s`/`12s` | `9s`    | planned | web    | Seconds between slides of the featured banner on Home (web and TV).                                                                                     |
+| Flag                       | Type                    | Default | Status | Owner  | What it changes                                                                                                                                         |
+| -------------------------- | ----------------------- | ------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prefetch-on-details`      | boolean                 | `true`  | active | server | Whether `POST /api/prefetch` warms up the stream the next Play would pick. Off makes the endpoint answer `streamId: null` without touching the gateway. |
+| `banner-rotation-interval` | multivariate `9s`/`12s` | `9s`    | active | web    | Seconds between slides of the featured banner on Home (web and TV). The web UI reads it; the TV app will.                                               |
 
 `planned` means the flag is declared and created in PostHog (switched off) but no app reads it yet; `pnpm flags:check` lists it without failing.
 

@@ -1,0 +1,79 @@
+:root {
+  /* surfaces */
+  --bg: #0a0a0e;
+  --s1: #14141a;
+  --s2: #1d1d26;
+  --s3: #292935;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.25);
+  --scrim: rgba(5, 5, 8, 0.72);
+  --glass: rgba(20, 20, 26, 0.97);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.1);
+
+  /* text */
+  --text: #f5f5f7;
+  --mut: #9b9ba8;
+  --dim: #6c6c79;
+  --star: #ffcb45;
+
+  /* status */
+  --ok: #30d158;
+  --warn: #ffb020;
+  --err: #ff453a;
+  --ok-bg: rgba(48, 209, 88, 0.16);
+  --warn-bg: rgba(255, 176, 32, 0.16);
+  --err-bg: rgba(255, 69, 58, 0.16);
+
+  /* accent: red is the only accent */
+  --accent: #e50914;
+  --accent-hi: #ff3d47;
+  --accent-rgb: 229, 9, 20;
+  --on-accent: #ffffff;
+
+  /* radii */
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 20px;
+  --r-modal: 22px;
+  --r-pill: 999px;
+
+  /* shadows: static values; hover and focus shadows fade in with opacity on a pseudo-element */
+  --sh-card: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --sh-card-hover: 0 18px 36px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.2);
+  --sh-menu: 0 24px 60px rgba(0, 0, 0, 0.6);
+  --sh-modal: 0 40px 100px rgba(0, 0, 0, 0.7);
+  --sh-hero-poster: 0 24px 60px rgba(0, 0, 0, 0.7);
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 150ms;
+  --t-base: 200ms;
+  --t-card: 250ms;
+  --t-fade: 300ms;
+  --t-banner: 600ms;
+  --banner-interval: 9000ms;
+  --idle-hide: 3000ms;
+
+  /* layout */
+  --nav-h: 68px;
+  --gutter: 48px;
+  --row-gap: 16px;
+
+  /* type */
+  --font: 'Inter', -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+@media (max-width: 700px) {
+  :root {
+    --gutter: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-card: 0ms;
+    --t-banner: 150ms;
+  }
+}

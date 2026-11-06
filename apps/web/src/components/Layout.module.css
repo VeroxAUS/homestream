@@ -1,0 +1,3 @@
+.fallback {
+  min-height: calc(100vh - var(--nav-h));
+}

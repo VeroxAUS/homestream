@@ -1,42 +1,17 @@
 import { resolveTelemetryConfig, type TelemetryConfig } from './config';
 import type * as RuntimeModule from './runtime';
+import { afterHomeContent, whenIdle } from '../lib/startup';
 import { routeTemplate } from './routes';
 
 // This file is part of the initial bundle and must stay free of Sentry and PostHog imports: both live in ./runtime,
 // which is fetched only when the build has a key, after the home content is shown, and the browser is idle.
 
-/** The page performance mark that tells telemetry the content is shown. Set it when Home has rendered its rows. */
-export const HOME_CONTENT_MARK = 'hs:home-content';
-const MARK_WAIT_LIMIT_MS = 8000;
-const IDLE_TIMEOUT_MS = 3000;
+export { HOME_CONTENT_MARK } from '../lib/startup';
 
 type Runtime = typeof RuntimeModule;
 
 let started: Promise<Runtime | null> | null = null;
 let lastPath: string | null = null;
-
-function afterHomeContent(): Promise<void> {
-  return new Promise((resolve) => {
-    if (performance.getEntriesByName(HOME_CONTENT_MARK).length > 0) return resolve();
-    const done = (observer?: PerformanceObserver): void => {
-      observer?.disconnect();
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(() => done(observer), MARK_WAIT_LIMIT_MS);
-    const observer = new PerformanceObserver((list) => {
-      if (list.getEntries().some((entry) => entry.name === HOME_CONTENT_MARK)) done(observer);
-    });
-    observer.observe({ type: 'mark' });
-  });
-}
-
-function whenIdle(): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: IDLE_TIMEOUT_MS });
-    else setTimeout(resolve, 0);
-  });
-}
 
 async function load(config: TelemetryConfig): Promise<Runtime | null> {
   await afterHomeContent();

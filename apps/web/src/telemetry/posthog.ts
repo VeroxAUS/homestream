@@ -1,4 +1,12 @@
-import { sanitizeEventProperties, type AnalyticsEventName, type AnalyticsProperties } from '@homestream/shared';
+import {
+  coerceFlagValue,
+  sanitizeEventProperties,
+  type AnalyticsEventName,
+  type AnalyticsProperties,
+  type FlagKey,
+  type FlagValue,
+} from '@homestream/shared';
+import { FeatureFlagsExtensions } from 'posthog-js/dist/extension-bundles';
 import posthog, { type CaptureResult } from 'posthog-js/dist/module.slim';
 import type { TelemetryConfig } from './config';
 import { scrubUrl } from './scrub';
@@ -21,11 +29,13 @@ export function restrictToCatalog(event: CaptureResult | null, appVersion: strin
   return { ...event, properties: kept };
 }
 
-/** Starts posthog-js with everything automatic switched off. Returns false when there is no key or starting fails. */
+/** Starts posthog-js with everything automatic switched off (flags are read, never reported on). Returns false when there is no key or starting fails. */
 export function startPostHog(config: TelemetryConfig): boolean {
   if (!config.posthogKey) return false;
   try {
     posthog.init(config.posthogKey, {
+      // The slim build has no flag support of its own; this is the one extension it needs.
+      __extensionClasses: { ...FeatureFlagsExtensions },
       api_host: config.posthogHost,
       autocapture: false,
       capture_pageview: false,
@@ -37,7 +47,6 @@ export function startPostHog(config: TelemetryConfig): boolean {
       disable_surveys: true,
       disable_web_experiments: true,
       disable_external_dependency_loading: true,
-      advanced_disable_flags: true,
       advanced_disable_toolbar_metrics: true,
       disable_compression: true,
       save_campaign_params: false,
@@ -60,5 +69,21 @@ export function captureEvent<E extends AnalyticsEventName>(event: E, properties:
     posthog.capture(event, properties);
   } catch {
     // analytics must never disturb the page
+  }
+}
+
+/**
+ * Calls `onValue` with the variant PostHog assigned to this install, once flags are loaded. A flag that PostHog does not
+ * answer for (unreachable, not defined, unknown variant) never reaches the callback, so the local default stays.
+ */
+export function watchFlag<K extends FlagKey>(key: K, onValue: (value: FlagValue<K>) => void): void {
+  try {
+    posthog.onFeatureFlags(() => {
+      const raw = posthog.getFeatureFlag(key, { send_event: false });
+      if (raw !== undefined) onValue(coerceFlagValue(key, raw));
+    });
+    posthog.reloadFeatureFlags();
+  } catch {
+    // flags are optional: the default stays
   }
 }

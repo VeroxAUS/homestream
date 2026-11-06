@@ -1,0 +1,149 @@
+.row {
+  position: relative;
+}
+
+.main {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 14px;
+}
+
+.main:hover {
+  background: var(--s1);
+  border-color: var(--line);
+}
+
+.selected .main,
+.selected .main:hover {
+  background: var(--s2);
+  border-color: rgba(var(--accent-rgb), 0.6);
+}
+
+.number {
+  flex: none;
+  width: 28px;
+  color: var(--dim);
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.still {
+  position: relative;
+  flex: none;
+  width: 232px;
+  height: 130px;
+  overflow: hidden;
+  background: var(--s2);
+  border-radius: 10px;
+}
+
+.still img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 14, 0.6);
+}
+
+.bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 0;
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.overview {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--mut);
+  font-size: 13.5px;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.runtime {
+  flex: none;
+  min-width: 52px;
+  color: var(--mut);
+  font-size: 13px;
+  text-align: right;
+}
+
+.play {
+  position: absolute;
+  top: 13px;
+  left: 61px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 232px;
+  height: 130px;
+  color: #fff;
+  opacity: 0;
+}
+
+.play svg {
+  box-sizing: content-box;
+  padding: 13px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+}
+
+.row:hover .play,
+.play:focus-visible {
+  opacity: 1;
+}
+
+@media (max-width: 700px) {
+  .still {
+    width: 120px;
+    height: 68px;
+  }
+
+  .play {
+    left: 61px;
+    width: 120px;
+    height: 68px;
+  }
+
+  .overview {
+    display: none;
+  }
+
+  .runtime {
+    display: none;
+  }
+}

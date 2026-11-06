@@ -1,0 +1,220 @@
+.banner {
+  position: relative;
+  height: 440px;
+  margin-top: 36px;
+  overflow: hidden;
+  background: var(--s2);
+  border-radius: var(--r-lg);
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-banner) ease;
+}
+
+.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+}
+
+.shadeSide {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 10, 14, 0.96) 0%, rgba(10, 10, 14, 0.78) 34%, rgba(10, 10, 14, 0.15) 72%);
+}
+
+.shadeBottom {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(10, 10, 14, 0.7), transparent 40%);
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-width: 680px;
+  padding: 44px 52px;
+}
+
+.kicker {
+  color: var(--accent-hi);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.title {
+  display: -webkit-box;
+  margin-top: 10px;
+  overflow: hidden;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.meta {
+  margin-top: 12px;
+  color: var(--mut);
+  font-size: 14px;
+}
+
+.overview {
+  display: -webkit-box;
+  margin-top: 10px;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.secondary {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+}
+
+.secondary:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-top: -20px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  border: 0;
+  border-radius: 50%;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity var(--t-base) linear;
+}
+
+.prev {
+  left: 14px;
+}
+
+.next {
+  right: 14px;
+}
+
+.banner:hover .arrow,
+.banner:focus-within .arrow {
+  opacity: 1;
+}
+
+.dots {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  position: relative;
+  width: 22px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.dot::before {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  content: '';
+}
+
+.dot[aria-current='true']::before {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.fill {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: #fff;
+  border-radius: 4px;
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.filling {
+  animation: banner-fill var(--interval) linear forwards;
+}
+
+@keyframes banner-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 700px) {
+  .content {
+    padding: 28px 22px;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+}

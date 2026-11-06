@@ -41,7 +41,7 @@ export const FLAGS = {
     description:
       'Experiment: seconds between slides of the featured banner on Home (web and TV). Compares 9 s with 12 s.',
     owner: 'web',
-    status: 'planned',
+    status: 'active',
   },
 } as const satisfies Record<string, FlagDefinition>;
 

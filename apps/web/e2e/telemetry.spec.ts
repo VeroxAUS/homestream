@@ -22,6 +22,7 @@ interface PostHogEvent {
 interface Captured {
   sentry: SentryEvent[];
   posthog: PostHogEvent[];
+  flagRequests: string[];
 }
 
 async function captured(request: APIRequestContext): Promise<Captured> {
@@ -39,7 +40,7 @@ test.describe('web telemetry (stub build pointing at local receivers)', () => {
   }) => {
     const runId = `e2e-${Date.now()}`;
     await page.goto(`/?__telemetry_test=${runId}&secret=do-not-send`);
-    await expect(page.getByRole('status')).toContainText('Server:');
+    await expect(page.getByRole('heading', { name: 'Trending Movies' })).toBeVisible();
 
     await expect.poll(async () => (await captured(request)).sentry.length, { timeout: 15_000 }).toBeGreaterThan(0);
     const { sentry } = await captured(request);
@@ -51,7 +52,7 @@ test.describe('web telemetry (stub build pointing at local receivers)', () => {
     expect(JSON.stringify(event?.user ?? {})).not.toMatch(/ip_address|"id"|email|username/);
     expect(event?.request).toBeUndefined();
     expect(event?.server_name).toBeUndefined();
-    expect(event?.breadcrumbs?.some((crumb) => crumb.message?.includes('/api/info'))).toBe(true);
+    expect(event?.breadcrumbs?.some((crumb) => crumb.message?.includes('/api/home'))).toBe(true);
 
     const text = JSON.stringify(event);
     expect(text).not.toContain('do-not-send');
@@ -66,7 +67,7 @@ test.describe('web telemetry (stub build pointing at local receivers)', () => {
     request,
   }) => {
     await page.goto('/?utm_source=private');
-    await expect(page.getByRole('status')).toContainText('Server:');
+    await expect(page.getByRole('heading', { name: 'Trending Movies' })).toBeVisible();
 
     await expect.poll(async () => (await captured(request)).posthog.length, { timeout: 15_000 }).toBeGreaterThan(0);
     await page.click('body');
@@ -83,7 +84,7 @@ test.describe('web telemetry (stub build pointing at local receivers)', () => {
 
   test('sends no error report when nothing went wrong', async ({ page, request }) => {
     await page.goto('/');
-    await expect(page.getByRole('status')).toContainText('Server:');
+    await expect(page.getByRole('heading', { name: 'Trending Movies' })).toBeVisible();
     await expect.poll(async () => (await captured(request)).posthog.length, { timeout: 15_000 }).toBeGreaterThan(0);
     expect((await captured(request)).sentry).toEqual([]);
   });
@@ -91,10 +92,42 @@ test.describe('web telemetry (stub build pointing at local receivers)', () => {
   test('a browser that opted out sends nothing, even with the test trigger', async ({ page, request }) => {
     await page.addInitScript(() => localStorage.setItem('homestream.telemetry', 'off'));
     await page.goto('/?__telemetry_test=e2e-opt-out');
-    await expect(page.getByRole('status')).toContainText('Server:');
+    await expect(page.getByRole('heading', { name: 'Trending Movies' })).toBeVisible();
     await page.waitForTimeout(3000);
     const data = await captured(request);
     expect(data.sentry).toEqual([]);
     expect(data.posthog).toEqual([]);
+  });
+
+  test('the banner interval follows the banner-rotation-interval flag and the flag request carries no page data', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    await request.post(`${HUB}/__flags`, { data: { 'banner-rotation-interval': '12s' } });
+    try {
+      await page.goto('/');
+      const dots = page.getByRole('button', { name: /^Show featured \d+ of \d+/ });
+      await expect(dots.first()).toBeVisible();
+      const active = () =>
+        page.locator('button[aria-current="true"][aria-label^="Show featured"]').getAttribute('aria-label');
+      await expect
+        .poll(async () => (await captured(request)).flagRequests.length, { timeout: 15_000 })
+        .toBeGreaterThan(0);
+      const startedAt = Date.now();
+      const first = await active();
+      await expect.poll(active, { timeout: 20_000, intervals: [250] }).not.toBe(first);
+      const elapsed = Date.now() - startedAt;
+      // 12 s variant, not the 9 s default (the first slide has been visible for a moment already)
+      expect(elapsed).toBeGreaterThan(9_000);
+      expect(elapsed).toBeLessThan(15_000);
+
+      const [body] = (await captured(request)).flagRequests;
+      expect(body).not.toContain('127.0.0.1');
+      expect(body).not.toContain('$current_url');
+      expect(body).not.toContain('/movie');
+    } finally {
+      await request.post(`${HUB}/__flags`, { data: {} });
+    }
   });
 });

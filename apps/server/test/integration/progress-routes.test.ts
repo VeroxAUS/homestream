@@ -10,7 +10,7 @@ import type {
 } from '@homestream/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/db/index.js';
-import { upsertProgress } from '../../src/db/progress.js';
+import { insertHiddenMarker, upsertProgress } from '../../src/db/progress.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
@@ -348,6 +348,49 @@ describe('DELETE /api/continue-watching/:mediaKey', () => {
     expect(del.json()).toEqual({ mediaKey: 'tv:1396:1:3', removed: true });
     expect(await continueWatching(harness)).toEqual([]);
     expect(((await harness.app.inject('/api/history')).json() as HistoryResponse).total).toBe(1);
+  });
+});
+
+describe('GET /api/tv/:tmdbId/progress', () => {
+  it('lists the saved episodes of one show in order, with season and episode, and nothing else', async () => {
+    const { harness } = await boot();
+    await watch(harness, startEpisode(harness, 1, 2), 400);
+    await watch(harness, startEpisode(harness, 1, 1), 950);
+    await watch(harness, startMovie(harness), 300);
+    insertHiddenMarker(harness.db, { mediaKey: 'tv:1396:1:3', tmdbId: 1396, season: 1, episode: 3, now: Date.now() });
+
+    const res = await harness.app.inject('/api/tv/1396/progress');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      items: [
+        {
+          mediaKey: 'tv:1396:1:1',
+          season: 1,
+          episode: 1,
+          positionSec: 950,
+          durationSec: DURATION,
+          completed: true,
+          resumable: false,
+        },
+        {
+          mediaKey: 'tv:1396:1:2',
+          season: 1,
+          episode: 2,
+          positionSec: 400,
+          durationSec: DURATION,
+          completed: false,
+          resumable: true,
+        },
+      ],
+    });
+  });
+
+  it('is empty for a show nobody watched and rejects a bad id', async () => {
+    const { harness } = await boot();
+    expect((await harness.app.inject('/api/tv/1396/progress')).json()).toEqual({ items: [] });
+    const bad = await harness.app.inject('/api/tv/abc/progress');
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: { code: 'invalid_request' } });
   });
 });
 

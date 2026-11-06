@@ -2,10 +2,17 @@ import type { CaptureResult } from 'posthog-js/dist/module.slim';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelemetryConfig } from './config';
 
-const sdk = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn() }));
+const sdk = vi.hoisted(() => ({
+  init: vi.fn(),
+  capture: vi.fn(),
+  onFeatureFlags: vi.fn(),
+  getFeatureFlag: vi.fn(),
+  reloadFeatureFlags: vi.fn(),
+}));
 vi.mock('posthog-js/dist/module.slim', () => ({ default: sdk }));
+vi.mock('posthog-js/dist/extension-bundles', () => ({ FeatureFlagsExtensions: { featureFlags: class {} } }));
 
-const { captureEvent, restrictToCatalog, startPostHog } = await import('./posthog');
+const { captureEvent, restrictToCatalog, startPostHog, watchFlag } = await import('./posthog');
 
 const CONFIG: TelemetryConfig = {
   sentryDsn: null,
@@ -95,6 +102,8 @@ describe('startPostHog', () => {
       person_profiles: 'identified_only',
       ip: false,
     });
+    expect(options).not.toHaveProperty('advanced_disable_flags');
+    expect(options.__extensionClasses).toHaveProperty('featureFlags');
     expect(options.before_send).toBeTypeOf('function');
   });
 
@@ -125,5 +134,43 @@ describe('captureEvent', () => {
       throw new Error('boom');
     });
     expect(() => captureEvent('page_viewed', { route: '/', deviceKind: 'web' })).not.toThrow();
+  });
+});
+
+describe('watchFlag', () => {
+  beforeEach(() => {
+    sdk.onFeatureFlags.mockReset();
+    sdk.getFeatureFlag.mockReset();
+    sdk.reloadFeatureFlags.mockReset();
+  });
+
+  function loaded(raw: unknown): ReturnType<typeof vi.fn> {
+    const onValue = vi.fn();
+    sdk.getFeatureFlag.mockReturnValue(raw);
+    sdk.onFeatureFlags.mockImplementation((callback: () => void) => callback());
+    watchFlag('banner-rotation-interval', onValue);
+    return onValue;
+  }
+
+  it('hands over the assigned variant without reporting the evaluation', () => {
+    const onValue = loaded('12s');
+    expect(onValue).toHaveBeenCalledWith('12s');
+    expect(sdk.getFeatureFlag).toHaveBeenCalledWith('banner-rotation-interval', { send_event: false });
+    expect(sdk.reloadFeatureFlags).toHaveBeenCalledOnce();
+  });
+
+  it('turns an unknown variant into the default', () => {
+    expect(loaded('30s')).toHaveBeenCalledWith('9s');
+  });
+
+  it('keeps the local default when PostHog has no answer for the flag', () => {
+    expect(loaded(undefined)).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the SDK does', () => {
+    sdk.onFeatureFlags.mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(() => watchFlag('banner-rotation-interval', vi.fn())).not.toThrow();
   });
 });

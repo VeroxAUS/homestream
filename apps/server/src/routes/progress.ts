@@ -3,12 +3,14 @@ import {
   type ContinueWatchingRemoveResponse,
   type ContinueWatchingResponse,
   type ProgressResponse,
+  type ShowProgressResponse,
 } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.js';
-import { getProgress } from '../db/progress.js';
+import { getProgress, listShowProgress } from '../db/progress.js';
 import { AppError, invalidRequest } from '../errors.js';
 import { isResumable } from '../progress/rules.js';
+import { parseId } from './params.js';
 
 const MAX_KEY_LENGTH = 64;
 
@@ -42,6 +44,24 @@ export function registerProgressRoutes(app: FastifyInstance, ctx: AppContext): v
       resumable: isResumable(row.positionSec, row.completed),
     };
   });
+
+  app.get<{ Params: { tmdbId: string } }>(
+    '/api/tv/:tmdbId/progress',
+    async (request): Promise<ShowProgressResponse> => {
+      const tmdbId = parseId(request.params.tmdbId, 'tmdbId', 1);
+      return {
+        items: listShowProgress(db, tmdbId).map((row) => ({
+          mediaKey: row.mediaKey,
+          season: row.season ?? 0,
+          episode: row.episode ?? 0,
+          positionSec: row.positionSec,
+          durationSec: row.durationSec,
+          completed: row.completed,
+          resumable: isResumable(row.positionSec, row.completed),
+        })),
+      };
+    },
+  );
 
   app.get('/api/continue-watching', async (): Promise<ContinueWatchingResponse> => ({
     items: await continueWatching.list(),

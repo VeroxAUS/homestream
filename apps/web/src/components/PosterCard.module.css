@@ -1,0 +1,113 @@
+.card {
+  display: block;
+  flex: none;
+  width: 176px;
+}
+
+.art {
+  position: relative;
+  display: block;
+  width: 176px;
+  height: 264px;
+  overflow: hidden;
+  background: var(--s2);
+  border-radius: var(--r);
+  box-shadow: var(--sh-card);
+  transition: transform var(--t-card) var(--ease);
+}
+
+.art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--dim);
+  font-size: 56px;
+  font-weight: 800;
+}
+
+/* The hover shadow is a pseudo-element that fades in, so no shadow is ever animated. */
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r);
+  box-shadow: var(--sh-card-hover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast) linear;
+}
+
+.card:hover .art,
+.card:focus-visible .art {
+  transform: translateY(-6px) scale(1.04);
+  will-change: transform;
+}
+
+.card:hover .ring,
+.card:focus-visible .ring {
+  opacity: 1;
+}
+
+.card:focus-visible {
+  outline: none;
+}
+
+.card:focus-visible .art {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .art,
+  .card:focus-visible .art {
+    transform: none;
+  }
+}
+
+.title {
+  display: block;
+  margin-top: 10px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+  color: var(--mut);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.type {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rating {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  font-weight: 700;
+}
+
+.star {
+  color: var(--star);
+}

@@ -1,0 +1,55 @@
+.page {
+  padding: 36px var(--gutter) 64px;
+}
+
+.title {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 24px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  padding: 12px 18px;
+  color: var(--mut);
+  border-bottom: 2px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive,
+.tabActive:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.card {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.cardTitle {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.muted {
+  margin-top: 6px;
+  color: var(--mut);
+}

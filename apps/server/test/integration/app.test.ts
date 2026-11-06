@@ -1,5 +1,6 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { brotliCompressSync, brotliDecompressSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
@@ -157,6 +158,26 @@ describe('static web UI', () => {
     const missing = await app.inject('/assets/missing.js');
     expect(missing.statusCode).toBe(404);
     expect(missing.json().error.code).toBe('not_found');
+  });
+
+  it('caches hashed assets for a year and revalidates index.html', async () => {
+    const asset = await app.inject('/assets/app.js');
+    expect(asset.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    for (const url of ['/', '/movie/278', '/index.html']) {
+      expect((await app.inject(url)).headers['cache-control']).toBe('no-cache');
+    }
+  });
+
+  it('serves the pre-compressed file of an asset to a client that accepts it', async () => {
+    writeFileSync(path.join(root, 'web', 'assets', 'app.js.br'), brotliCompressSync('console.log("app")'));
+    const res = await app.inject({ url: '/assets/app.js', headers: { 'accept-encoding': 'br, gzip' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-encoding']).toBe('br');
+    expect(res.headers['content-type']).toContain('javascript');
+    expect(brotliDecompressSync(res.rawPayload).toString()).toBe('console.log("app")');
+    const plain = await app.inject({ url: '/assets/app.js', headers: { 'accept-encoding': 'identity' } });
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    expect(plain.body).toContain('console.log');
   });
 
   it('does not serve the SPA for non-GET methods', async () => {

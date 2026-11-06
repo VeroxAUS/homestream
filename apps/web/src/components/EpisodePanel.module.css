@@ -1,0 +1,60 @@
+.panel {
+  overflow: hidden;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.still {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--s2);
+}
+
+.still img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 14, 0.6);
+}
+
+.body {
+  padding: 18px 20px 22px;
+}
+
+.kicker {
+  color: var(--accent-hi);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.name {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.meta {
+  margin-top: 4px;
+  color: var(--mut);
+  font-size: 13.5px;
+}
+
+.overview {
+  margin-top: 12px;
+  color: #d0d0d8;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.actions {
+  margin-top: 18px;
+}

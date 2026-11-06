@@ -1,0 +1,35 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 96px var(--gutter);
+  text-align: center;
+}
+
+.icon {
+  color: var(--dim);
+}
+
+.title {
+  margin-top: 18px;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.message {
+  max-width: 520px;
+  margin-top: 8px;
+  color: var(--mut);
+  overflow-wrap: anywhere;
+}
+
+.home {
+  margin-top: 24px;
+  padding: 11px 22px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}

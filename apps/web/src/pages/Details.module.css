@@ -1,0 +1,89 @@
+.overview {
+  max-width: 660px;
+  margin-top: 18px;
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.actions {
+  margin-top: 26px;
+}
+
+.seasons {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--gutter);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.season {
+  padding: 12px 18px;
+  color: var(--mut);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.season:hover {
+  color: var(--text);
+}
+
+.seasonActive,
+.seasonActive:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1100px) 360px;
+  gap: 40px;
+  align-items: start;
+  padding: 24px var(--gutter) 64px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.more {
+  width: 100%;
+  padding: 12px;
+  color: var(--mut);
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.more:hover {
+  color: var(--text);
+}
+
+.panelSlot {
+  position: sticky;
+  top: calc(var(--nav-h) + 16px);
+}
+
+@media (max-width: 1199px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panelSlot {
+    position: static;
+    order: -1;
+  }
+}
+
+.seasonStatus {
+  padding: 24px var(--gutter);
+  color: var(--mut);
+}

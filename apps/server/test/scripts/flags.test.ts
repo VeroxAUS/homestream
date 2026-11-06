@@ -49,7 +49,7 @@ describe('flags:check', () => {
     const result = checkFlags(registry, scanUsage(realRoot, Object.keys(registry)));
     expect(result.dead).toEqual([]);
     expect(result.unknown).toEqual([]);
-    expect(result.planned).toEqual(['banner-rotation-interval']);
+    expect(result.planned).toEqual([]);
   });
 
   it('reports an active flag that nothing reads and a flag that is evaluated but not declared', () => {

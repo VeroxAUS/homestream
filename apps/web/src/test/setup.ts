@@ -4,6 +4,7 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 beforeEach(() => {
   vi.stubEnv('DEV', false);
+  window.scrollTo = vi.fn();
 });
 
 afterEach(() => {

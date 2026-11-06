@@ -1,0 +1,67 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.wide .primary,
+.wide .outline {
+  flex: 1;
+}
+
+.primary,
+.outline {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.primary:hover {
+  background: var(--accent-hi);
+}
+
+.outline {
+  border: 1px solid var(--line-strong);
+}
+
+.outline:hover {
+  background: var(--hover);
+}
+
+.placeholder {
+  width: 132px;
+  height: 46px;
+  background: var(--s2);
+  border-radius: 10px;
+}
+
+.wide.placeholder {
+  width: 100%;
+}
+
+.resume {
+  max-width: 420px;
+  margin-top: 14px;
+}
+
+.resumeBar {
+  height: 4px;
+}
+
+.caption {
+  margin-top: 6px;
+  color: var(--mut);
+  font-size: 12.5px;
+}

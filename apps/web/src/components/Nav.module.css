@@ -1,0 +1,138 @@
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 36px;
+  align-items: center;
+  height: var(--nav-h);
+  padding: 0 var(--gutter);
+  background: linear-gradient(180deg, rgba(10, 10, 14, 0.97), rgba(10, 10, 14, 0.92));
+  border-bottom: 1px solid var(--line);
+}
+
+.logo {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
+  border-radius: 8px;
+}
+
+.links {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
+  color: var(--mut);
+  background: none;
+  border: 0;
+  border-radius: var(--r-pill);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.link:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.active,
+.active:hover {
+  color: var(--text);
+  background: var(--active);
+}
+
+.menuRoot {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  min-width: 180px;
+  padding: 8px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--sh-menu);
+}
+
+.menu .link {
+  display: flex;
+  width: 100%;
+  border-radius: var(--r-sm);
+}
+
+.right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.searchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.searchButton:hover {
+  background: var(--s3);
+}
+
+@media (max-width: 900px) {
+  .bar {
+    gap: 12px;
+  }
+
+  .logo {
+    font-size: 0;
+    gap: 0;
+  }
+
+  .link {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+}
+
+/* Desktop app: the frameless window has no title bar, so the nav is the drag handle. The right padding keeps the search
+   button clear of the caption-button overlay (48 gutter + 138). */
+.desktop {
+  padding-right: 186px;
+  -webkit-app-region: drag;
+}
+
+.desktop a,
+.desktop button,
+.desktop ul {
+  -webkit-app-region: no-drag;
+}

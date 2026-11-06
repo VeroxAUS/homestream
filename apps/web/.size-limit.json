@@ -6,6 +6,24 @@
     "limit": "150 kB"
   },
   {
+    "name": "All CSS (gzip)",
+    "path": "dist/assets/*.css",
+    "gzip": true,
+    "limit": "24 kB"
+  },
+  {
+    "name": "Route chunks together (gzip)",
+    "path": "dist/assets/*Page-*.js",
+    "gzip": true,
+    "limit": "40 kB"
+  },
+  {
+    "name": "Inter font",
+    "path": "dist/assets/inter-var-*.woff2",
+    "gzip": false,
+    "limit": "50 kB"
+  },
+  {
     "name": "Telemetry chunk (gzip)",
     "path": "dist/assets/telemetry-*.js",
     "gzip": true,

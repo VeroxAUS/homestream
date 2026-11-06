@@ -30,6 +30,17 @@ export const ProgressResponseSchema = z.object({
 });
 export type ProgressResponse = z.infer<typeof ProgressResponseSchema>;
 
+/** One saved episode of GET /api/tv/:tmdbId/progress. */
+export const EpisodeProgressSchema = ProgressResponseSchema.extend({
+  season: z.number().int(),
+  episode: z.number().int(),
+});
+export type EpisodeProgress = z.infer<typeof EpisodeProgressSchema>;
+
+/** GET /api/tv/:tmdbId/progress: every episode of the show with saved progress (position > 0 or completed), in one answer. */
+export const ShowProgressResponseSchema = z.object({ items: z.array(EpisodeProgressSchema) });
+export type ShowProgressResponse = z.infer<typeof ShowProgressResponseSchema>;
+
 export const ContinueWatchingResponseSchema = z.object({ items: z.array(ContinueWatchingItemSchema) });
 export type ContinueWatchingResponse = z.infer<typeof ContinueWatchingResponseSchema>;
 

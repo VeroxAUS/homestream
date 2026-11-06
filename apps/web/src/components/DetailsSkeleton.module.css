@@ -1,0 +1,36 @@
+.hero {
+  display: flex;
+  gap: 44px;
+  align-items: flex-end;
+  min-height: 420px;
+  padding: 56px var(--gutter) 40px;
+}
+
+.poster {
+  flex: none;
+  width: 280px;
+  height: 420px;
+  background: var(--s2);
+  border-radius: var(--r);
+}
+
+.lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 660px;
+}
+
+.title {
+  width: 60%;
+  height: 54px;
+  background: var(--s2);
+  border-radius: 8px;
+}
+
+.line {
+  height: 16px;
+  background: var(--s2);
+  border-radius: 6px;
+}

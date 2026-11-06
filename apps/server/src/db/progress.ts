@@ -94,6 +94,16 @@ export function upsertProgress(db: Db, row: ProgressWrite): void {
   );
 }
 
+/** Saved episodes of one show, by season and episode. Removed-from-row markers (position 0, not completed) are left out. */
+export function listShowProgress(db: Db, tmdbId: number): ProgressRow[] {
+  const rows = db
+    .prepare(
+      "SELECT * FROM progress WHERE type = 'tv' AND tmdb_id = ? AND season IS NOT NULL AND episode IS NOT NULL AND (position_sec > 0 OR completed = 1) ORDER BY season ASC, episode ASC",
+    )
+    .all(tmdbId) as unknown as RawRow[];
+  return rows.map(toRow);
+}
+
 /**
  * Rows that can appear in Continue Watching: resumable, completed (their next episode may show) or removed by the user
  * (the removal has to win against older rows of the same show). Newest first.

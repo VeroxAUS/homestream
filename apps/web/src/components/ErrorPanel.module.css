@@ -1,0 +1,68 @@
+.panel {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 24px 28px;
+  background: var(--s1);
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  border-radius: var(--r-lg);
+}
+
+.icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--err);
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.message {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin-top: 6px;
+  color: var(--mut);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.retry {
+  height: 38px;
+  padding: 0 20px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 0;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.health {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.health:hover {
+  background: var(--hover);
+}

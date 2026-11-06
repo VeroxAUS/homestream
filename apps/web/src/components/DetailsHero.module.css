@@ -1,0 +1,144 @@
+.hero {
+  position: relative;
+  min-height: 420px;
+  overflow: hidden;
+  background: var(--s1);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(10, 10, 14, 0.97) 0%, rgba(10, 10, 14, 0.8) 38%, rgba(10, 10, 14, 0.25) 75%),
+    linear-gradient(0deg, var(--bg) 0%, transparent 45%);
+}
+
+.content {
+  position: relative;
+  display: flex;
+  gap: 44px;
+  align-items: flex-end;
+  min-height: 420px;
+  padding: 56px var(--gutter) 40px;
+}
+
+.poster {
+  flex: none;
+  width: 280px;
+  height: 420px;
+  object-fit: cover;
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--sh-hero-poster);
+}
+
+.noPoster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  font-size: 96px;
+  font-weight: 800;
+}
+
+.text {
+  min-width: 0;
+  max-width: 760px;
+}
+
+.back {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 0;
+  color: var(--mut);
+  background: none;
+  border: 0;
+  font-size: 14px;
+}
+
+.back:hover {
+  color: var(--text);
+}
+
+.title {
+  font-size: 54px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  margin-top: 14px;
+  color: var(--mut);
+  font-size: 14px;
+}
+
+.meta > span + span::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-right: 18px;
+  vertical-align: middle;
+  background: var(--dim);
+  border-radius: 50%;
+}
+
+.rating {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.star {
+  color: var(--star);
+}
+
+.genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.genre {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 13px;
+}
+
+@media (max-width: 800px) {
+  .content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .poster {
+    width: 140px;
+    height: 210px;
+  }
+
+  .title {
+    font-size: 36px;
+  }
+}
