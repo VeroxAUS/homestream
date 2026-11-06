@@ -9,7 +9,8 @@ import { registerSecret, registerSecretUrl } from './redact.js';
 export const REQUIRED_KEYS = ['GATEWAY_MANIFEST_URL', 'TMDB_READ_TOKEN'] as const;
 type RequiredKey = (typeof REQUIRED_KEYS)[number];
 
-const KNOWN_KEYS = [
+/** Every setting the server reads from the process environment or the config file; `.env.example` must list each one. */
+export const KNOWN_KEYS = [
   ...REQUIRED_KEYS,
   'TORBOX_API_KEY',
   'TORBOX_API_URL',

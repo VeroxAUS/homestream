@@ -3,6 +3,7 @@ import Fastify, { LogController, type FastifyBaseLogger, type FastifyError, type
 import { registerConfigSecrets, type Config } from './config.js';
 import type { AppContext } from './context.js';
 import { openDatabase, type Db } from './db/index.js';
+import { registerOpenApi } from './docs/openapi.js';
 import { DownloadService, type DownloadServiceOptions } from './downloads/service.js';
 import { AllStreamsFailedError, AppError, codeForStatus, errorBody } from './errors.js';
 import { EventBus } from './events/bus.js';
@@ -163,6 +164,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}): P
     exposedHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges'],
     maxAge: 600,
   });
+
+  await registerOpenApi(app);
 
   const hasWeb = await registerStatic(app, config.webDir);
 

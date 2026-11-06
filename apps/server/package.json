@@ -2,6 +2,7 @@
   "name": "@homestream/server",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -16,11 +17,17 @@
     "test:gpu": "vitest run --project gpu",
     "test:live": "vitest run --project live",
     "test:ci": "vitest run --project unit --project integration",
-    "test:coverage": "vitest run --coverage --project unit --project integration"
+    "test:coverage": "vitest run --coverage --project unit --project integration",
+    "openapi:export": "tsx src/docs/cli.ts openapi",
+    "openapi:check": "tsx src/docs/cli.ts openapi --check",
+    "db:schema": "tsx src/docs/cli.ts schema",
+    "db:schema:check": "tsx src/docs/cli.ts schema --check"
   },
   "dependencies": {
     "@fastify/cors": "^11.4.0",
     "@fastify/static": "^10.1.8",
+    "@fastify/swagger": "~9.9.3",
+    "@fastify/swagger-ui": "~6.1.3",
     "@homestream/shared": "workspace:*",
     "bonjour-service": "^1.4.4",
     "fastify": "^5.12.8",

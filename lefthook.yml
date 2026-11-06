@@ -22,6 +22,16 @@ pre-commit:
       run: node scripts/pre-commit-secrets.mjs
       fail_text: A secret was found in the staged changes (see above). Nothing was committed.
 
+    - name: agents-md
+      glob: 'AGENTS.md'
+      run: node scripts/validate-agents-md.mjs
+      fail_text: AGENTS.md mentions a command, path or endpoint that does not exist (see above).
+
+    - name: docs-links
+      glob: '*.md'
+      run: node scripts/check-docs.mjs
+      fail_text: A markdown link or anchor is broken (see above).
+
     - name: large-files
       run: node scripts/check-large-files.mjs
       fail_text: A staged file is over the 1 MB limit (see above). Nothing was committed.

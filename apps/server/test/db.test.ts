@@ -83,13 +83,13 @@ describe('database', () => {
 
   it('migrates idempotently and persists on disk', () => {
     const db = openDatabase(root);
-    upsertDevice(db, profile, '10.0.0.5');
+    upsertDevice(db, profile, '192.0.2.5');
     migrate(db);
     db.close();
 
     const reopened = openDatabase(root);
     const rows = reopened.prepare('SELECT id, last_ip FROM devices').all() as { id: string; last_ip: string }[];
-    expect(rows).toEqual([{ id: 'd1', last_ip: '10.0.0.5' }]);
+    expect(rows).toEqual([{ id: 'd1', last_ip: '192.0.2.5' }]);
     reopened.close();
   });
 
@@ -143,8 +143,8 @@ describe('database', () => {
 describe('upsertDevice', () => {
   it('updates in place and keeps one row', () => {
     const db = openDatabase(':memory:');
-    const first = upsertDevice(db, profile, '10.0.0.5', 1000);
-    const second = upsertDevice(db, { ...profile, deviceName: 'Renamed' }, '10.0.0.6', 2000);
+    const first = upsertDevice(db, profile, '192.0.2.5', 1000);
+    const second = upsertDevice(db, { ...profile, deviceName: 'Renamed' }, '192.0.2.6', 2000);
     expect(first.lastSeen).toBe(new Date(1000).toISOString());
     expect(second.name).toBe('Renamed');
     expect(second.capabilities.deviceName).toBe('Renamed');

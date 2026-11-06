@@ -1,0 +1,28 @@
+{
+  "name": "HomeStream",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/homestream",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/homestream,type=bind",
+  "remoteUser": "node",
+  "containerEnv": {
+    "HOMESTREAM_TEST_ROOT": "/tmp/homestream-test"
+  },
+  "postCreateCommand": "node scripts/bootstrap.mjs",
+  "forwardPorts": [8600, 8601],
+  "portsAttributes": {
+    "8600": { "label": "HomeStream server" },
+    "8601": { "label": "Web dev server" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint", "editorconfig.editorconfig"],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+      }
+    }
+  }
+}

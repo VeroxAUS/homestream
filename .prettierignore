@@ -9,6 +9,9 @@ reports/
 *.tsbuildinfo
 pnpm-lock.yaml
 
+# Written byte-for-byte by `pnpm openapi:export`; a drift check compares it
+docs/openapi.json
+
 # Android TV build output and Gradle files are not formatted by prettier
 apps/tv/
 

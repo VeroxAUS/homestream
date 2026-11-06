@@ -1,6 +1,7 @@
 {
   "name": "homestream",
   "private": true,
+  "license": "GPL-3.0-only",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -29,7 +30,14 @@
     "syncpack:lint": "syncpack lint",
     "techdebt": "node scripts/techdebt.mjs",
     "check:large-files": "node scripts/check-large-files.mjs --all",
-    "check:secrets": "node scripts/pre-commit-secrets.mjs"
+    "check:secrets": "node scripts/pre-commit-secrets.mjs",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "agents:check": "node scripts/validate-agents-md.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
+    "openapi:export": "pnpm --filter @homestream/server openapi:export",
+    "openapi:check": "pnpm --filter @homestream/server openapi:check",
+    "db:schema": "pnpm --filter @homestream/server db:schema",
+    "db:schema:check": "pnpm --filter @homestream/server db:schema:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
