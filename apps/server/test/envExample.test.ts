@@ -25,7 +25,20 @@ const EXTRA_KEYS = [
 ];
 
 /** Variables the operating system or CI provide; nothing to configure. */
-const SYSTEM_VARIABLES = new Set(['APPDATA', 'CI', 'PATH', 'Path', 'TEMP', 'TMP', 'HOME', 'USERPROFILE']);
+const SYSTEM_VARIABLES = new Set([
+  'APPDATA',
+  'CI',
+  'GITHUB_OUTPUT',
+  'GITHUB_REPOSITORY',
+  'GITHUB_STEP_SUMMARY',
+  'GITHUB_TOKEN',
+  'PATH',
+  'Path',
+  'TEMP',
+  'TMP',
+  'HOME',
+  'USERPROFILE',
+]);
 
 /** Keys with an assignment line, commented or not: `KEY=` or `# KEY=`. */
 function assignedKeys(text: string): Map<string, string> {

@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+title: 'feat: '
+labels: ['type:feature']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        HomeStream is a home media server. Some decisions are fixed (the PC encodes all video, there are no user accounts, the server is for the local network only), so requests that change them need a strong reason.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part would change?
+      options:
+        - Server (apps/server)
+        - Web UI (apps/web)
+        - Desktop app (apps/desktop)
+        - Google TV app (apps/tv)
+        - CI or tooling
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+      description: Describe the situation, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered

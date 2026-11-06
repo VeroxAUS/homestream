@@ -1,0 +1,14 @@
+# Every path is reviewed by the repository owner. Later entries win, so list the most specific paths last.
+*                       @VeroxAUS
+/.github/               @VeroxAUS
+/apps/server/           @VeroxAUS
+/apps/web/              @VeroxAUS
+/apps/desktop/          @VeroxAUS
+/apps/tv/               @VeroxAUS
+/packages/shared/       @VeroxAUS
+/docs/                  @VeroxAUS
+/scripts/               @VeroxAUS
+/monitoring/            @VeroxAUS
+/.github/workflows/     @VeroxAUS
+/SECURITY.md            @VeroxAUS
+/LICENSE                @VeroxAUS

@@ -1,0 +1,66 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/server/src/**'
+      - 'packages/shared/**'
+      - 'docs/**'
+      - 'scripts/check-docs.mjs'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'apps/server/src/**'
+      - 'packages/shared/**'
+      - 'docs/**'
+      - 'scripts/check-docs.mjs'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: '12.18.0'
+
+jobs:
+  generated-docs:
+    name: Generated docs are current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate docs/openapi.json and docs/schema.sql
+        run: |
+          pnpm openapi:export
+          pnpm db:schema
+
+      - name: Fail when the generated files differ from the committed ones
+        run: |
+          if ! git diff --exit-code -- docs/openapi.json docs/schema.sql; then
+            echo "::error::Generated docs are stale. Run 'pnpm openapi:export' and 'pnpm db:schema' and commit the result."
+            exit 1
+          fi
+
+      - name: Check links, anchors and the database docs
+        run: |
+          pnpm docs:check
+          pnpm db:schema:check

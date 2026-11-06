@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in HomeStream does not work as expected
+title: 'bug: '
+labels: ['type:bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not paste secrets**: no API keys, tokens, gateway or stream URLs, and no IP addresses. Redact them first. Security problems go through the private report on the Security tab, not here.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options:
+        - Server (apps/server)
+        - Web UI (apps/web)
+        - Desktop app (apps/desktop)
+        - Google TV app (apps/tv)
+        - CI or tooling
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Press play on ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: HomeStream version
+      description: Shown by `GET /api/info` or in the About screen.
+      placeholder: 0.1.0
+  - type: input
+    id: request-id
+    attributes:
+      label: Request ID
+      description: The `X-Request-ID` response header of the failing request, if you have it.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From `GET /api/logs?level=error` or `server.log`. Check them for secrets before pasting.
+      render: text

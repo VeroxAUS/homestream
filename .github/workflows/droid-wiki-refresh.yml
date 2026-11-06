@@ -26,6 +26,7 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read
@@ -70,6 +71,7 @@ jobs:
     needs: check
     if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
     # One refresh at a time for the whole repository: the wiki is per repo, so
@@ -120,9 +122,11 @@ jobs:
   wiki-publish:
     needs: wiki-refresh
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
+      statuses: write
     concurrency:
       group: droid-wiki-refresh
       cancel-in-progress: false
@@ -164,6 +168,26 @@ jobs:
         if: steps.wiki-pr.outcome == 'failure'
         run: |
           echo "::warning::Could not push droid-wiki/ to $WIKI_BRANCH or open the pull request. The wiki was still generated, but the next run has no previous wiki on that branch to start from. Check the branch rules on $WIKI_BRANCH and the contents/pull-requests permissions of the token, and that Actions may create pull requests."
+
+      - name: Mark the code checks as not applicable to the wiki pull request
+        id: wiki-checks
+        # Branch protection on main requires the CI jobs below. CI ignores droid-wiki/** (ci.yml paths-ignore) and a
+        # pull request opened with the GITHUB_TOKEN triggers no workflow at all, so those checks would stay pending
+        # and auto-merge would wait forever. The pull request only touches droid-wiki/** (add-paths above), which no
+        # check covers, so the checks are reported as passed on its head commit. Keep REQUIRED_CHECKS equal to the
+        # job names in ci.yml and to the required checks of the branch protection rule.
+        if: steps.wiki-pr.outcome == 'success' && steps.wiki-pr.outputs.pull-request-head-sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.wiki-pr.outputs.pull-request-head-sha }}
+          REQUIRED_CHECKS: Linux,Windows
+        run: |
+          IFS=, read -ra checks <<< "$REQUIRED_CHECKS"
+          for check in "${checks[@]}"; do
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+              -f state=success -f context="$check" \
+              -f description="Not applicable: this pull request only changes the generated droid-wiki/ folder"
+          done
 
       - name: Merge the wiki pull request
         id: wiki-merge

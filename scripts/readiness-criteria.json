@@ -1,0 +1,1274 @@
+{
+  "description": "Factory Agent Readiness criteria (81 IDs) with the inferred level, scope and checker used by scripts/readiness-audit.mjs. Levels are inferred from public readiness reports; see the readiness plan.",
+  "defaultApps": ["server"],
+  "libraries": ["shared"],
+  "criteria": [
+    {
+      "id": "formatter",
+      "pillar": "Style",
+      "level": 1,
+      "scope": "app",
+      "tv": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "appContains",
+            "pattern": "ktlint|spotless|detekt",
+            "pathRegex": "(^|/)build\\.gradle(\\.kts)?$"
+          }
+        ]
+      },
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".prettierrc"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["format:check"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lint_config",
+      "pillar": "Style",
+      "level": 1,
+      "scope": "app",
+      "tv": {
+        "type": "appContains",
+        "pattern": "detekt|ktlint|lint",
+        "pathRegex": "(^|/)build\\.gradle(\\.kts)?$"
+      },
+      "checker": {
+        "type": "appScripts",
+        "scripts": ["lint"]
+      }
+    },
+    {
+      "id": "type_check",
+      "pillar": "Style",
+      "level": 1,
+      "scope": "app",
+      "tv": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)build\\.gradle(\\.kts)?$"
+      },
+      "checker": {
+        "type": "appScripts",
+        "scripts": ["typecheck"]
+      }
+    },
+    {
+      "id": "strict_typing",
+      "pillar": "Style",
+      "level": 2,
+      "scope": "app",
+      "tv": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)build\\.gradle(\\.kts)?$"
+      },
+      "checker": {
+        "type": "appTsconfigStrict"
+      }
+    },
+    {
+      "id": "pre_commit_hooks",
+      "pillar": "Style",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["lefthook.yml"]
+          },
+          {
+            "type": "contains",
+            "file": "lefthook.yml",
+            "pattern": "pre-commit"
+          }
+        ]
+      }
+    },
+    {
+      "id": "large_file_detection",
+      "pillar": "Style",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/check-large-files.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": "lefthook.yml",
+            "pattern": "check-large-files"
+          }
+        ]
+      }
+    },
+    {
+      "id": "naming_consistency",
+      "pillar": "Style",
+      "level": 3,
+      "scope": "app",
+      "tv": {
+        "type": "contains",
+        "file": "detekt.yml",
+        "pattern": "Naming"
+      },
+      "checker": {
+        "type": "contains",
+        "file": "eslint.config.mjs",
+        "pattern": "naming-convention"
+      }
+    },
+    {
+      "id": "cyclomatic_complexity",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "app",
+      "tv": {
+        "type": "contains",
+        "file": "detekt.yml",
+        "pattern": "Complexity"
+      },
+      "checker": {
+        "type": "contains",
+        "file": "eslint.config.mjs",
+        "pattern": "complexity: \\['error'"
+      }
+    },
+    {
+      "id": "dead_code_detection",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "app",
+      "tv": {
+        "type": "skip",
+        "reason": "Kotlin: covered by Android lint (UnusedResources)"
+      },
+      "checker": {
+        "type": "knipWorkspace"
+      }
+    },
+    {
+      "id": "duplicate_code_detection",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".jscpd.json"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["dup"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "code_modularization",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".dependency-cruiser.cjs"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["deps:check"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tech_debt_tracking",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/techdebt.mjs", "docs/TECH_DEBT.md"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["techdebt"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "n_plus_one_detection",
+      "pillar": "Style",
+      "level": 4,
+      "scope": "app",
+      "checker": {
+        "type": "skip",
+        "reason": "No ORM: node:sqlite with hand-written prepared statements"
+      }
+    },
+    {
+      "id": "build_cmd_doc",
+      "pillar": "Build",
+      "level": 1,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["README.md", "AGENTS.md"]
+          },
+          {
+            "type": "contains",
+            "file": "README.md",
+            "pattern": "pnpm (install|build)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "deps_pinned",
+      "pillar": "Build",
+      "level": 1,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": ["pnpm-lock.yaml"]
+      }
+    },
+    {
+      "id": "single_command_setup",
+      "pillar": "Build",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/bootstrap.mjs"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["bootstrap"]
+          },
+          {
+            "type": "contains",
+            "file": "README.md",
+            "pattern": "bootstrap"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unused_dependencies_detection",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "app",
+      "tv": {
+        "type": "skip",
+        "reason": "Gradle dependency analysis not configured; Android lint covers unused resources only"
+      },
+      "checker": {
+        "type": "knipWorkspace"
+      }
+    },
+    {
+      "id": "version_drift_detection",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".syncpackrc.json"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["syncpack:lint"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "monorepo_tooling",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["turbo.json"]
+          },
+          {
+            "type": "contains",
+            "file": "package.json",
+            "pattern": "turbo run"
+          }
+        ]
+      }
+    },
+    {
+      "id": "build_performance_tracking",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["turbo.json"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/ci.yml",
+            "pattern": "turbo"
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["build:summary"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "heavy_dependency_detection",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "app",
+      "appliesTo": ["web", "desktop"],
+      "checker": {
+        "type": "appContains",
+        "pattern": "size-limit|rollup-plugin-visualizer|analyze",
+        "pathRegex": "(^|/)package\\.json$"
+      }
+    },
+    {
+      "id": "deployment_frequency",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "gh",
+        "check": "releases"
+      }
+    },
+    {
+      "id": "release_automation",
+      "pillar": "Build",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/release.yml", "scripts/next-version.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/release.yml",
+            "pattern": "workflow_run"
+          }
+        ]
+      }
+    },
+    {
+      "id": "release_notes_automation",
+      "pillar": "Build",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/release.yml"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/release.yml",
+            "pattern": "generate-notes"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rollback_automation",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "skip",
+        "reason": "Desktop and LAN app, not an infrastructure deployment; docs/runbooks/rollback.md documents reinstalling the previous release"
+      }
+    },
+    {
+      "id": "progressive_rollout",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["docs/experimentation.md"]
+          },
+          {
+            "type": "contains",
+            "file": "docs/experimentation.md",
+            "pattern": "rollout",
+            "flags": "i"
+          }
+        ]
+      }
+    },
+    {
+      "id": "feature_flag_infrastructure",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["packages/shared/src/flags.ts"]
+          },
+          {
+            "type": "contains",
+            "file": "packages/shared/src/flags.ts",
+            "pattern": "posthog|PostHog",
+            "flags": "i"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dead_feature_flag_detection",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/flags.mjs"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["flags:check"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "vcs_cli_tools",
+      "pillar": "Build",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "gh",
+        "check": "auth"
+      }
+    },
+    {
+      "id": "agentic_development",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "git",
+        "check": "coauthor"
+      }
+    },
+    {
+      "id": "automated_pr_review",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "skip",
+        "reason": "Optional Droid review workflow needs a Factory secret (tracked as a GitHub issue); all work lands on main"
+      }
+    },
+    {
+      "id": "fast_ci_feedback",
+      "pillar": "Build",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "gh",
+        "check": "ciDuration"
+      }
+    },
+    {
+      "id": "unit_tests_exist",
+      "pillar": "Testing",
+      "level": 1,
+      "scope": "app",
+      "library": true,
+      "checker": {
+        "type": "appFiles",
+        "pathRegex": "\\.(test|spec)\\.(ts|tsx|mjs)$|(^|/)src/test/.*\\.kt$"
+      }
+    },
+    {
+      "id": "unit_tests_runnable",
+      "pillar": "Testing",
+      "level": 1,
+      "scope": "app",
+      "library": true,
+      "tv": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)gradlew(\\.bat)?$"
+      },
+      "checker": {
+        "type": "appScripts",
+        "scripts": ["test"]
+      }
+    },
+    {
+      "id": "test_naming_conventions",
+      "pillar": "Testing",
+      "level": 2,
+      "scope": "app",
+      "library": true,
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "appFiles",
+            "pathRegex": "\\.test\\.(ts|tsx)$|Test\\.kt$"
+          },
+          {
+            "type": "files",
+            "all": ["AGENTS.md"]
+          },
+          {
+            "type": "contains",
+            "file": "AGENTS.md",
+            "pattern": "\\*\\.test\\.ts"
+          }
+        ]
+      }
+    },
+    {
+      "id": "test_isolation",
+      "pillar": "Testing",
+      "level": 2,
+      "scope": "app",
+      "library": true,
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "appFiles",
+            "pathRegex": "(^|/)vitest\\.config\\.ts$|(^|/)vite\\.config\\.ts$|(^|/)build\\.gradle(\\.kts)?$"
+          },
+          {
+            "type": "contains",
+            "file": "AGENTS.md",
+            "pattern": "PORT=0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "integration_tests_exist",
+      "pillar": "Testing",
+      "level": 3,
+      "scope": "app",
+      "tv": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)src/androidTest/"
+      },
+      "checker": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)(test/integration|e2e|src/androidTest)/"
+      }
+    },
+    {
+      "id": "test_coverage_thresholds",
+      "pillar": "Testing",
+      "level": 3,
+      "scope": "app",
+      "library": true,
+      "tv": {
+        "type": "appContains",
+        "pattern": "jacocoTestCoverageVerification",
+        "pathRegex": "(^|/)build\\.gradle(\\.kts)?$"
+      },
+      "checker": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)coverage-thresholds\\.json$"
+      }
+    },
+    {
+      "id": "flaky_test_detection",
+      "pillar": "Testing",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/flaky-report.mjs", "scripts/vitest-flaky-reporter.mjs", "docs/runbooks/flaky-tests.md"]
+          },
+          {
+            "type": "contains",
+            "file": "vitest.shared.ts",
+            "pattern": "retry"
+          }
+        ]
+      }
+    },
+    {
+      "id": "test_performance_tracking",
+      "pillar": "Testing",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/test-timing.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/ci.yml",
+            "pattern": "test-reports"
+          }
+        ]
+      }
+    },
+    {
+      "id": "agents_md",
+      "pillar": "Docs",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": ["AGENTS.md"]
+      }
+    },
+    {
+      "id": "agents_md_validation",
+      "pillar": "Docs",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/validate-agents-md.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/ci.yml",
+            "pattern": "agents:check"
+          }
+        ]
+      }
+    },
+    {
+      "id": "api_schema_docs",
+      "pillar": "Docs",
+      "level": 3,
+      "scope": "app",
+      "appliesTo": ["server"],
+      "checker": {
+        "type": "files",
+        "all": ["docs/openapi.json"]
+      }
+    },
+    {
+      "id": "automated_doc_generation",
+      "pillar": "Docs",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/docs.yml"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["openapi:export", "db:schema"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "documentation_freshness",
+      "pillar": "Docs",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "git",
+        "check": "docsFresh"
+      }
+    },
+    {
+      "id": "readme",
+      "pillar": "Docs",
+      "level": 1,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": ["README.md"]
+      }
+    },
+    {
+      "id": "service_flow_documented",
+      "pillar": "Docs",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["docs/architecture.md"]
+          },
+          {
+            "type": "contains",
+            "file": "docs/architecture.md",
+            "pattern": "mermaid"
+          }
+        ]
+      }
+    },
+    {
+      "id": "skills",
+      "pillar": "Docs",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "skills"
+      }
+    },
+    {
+      "id": "database_schema",
+      "pillar": "Dev env",
+      "level": 3,
+      "scope": "app",
+      "appliesTo": ["server"],
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["docs/schema.sql", "docs/database.md"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "devcontainer",
+      "pillar": "Dev env",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": [".devcontainer/devcontainer.json"]
+      }
+    },
+    {
+      "id": "devcontainer_runnable",
+      "pillar": "Dev env",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".devcontainer/devcontainer.json", ".github/workflows/devcontainer.yml"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/devcontainer.yml",
+            "pattern": "devcontainers/ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "env_template",
+      "pillar": "Dev env",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".env.example"]
+          },
+          {
+            "type": "files",
+            "all": ["apps/server/test/envExample.test.ts"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "local_services_setup",
+      "pillar": "Dev env",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "skip",
+        "reason": "No local backing services: TMDB, the gateway and TorBox are SaaS (pnpm dev:stubs is a bonus)"
+      }
+    },
+    {
+      "id": "structured_logging",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "app",
+      "checker": {
+        "type": "appContains",
+        "pattern": "pino|logger|Timber",
+        "pathRegex": "(^|/)(src|app/src)/.*([Ll]ogger|[Ll]og)\\.(ts|tsx|kt)$|(^|/)package\\.json$"
+      }
+    },
+    {
+      "id": "log_scrubbing",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "app",
+      "checker": {
+        "type": "appFiles",
+        "pathRegex": "(^|/)src/.*(redact|scrub|sanitiz)[A-Za-z]*\\.(ts|tsx)$|(^|/)src/.*[Ss]crubber.*\\.kt$"
+      }
+    },
+    {
+      "id": "distributed_tracing",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "app",
+      "checker": {
+        "type": "appContains",
+        "pattern": "x-request-id",
+        "flags": "i"
+      }
+    },
+    {
+      "id": "metrics_collection",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "app",
+      "appliesTo": ["server"],
+      "checker": {
+        "type": "appContains",
+        "pattern": "prom-client",
+        "pathRegex": "(^|/)package\\.json$"
+      }
+    },
+    {
+      "id": "health_checks",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "app",
+      "appliesTo": ["server"],
+      "checker": {
+        "type": "appContains",
+        "pattern": "/healthz",
+        "pathRegex": "(^|/)src/.*\\.ts$"
+      }
+    },
+    {
+      "id": "error_tracking_contextualized",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "app",
+      "checker": {
+        "type": "appContains",
+        "pattern": "@sentry/|io\\.sentry",
+        "pathRegex": "(^|/)package\\.json$|(^|/)build\\.gradle(\\.kts)?$"
+      }
+    },
+    {
+      "id": "profiling_instrumentation",
+      "pillar": "Observability",
+      "level": 4,
+      "scope": "app",
+      "appliesTo": ["server"],
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["scripts/profile-server.mjs", "docs/runbooks/profiling.md"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["profile:server"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "circuit_breakers",
+      "pillar": "Observability",
+      "level": 4,
+      "scope": "app",
+      "checker": {
+        "type": "skip",
+        "reason": "The gateway client has its own rate limiter, cache and timeouts; a breaker would change validated behaviour"
+      }
+    },
+    {
+      "id": "alerting_configured",
+      "pillar": "Observability",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": ["monitoring/sentry/alert-rules.json", "monitoring/prometheus/alerts.yml", "docs/alerting.md"]
+      }
+    },
+    {
+      "id": "deployment_observability",
+      "pillar": "Observability",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/release.yml"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/release.yml",
+            "pattern": "getsentry/action-release"
+          },
+          {
+            "type": "contains",
+            "file": "docs/observability.md",
+            "pattern": "sentry",
+            "flags": "i"
+          }
+        ]
+      }
+    },
+    {
+      "id": "code_quality_metrics",
+      "pillar": "Observability",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/codeql.yml", "scripts/ci-summary.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/ci.yml",
+            "pattern": "ci-summary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "runbooks_documented",
+      "pillar": "Observability",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": ["docs/runbooks/README.md", "docs/runbooks/gateway-down.md", "docs/runbooks/sentry-triage.md"]
+      }
+    },
+    {
+      "id": "branch_protection",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "gh",
+        "check": "branchProtection"
+      }
+    },
+    {
+      "id": "codeowners",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": [".github/CODEOWNERS"]
+      }
+    },
+    {
+      "id": "dependency_update_automation",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/dependabot.yml"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/dependabot.yml",
+            "pattern": "package-ecosystem: \"?npm"
+          }
+        ]
+      }
+    },
+    {
+      "id": "gitignore_comprehensive",
+      "pillar": "Security",
+      "level": 1,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "contains",
+            "file": ".gitignore",
+            "pattern": "^\\.env$"
+          },
+          {
+            "type": "contains",
+            "file": ".gitignore",
+            "pattern": "node_modules"
+          },
+          {
+            "type": "contains",
+            "file": ".gitignore",
+            "pattern": "dist/"
+          },
+          {
+            "type": "contains",
+            "file": ".gitignore",
+            "pattern": "\\.DS_Store|Thumbs\\.db"
+          }
+        ]
+      }
+    },
+    {
+      "id": "secret_scanning",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".gitleaks.toml", ".github/workflows/gitleaks.yml"]
+          },
+          {
+            "type": "gh",
+            "check": "secretScanning"
+          }
+        ]
+      }
+    },
+    {
+      "id": "secrets_management",
+      "pillar": "Security",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".env.example"]
+          },
+          {
+            "type": "trackedEnv"
+          }
+        ]
+      }
+    },
+    {
+      "id": "automated_security_review",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/codeql.yml"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/codeql.yml",
+            "pattern": "javascript-typescript"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dast_scanning",
+      "pillar": "Security",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "skip",
+        "reason": "LAN-only app; an optional weekly ZAP baseline is not configured"
+      }
+    },
+    {
+      "id": "pii_handling",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "skip",
+        "reason": "No accounts or profiles; analytics carry an anonymous install id and are scrubbed (docs/PRIVACY.md)"
+      }
+    },
+    {
+      "id": "privacy_compliance",
+      "pillar": "Security",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": ["docs/PRIVACY.md"]
+          },
+          {
+            "type": "contains",
+            "file": "docs/PRIVACY.md",
+            "pattern": "HOMESTREAM_TELEMETRY"
+          }
+        ]
+      }
+    },
+    {
+      "id": "backlog_health",
+      "pillar": "Task",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "gh",
+        "check": "backlog"
+      }
+    },
+    {
+      "id": "issue_labeling_system",
+      "pillar": "Task",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/labels.yml", "scripts/sync-labels.mjs"]
+          },
+          {
+            "type": "rootScripts",
+            "scripts": ["labels:sync"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "issue_templates",
+      "pillar": "Task",
+      "level": 2,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": [
+          ".github/ISSUE_TEMPLATE/bug.yml",
+          ".github/ISSUE_TEMPLATE/feature.yml",
+          ".github/ISSUE_TEMPLATE/config.yml"
+        ]
+      }
+    },
+    {
+      "id": "pr_templates",
+      "pillar": "Task",
+      "level": 3,
+      "scope": "repo",
+      "checker": {
+        "type": "files",
+        "all": [".github/pull_request_template.md"]
+      }
+    },
+    {
+      "id": "error_to_insight_pipeline",
+      "pillar": "Product",
+      "level": 4,
+      "scope": "repo",
+      "checker": {
+        "type": "all",
+        "checks": [
+          {
+            "type": "files",
+            "all": [".github/workflows/sentry-issues.yml", "scripts/sentry-issues.mjs"]
+          },
+          {
+            "type": "contains",
+            "file": ".github/workflows/release.yml",
+            "pattern": "set_commits"
+          }
+        ]
+      }
+    },
+    {
+      "id": "product_analytics_instrumentation",
+      "pillar": "Product",
+      "level": 4,
+      "scope": "app",
+      "checker": {
+        "type": "appContains",
+        "pattern": "posthog",
+        "pathRegex": "(^|/)package\\.json$|(^|/)build\\.gradle(\\.kts)?$"
+      }
+    }
+  ]
+}

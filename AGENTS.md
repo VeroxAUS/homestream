@@ -73,6 +73,15 @@ pnpm docs:check              # relative links, anchors and mermaid diagrams in t
 pnpm agents:check            # this file, the skills and the runbooks only mention real commands, paths and endpoints
 ```
 
+Repository automation:
+
+````powershell
+pnpm readiness:audit          # self-audit against the Factory readiness criteria (add --all, --apps a,b, --strict, --json)
+pnpm release:next             # next version from the Conventional Commits since the last tag (dry run)
+pnpm labels:sync             # make the GitHub labels match .github/labels.yml (needs gh)
+pnpm ci:summary              # coverage, flaky and slowest tests as Markdown (what CI puts in the job summary)
+pnpm sentry:issues           # dry run of the Sentry-to-GitHub issue sync (needs SENTRY_API_TOKEN, SENTRY_ORG, GITHUB_TOKEN)
+```n
 Telemetry, flags and profiling (details in [docs/observability.md](docs/observability.md)):
 
 ```powershell
@@ -81,7 +90,7 @@ pnpm flags:sync             # creates missing flags in PostHog (needs POSTHOG_PE
 pnpm telemetry:smoke --sentry   # sends one deliberate test error; add --posthog or use neither flag for both
 pnpm sentry:alerts --dry-run    # plan for monitoring/sentry/alert-rules.json; --apply makes Sentry match it
 pnpm profile:server         # CPU profile of a throw-away server into reports/profiles
-```
+````
 
 Run the server (port 8600) and the web dev server (port 8601, proxies `/api` and `/hls`):
 
@@ -199,4 +208,16 @@ CI runs these on every push and pull request (the workflows are in `.github/work
 4. `pnpm agents:check` and `pnpm docs:check`
 5. `pnpm openapi:check` and `pnpm db:schema:check` (generated docs must be committed)
 
+Check CI status with the GitHub CLI (`gh auth status` must succeed first):
+
+````powershell
+gh run list --workflow ci.yml --branch main --limit 3      # latest runs on main
+gh run watch <run-id> --exit-status                      # wait for a run
+gh run view <run-id> --log-failed                        # logs of the failing steps only
+gh pr checks <number>                                    # checks of a pull request
+gh api repos/VeroxAUS/homestream/branches/main/protection --jq '.required_status_checks.contexts'
+```n
+Branch protection on `main` requires the jobs `Linux` and `Windows`; force pushes and deletions are blocked, the owner may push directly. A push to `main` triggers CI, then `release.yml` (tag, GitHub release, Sentry release) when the commits since the last tag include `feat`, `fix` or `perf`.
+
 GPU and live tests never run in CI. Pre-commit hooks (lefthook, installed by `pnpm install`) run prettier, ESLint, the secret scan and the large-file check on staged files, `pnpm agents:check` when this file changes, and `pnpm docs:check` when markdown changes.
+````

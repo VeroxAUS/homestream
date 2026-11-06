@@ -1,0 +1,67 @@
+name: Release
+
+# Runs after CI succeeds for a push to main. It creates a tag and a GitHub release and tells Sentry about the release.
+# It never commits to main and never opens a pull request, so it needs no pull-request permission.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Work out the next version
+        id: plan
+        run: node scripts/next-version.mjs --sha "$HEAD_SHA" --notes-file "$RUNNER_TEMP/commits.md"
+
+      - name: Create the tag and the GitHub release
+        if: ${{ steps.plan.outputs.release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --target "$HEAD_SHA" --title "$TAG" --generate-notes --notes-file "$RUNNER_TEMP/commits.md")
+          if [ -n "$PREVIOUS" ]; then
+            args+=(--notes-start-tag "$PREVIOUS")
+          fi
+          gh release create "$TAG" "${args[@]}"
+
+      - name: Create the Sentry release with commits and a deploy
+        if: ${{ steps.plan.outputs.release == 'true' }}
+        uses: getsentry/action-release@e6703d0b00208e0b3687ba660d18ab5af7892821 # v3.7.2
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_URL: https://us.sentry.io
+        with:
+          release: homestream@${{ steps.plan.outputs.version }}
+          projects: homestream-server homestream-web homestream-tv
+          environment: production
+          set_commits: auto
+          ignore_missing: true

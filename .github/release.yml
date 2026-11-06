@@ -1,0 +1,34 @@
+changelog:
+  exclude:
+    labels:
+      - droid-wiki
+      - ignore-for-release
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking-change
+    - title: Features
+      labels:
+        - type:feature
+    - title: Fixes
+      labels:
+        - type:bug
+        - sentry
+    - title: Telemetry
+      labels:
+        - telemetry
+    - title: Documentation
+      labels:
+        - type:docs
+        - area:docs
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: Maintenance
+      labels:
+        - type:chore
+        - area:ci
+        - flaky-test
+    - title: Other changes
+      labels:
+        - '*'

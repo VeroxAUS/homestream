@@ -16,6 +16,10 @@ When it runs:
 1. `wiki-refresh` restores the previous wiki from the `factory/droid-wiki` branch (or from main), runs `droid exec --auto high "/wiki"` with read-only permissions, and uploads the result.
 2. `wiki-publish` opens or updates a pull request from `factory/droid-wiki` titled `docs: refresh wiki`, labelled `droid-wiki`, and merges it automatically (squash, branch kept). If the push, pull request or merge is rejected, the run ends with a warning annotation instead of failing.
 
+### Branch protection and the wiki pull request
+
+Branch protection on `main` requires the CI jobs `Linux` and `Windows`. CI ignores `droid-wiki/**` (`paths-ignore` in `ci.yml`) and a pull request opened with the built-in `GITHUB_TOKEN` triggers no workflow, so those checks would never report and auto-merge would wait forever. After opening the pull request, `wiki-publish` therefore posts a `success` commit status named `Linux` and `Windows` on its head commit (the `REQUIRED_CHECKS` variable of the workflow). That is safe because the pull request only adds `droid-wiki/**`, which no check covers. If you rename a CI job or change the required checks, change `REQUIRED_CHECKS` as well. The repository setting `allow_auto_merge` must be on; `enforce_admins` is off, force pushes and deletions are blocked.
+
 `droid-wiki/video/` and `droid-wiki/images/` are never committed.
 
 ## Secrets and settings

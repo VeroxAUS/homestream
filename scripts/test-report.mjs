@@ -27,7 +27,7 @@ export function mergeVitestJson(reports) {
   };
 }
 
-function mergeReports(reportsDir) {
+export function mergeReports(reportsDir) {
   const read = (name) => PACKAGES.map((pkg) => readIf(path.join(reportsDir, pkg, name))).filter(Boolean);
   writeFileSync(path.join(reportsDir, 'junit.xml'), mergeJunit(read('junit.xml')));
   writeFileSync(
@@ -38,18 +38,27 @@ function mergeReports(reportsDir) {
   writeFileSync(path.join(reportsDir, 'flaky.json'), `${JSON.stringify({ flaky }, null, 2)}\n`);
 }
 
-/** Runs the CI-tier tests of every package in CI mode (retry 2, JUnit/JSON/flaky reporters), then prints the reports. */
-export function main(root = repoRoot()) {
+/**
+ * Runs the CI-tier tests of every package in CI mode (retry 2, JUnit/JSON/flaky reporters), then prints the reports.
+ * --merge-only skips the run and merges the per-package reports a previous CI-mode run already wrote (the CI job runs
+ * the tests once, with coverage).
+ */
+export function main(root = repoRoot(), argv = process.argv.slice(2)) {
   const reportsDir = path.join(root, 'reports');
-  rmSync(reportsDir, { recursive: true, force: true });
-  mkdirSync(reportsDir, { recursive: true });
+  const mergeOnly = argv.includes('--merge-only');
+  if (!mergeOnly) {
+    rmSync(reportsDir, { recursive: true, force: true });
+    mkdirSync(reportsDir, { recursive: true });
+  }
 
-  const run = spawnSync('pnpm', ['-r', '--workspace-concurrency=1', 'run', 'test:ci'], {
-    cwd: root,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    env: { ...process.env, CI: 'true' },
-  });
+  const run = mergeOnly
+    ? { status: 0 }
+    : spawnSync('pnpm', ['-r', '--workspace-concurrency=1', 'run', 'test:ci'], {
+        cwd: root,
+        stdio: 'inherit',
+        shell: process.platform === 'win32',
+        env: { ...process.env, CI: 'true' },
+      });
   mergeReports(reportsDir);
   testTiming([], root);
   flakyReport([], root);

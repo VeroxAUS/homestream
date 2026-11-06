@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    # The generated wiki is merged by its own workflow; it changes no code.
+    paths-ignore: ['droid-wiki/**']
+  pull_request:
+    paths-ignore: ['droid-wiki/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: '12.18.0'
+  GITLEAKS_VERSION: '8.30.1'
+  TURBO_TELEMETRY_DISABLED: '1'
+  HOMESTREAM_TELEMETRY: 'off'
+
+jobs:
+  # The job names below ("Linux", "Windows") are the required status checks of branch protection on main.
+  # Renaming a job means updating the protection rule, otherwise pushes are blocked.
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gitleaks scans the full history.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Restore the turbo cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
+
+      - name: Install ffmpeg (software only; the tests that run it need no GPU)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+
+      - name: Install gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" "$base/$archive"
+          curl -fsSL -o "$RUNNER_TEMP/checksums.txt" "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " $archive\$" checksums.txt | sha256sum --check -)
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$HOME/.local/bin" gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Dead code (knip)
+        run: pnpm knip
+
+      - name: Duplicate code (jscpd)
+        run: pnpm dup
+
+      - name: Module boundaries (dependency-cruiser)
+        run: pnpm deps:check
+
+      - name: Dependency version drift (syncpack)
+        run: pnpm syncpack:lint
+
+      - name: Large files
+        run: pnpm check:large-files
+
+      - name: AGENTS.md, skills and runbooks name real commands
+        run: pnpm agents:check
+
+      - name: Markdown links and anchors
+        run: pnpm docs:check
+
+      - name: OpenAPI export is current
+        run: pnpm openapi:check
+
+      - name: Database schema docs are current
+        run: pnpm db:schema:check
+
+      - name: Feature flags
+        run: pnpm flags:check
+
+      - name: Tech debt budget
+        run: pnpm techdebt
+
+      - name: .env.example lists every known key
+        run: pnpm --filter @homestream/server exec vitest run --project unit test/envExample.test.ts
+
+      # Unit and integration tiers only: GPU (test/encode) and live (test/live) tests never run in CI, and no secret is
+      # passed to this job. CI=true makes vitest retry twice and write the JUnit, JSON and flaky reports.
+      - name: Tests with coverage thresholds
+        run: pnpm test:coverage
+
+      - name: Merge test reports
+        if: ${{ !cancelled() }}
+        run: node scripts/test-report.mjs --merge-only
+
+      - name: Job summary (coverage, flaky tests, slowest tests)
+        if: ${{ !cancelled() }}
+        run: node scripts/ci-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Secret scan of the full history (gitleaks)
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
+
+      - name: Upload test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports
+          path: |
+            reports/junit.xml
+            reports/vitest.json
+            reports/flaky.json
+            reports/test-timing.md
+            apps/*/coverage/coverage-summary.json
+            packages/*/coverage/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # The server runs on Windows, so the pure modules that touch paths and processes are checked there too.
+      - name: Server unit tests (config, redact, playlist, decision, ffmpegArgs, db)
+        run: >-
+          pnpm --filter @homestream/server exec vitest run --project unit
+          test/config.test.ts test/redact.test.ts test/playback/playlist.test.ts
+          test/playback/decision.test.ts test/playback/ffmpegArgs.test.ts test/db.test.ts

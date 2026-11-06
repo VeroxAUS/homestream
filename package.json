@@ -42,7 +42,12 @@
     "flags:check": "node scripts/flags.mjs check",
     "flags:sync": "node scripts/flags.mjs sync",
     "sentry:alerts": "node scripts/sentry-alerts.mjs",
-    "profile:server": "node scripts/profile-server.mjs"
+    "profile:server": "node scripts/profile-server.mjs",
+    "labels:sync": "node scripts/sync-labels.mjs",
+    "readiness:audit": "node scripts/readiness-audit.mjs",
+    "release:next": "node scripts/next-version.mjs --dry-run",
+    "ci:summary": "node scripts/ci-summary.mjs",
+    "sentry:issues": "node scripts/sentry-issues.mjs --dry-run"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -60,7 +65,8 @@
     "turbo": "~2.11.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   },
   "engines": {
     "node": ">=24 <25"

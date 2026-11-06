@@ -1,0 +1,62 @@
+# Source of truth for the repository labels. `pnpm labels:sync` creates missing labels and updates colours and
+# descriptions (it never deletes a label). Keep the format flat: `- name:`, `color:`, `description:`.
+- name: type:bug
+  color: d73a4a
+  description: Something is broken
+- name: type:feature
+  color: 0e8a16
+  description: New capability or improvement
+- name: type:chore
+  color: cfd3d7
+  description: Maintenance, tooling or dependencies
+- name: type:docs
+  color: 0075ca
+  description: Documentation only
+- name: area:server
+  color: 5319e7
+  description: apps/server (Fastify, ffmpeg, playback)
+- name: area:web
+  color: 1d76db
+  description: apps/web (React UI)
+- name: area:desktop
+  color: 0052cc
+  description: apps/desktop (Electron shell)
+- name: area:tv
+  color: 006b75
+  description: apps/tv (Google TV app)
+- name: area:ci
+  color: fbca04
+  description: GitHub Actions, release and repository settings
+- name: area:docs
+  color: bfd4f2
+  description: Docs, runbooks and generated references
+- name: priority:p0
+  color: b60205
+  description: Drop everything, playback or data is broken
+- name: priority:p1
+  color: d93f0b
+  description: Important, plan it for the next change
+- name: priority:p2
+  color: fef2c0
+  description: Nice to have, no deadline
+- name: flaky-test
+  color: e99695
+  description: A test that passes and fails on the same code (see docs/runbooks/flaky-tests.md)
+- name: sentry
+  color: 362d59
+  description: Created from a Sentry issue
+- name: dependencies
+  color: 0366d6
+  description: Dependency updates
+- name: telemetry
+  color: c5def5
+  description: Sentry, PostHog, metrics or logging
+- name: droid-wiki
+  color: ededed
+  description: Generated wiki refresh
+- name: good first issue
+  color: 7057ff
+  description: Small and well described
+- name: help wanted
+  color: 008672
+  description: Extra attention is welcome
