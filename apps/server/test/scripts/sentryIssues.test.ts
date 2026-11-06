@@ -18,7 +18,7 @@ const issue = (overrides: Partial<SentryIssueLike> = {}): SentryIssueLike => ({
   count: '3',
   firstSeen: '2026-11-06T10:00:00Z',
   lastSeen: '2026-11-06T11:00:00Z',
-  permalink: 'https://<your-sentry-org>.sentry.io/issues/123/',
+  permalink: 'https://example-org.sentry.io/issues/123/',
   project: { slug: 'homestream-server' },
   metadata: { type: 'Error', value: 'encoder exited' },
   ...overrides,
@@ -76,7 +76,7 @@ describe('scrubbing', () => {
 
   it('builds a body with the Sentry link and no secret', () => {
     const body = issueBody(issue({ metadata: { value: 'failed token=hunter2hunter2 at 203.0.113.9' } }));
-    expect(body).toContain('https://<your-sentry-org>.sentry.io/issues/123/');
+    expect(body).toContain('https://example-org.sentry.io/issues/123/');
     expect(body).toContain('Fixes HOMESTREAM-SERVER-7');
     expect(body).not.toContain('hunter2');
     expect(body).not.toContain('203.0.113.9');

@@ -9,12 +9,14 @@ import { isMain, repoRoot } from './lib/util.mjs';
  * `--apply` can run any number of times: it creates what is missing, updates what drifted and leaves the rest alone.
  *   node scripts/sentry-alerts.mjs --dry-run   print the plan, change nothing
  *   node scripts/sentry-alerts.mjs --apply     make Sentry match monitoring/sentry/alert-rules.json
- * Uses SENTRY_API_TOKEN (the personal token); the organisation token cannot manage alerts.
+ * Uses SENTRY_API_TOKEN (the personal token; the organisation token cannot manage alerts) and SENTRY_ORG (the slug).
  */
 
 const DEFAULT_RULES_FILE = path.join('monitoring', 'sentry', 'alert-rules.json');
 const DEFAULT_API_BASE = 'https://sentry.io/api/0';
 const REQUEST_TIMEOUT_MS = 20_000;
+/** The rules file carries this placeholder; the real slug comes from SENTRY_ORG so it never lands in git. */
+const ORG_PLACEHOLDER = '<your-sentry-org>';
 
 export function parseArgs(argv) {
   const dryRun = argv.includes('--dry-run');
@@ -219,10 +221,15 @@ export async function main(argv, root = repoRoot(), env = process.env, fetchImpl
     );
     return args.apply ? 1 : 0;
   }
+  const organization = resolved.SENTRY_ORG || rules.organization;
+  if (!organization || organization === ORG_PLACEHOLDER) {
+    console.error('[sentry-alerts] SENTRY_ORG is not set. Put your Sentry organisation slug in .env.');
+    return 1;
+  }
   try {
     const client = createClient({
       token,
-      organization: rules.organization,
+      organization,
       base: resolved.SENTRY_API_BASE ?? DEFAULT_API_BASE,
       fetchImpl,
     });

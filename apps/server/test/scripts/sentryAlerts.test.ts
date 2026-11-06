@@ -234,6 +234,25 @@ describe('sentry-alerts main', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('takes the organisation from SENTRY_ORG and refuses the placeholder without it', async () => {
+    const root = rulesFile({ organization: '<your-sentry-org>', detectors: [], workflows: [] });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const urls: string[] = [];
+    const fetchImpl = vi.fn((url: string) => {
+      urls.push(url);
+      return Promise.resolve(new Response('[]'));
+    });
+    const env = { SENTRY_API_TOKEN: 'personal-token', SENTRY_ORG: 'example-org' } as NodeJS.ProcessEnv;
+    expect(await main(['--dry-run'], root, env, fetchImpl as unknown as typeof fetch)).toBe(0);
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((url) => url.startsWith('https://sentry.io/api/0/organizations/example-org/'))).toBe(true);
+
+    const withoutOrg = { SENTRY_API_TOKEN: 'personal-token' } as NodeJS.ProcessEnv;
+    expect(await main(['--dry-run'], root, withoutOrg, fetchImpl as unknown as typeof fetch)).toBe(1);
+    expect(error.mock.calls.join('\n')).toContain('SENTRY_ORG is not set');
+  });
+
   it('reports an unreadable rules file', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(await main(['--dry-run', '--file=missing.json'], realRoot, {})).toBe(1);

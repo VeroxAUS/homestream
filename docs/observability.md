@@ -73,15 +73,17 @@ The command prints the run id, never exits non-zero for a missing key or an unre
 
 ## Where to look
 
-| What                                        | Where                                                                                           |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Server errors (project `homestream-server`) | [Sentry: homestream-server](https://<your-sentry-org>.sentry.io/projects/homestream-server/)             |
-| Web and desktop errors                      | [Sentry: homestream-web](https://<your-sentry-org>.sentry.io/projects/homestream-web/)                   |
-| TV app errors                               | [Sentry: homestream-tv](https://<your-sentry-org>.sentry.io/projects/homestream-tv/)                     |
-| Product events and dashboards               | [PostHog dashboards](https://us.posthog.com/project/711768/dashboard)                           |
-| Event stream (check a new event arrived)    | [PostHog activity](https://us.posthog.com/project/711768/activity/explore)                      |
-| Feature flags and experiments               | [PostHog feature flags](https://us.posthog.com/project/711768/feature_flags)                    |
-| Alert rules                                 | [Sentry alerts](https://<your-sentry-org>.sentry.io/issues/alerts/rules/) and [alerting.md](alerting.md) |
+| What                                        | Where                                                                                     |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Server errors (project `homestream-server`) | `https://<your-sentry-org>.sentry.io/projects/homestream-server/`                         |
+| Web and desktop errors                      | `https://<your-sentry-org>.sentry.io/projects/homestream-web/`                            |
+| TV app errors                               | `https://<your-sentry-org>.sentry.io/projects/homestream-tv/`                             |
+| Product events and dashboards               | [PostHog dashboards](https://us.posthog.com/project/711768/dashboard)                     |
+| Event stream (check a new event arrived)    | [PostHog activity](https://us.posthog.com/project/711768/activity/explore)                |
+| Feature flags and experiments               | [PostHog feature flags](https://us.posthog.com/project/711768/feature_flags)              |
+| Alert rules                                 | `https://<your-sentry-org>.sentry.io/issues/alerts/rules/` and [alerting.md](alerting.md) |
+
+Replace `<your-sentry-org>` with your Sentry organisation slug, the value of `SENTRY_ORG` in `.env`. The scripts that call the Sentry API (`pnpm sentry:alerts`, `pnpm sentry:issues`) read it from there.
 
 ## Profiling
 
