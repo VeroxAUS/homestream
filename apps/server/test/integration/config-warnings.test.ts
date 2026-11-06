@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { recordConfigWarnings } from '../src/events/configWarnings.js';
-import { makeTempDir, removeDir, startTestApp } from './helpers.js';
+import { recordConfigWarnings } from '../../src/events/configWarnings.js';
+import { makeTempDir, removeDir, startTestApp } from '../helpers.js';
 
 describe('recordConfigWarnings', () => {
   let root: string;

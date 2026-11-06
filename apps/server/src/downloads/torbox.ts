@@ -1,6 +1,6 @@
 import type { TorboxItem } from './rules.js';
 
-export const TORBOX_LIST_TIMEOUT_MS = 30_000;
+const TORBOX_LIST_TIMEOUT_MS = 30_000;
 
 export type TorboxFetch = (
   url: string,

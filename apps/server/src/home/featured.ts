@@ -1,7 +1,7 @@
 import type { ContinueWatchingItem, FeaturedItem, MediaSummary } from '@homestream/shared';
 
-export const MIN_FEATURED = 3;
-export const MAX_FEATURED = 5;
+const MIN_FEATURED = 3;
+const MAX_FEATURED = 5;
 
 export interface FeaturedInput {
   trendingMovies: MediaSummary[];

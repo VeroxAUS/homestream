@@ -2,9 +2,9 @@ import type { Config } from '../../config.js';
 import type { HealthFetch } from './gateway.js';
 import { failure, type CheckOutcome } from './types.js';
 
-export const TORBOX_USER_URL = 'https://api.torbox.app/v1/api/user/me';
-export const TORBOX_CHECK_TIMEOUT_MS = 10_000;
-export const TORBOX_WARN_DAYS = 7;
+const TORBOX_USER_URL = 'https://api.torbox.app/v1/api/user/me';
+const TORBOX_CHECK_TIMEOUT_MS = 10_000;
+const TORBOX_WARN_DAYS = 7;
 const DAY_MS = 24 * 3600 * 1000;
 const PLAN_NAMES: Record<number, string> = { 0: 'Free', 1: 'Essential', 2: 'Pro', 3: 'Standard' };
 

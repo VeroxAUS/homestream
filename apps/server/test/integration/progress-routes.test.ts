@@ -16,7 +16,7 @@ import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
 import { FakeEncoders } from '../playback/fakeEncoder.js';
 import { bootHarness, startSession, type Harness } from '../playback/harness.js';
-import { BREAKING_BAD_SEASONS, makeFakeCatalog, type FakeCatalog } from './fakeCatalog.js';
+import { BREAKING_BAD_SEASONS, makeFakeCatalog, type FakeCatalog } from '../progress/fakeCatalog.js';
 
 const DURATION = 1000;
 const PROBE: ProbeResult = {

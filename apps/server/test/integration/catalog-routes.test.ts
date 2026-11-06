@@ -6,7 +6,7 @@ import { createSilentLogger } from '../../src/logger.js';
 import { clearSecrets } from '../../src/redact.js';
 import { TmdbService } from '../../src/tmdb/service.js';
 import { makeTempDir, removeDir, testConfig } from '../helpers.js';
-import { makeFakeTmdb, type FakeTmdb } from './fixtures.js';
+import { makeFakeTmdb, type FakeTmdb } from '../tmdb/fixtures.js';
 
 let app: FastifyInstance;
 let fake: FakeTmdb;

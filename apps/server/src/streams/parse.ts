@@ -6,7 +6,7 @@ const B = '(?<![a-z0-9])';
 const E = '(?![a-z0-9])';
 
 /** Lower-cases and turns separators into spaces, keeping dots between digits (5.1, H.264). */
-export function normalizeFilename(filename: string): string {
+function normalizeFilename(filename: string): string {
   return (
     filename
       .toLowerCase()
@@ -21,7 +21,7 @@ export function normalizeFilename(filename: string): string {
 
 const test = (re: RegExp, text: string): boolean => re.test(text);
 
-export function parseResolution(norm: string): StreamResolution {
+function parseResolution(norm: string): StreamResolution {
   const explicit = new RegExp(`${B}(2160|1440|1080|720|576|480|360)[pi]${E}`).exec(norm);
   if (explicit) {
     switch (explicit[1]) {
@@ -43,14 +43,14 @@ export function parseResolution(norm: string): StreamResolution {
   return 'unknown';
 }
 
-export function parseVideoCodec(norm: string): StreamVideoCodec {
+function parseVideoCodec(norm: string): StreamVideoCodec {
   if (test(new RegExp(`${B}av1${E}`), norm)) return 'av1';
   if (test(new RegExp(`${B}(x ?265|h ?\\.?265|hevc)${E}`), norm)) return 'hevc';
   if (test(new RegExp(`${B}(x ?264|h ?\\.?264|avc)${E}`), norm)) return 'h264';
   return 'other';
 }
 
-export function parseHdr(norm: string, resolution: StreamResolution): StreamHdr {
+function parseHdr(norm: string, resolution: StreamResolution): StreamHdr {
   if (test(new RegExp(`${B}(dv|dovi|dolby ?vision)${E}`), norm)) return 'dv';
   if (test(new RegExp(`${B}hdr ?10 ?(\\+|plus)`), norm)) return 'hdr10+';
   if (test(new RegExp(`${B}hdr(?: ?10)?${E}`), norm)) return 'hdr10';
@@ -59,9 +59,7 @@ export function parseHdr(norm: string, resolution: StreamResolution): StreamHdr 
   return resolution === '1080p' || resolution === '720p' || resolution === '480p' ? 'sdr' : 'unknown';
 }
 
-export const SOURCES = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV'] as const;
-
-export function parseSource(norm: string): string {
+function parseSource(norm: string): string {
   if (test(/remux/, norm)) return 'Remux';
   if (test(new RegExp(`${B}web ?-?rip${E}`), norm)) return 'WEBRip';
   if (test(new RegExp(`${B}(web ?-?dl|webdl|web)${E}`), norm)) return 'WEB-DL';
@@ -101,7 +99,7 @@ function parseChannels(norm: string, from: number): string | null {
   return null;
 }
 
-export function parseAudio(norm: string): string {
+function parseAudio(norm: string): string {
   for (const { re, label } of AUDIO_PATTERNS) {
     const match = re.exec(norm);
     if (!match) continue;
@@ -134,7 +132,7 @@ const LANGUAGE_PATTERNS: Array<[string, string]> = [
   ['ara', 'ara|arabic'],
 ];
 
-export function parseLanguages(filename: string, norm: string): string[] {
+function parseLanguages(filename: string, norm: string): string[] {
   const found: Array<{ code: string; index: number }> = [];
   for (const [code, words] of LANGUAGE_PATTERNS) {
     const match = new RegExp(`${B}(?:\\d+x)?(?:${words})${E}`).exec(norm);

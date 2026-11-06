@@ -6,8 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ProbeResult, SubtitleTrackInfo } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { FakeEncoders } from './fakeEncoder.js';
-import { bootHarness, fetchHls, startSession, type Harness } from './harness.js';
+import { FakeEncoders } from '../playback/fakeEncoder.js';
+import { bootHarness, fetchHls, startSession, type Harness } from '../playback/harness.js';
 
 interface TrackOptions {
   kind?: 'text' | 'bitmap';

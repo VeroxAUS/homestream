@@ -73,7 +73,7 @@ function execText(command: string, args: string[]): Promise<string> {
 }
 
 /** Command line per live pid; pids that are gone are absent. */
-export async function commandLines(pids: number[]): Promise<Map<number, string>> {
+async function commandLines(pids: number[]): Promise<Map<number, string>> {
   const result = new Map<number, string>();
   if (pids.length === 0) return result;
   if (process.platform === 'win32') {

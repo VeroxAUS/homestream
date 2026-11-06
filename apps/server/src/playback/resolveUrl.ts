@@ -4,7 +4,7 @@ import { redact } from '../redact.js';
 export type UrlResolver = (rawUrl: string) => Promise<string>;
 export type FetchImpl = (url: string, init: RequestInit) => Promise<Response>;
 
-export const RESOLVE_TIMEOUT_MS = 60_000;
+const RESOLVE_TIMEOUT_MS = 60_000;
 const MAX_REDIRECTS = 8;
 
 function unavailable(reason: string): AppError {

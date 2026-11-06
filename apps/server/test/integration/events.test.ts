@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { EventBus } from '../src/events/bus.js';
-import { clearSecrets, registerSecret } from '../src/redact.js';
-import { makeTempDir, removeDir, startTestApp } from './helpers.js';
+import { EventBus } from '../../src/events/bus.js';
+import { clearSecrets, registerSecret } from '../../src/redact.js';
+import { makeTempDir, removeDir, startTestApp } from '../helpers.js';
 
 describe('EventBus', () => {
   it('delivers typed events to subscribers and supports unsubscribe', () => {

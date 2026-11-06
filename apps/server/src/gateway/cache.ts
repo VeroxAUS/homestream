@@ -1,9 +1,9 @@
 import type { Db } from '../db/index.js';
 import type { GatewayStream } from './types.js';
 
-export const GATEWAY_TTL_MS = 60 * 60 * 1000;
+const GATEWAY_TTL_MS = 60 * 60 * 1000;
 /** Empty lists are usually "not released / not indexed yet", so they are retried sooner. */
-export const GATEWAY_EMPTY_TTL_MS = 5 * 60 * 1000;
+const GATEWAY_EMPTY_TTL_MS = 5 * 60 * 1000;
 const PURGE_AFTER_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CachedLookup {

@@ -10,7 +10,7 @@ import { testConfig } from '../helpers.js';
 import { makeFakeTmdb, type FakeTmdb } from '../tmdb/fixtures.js';
 
 const GIB = 1024 ** 3;
-export const GPU_LINE = 'NVIDIA GeForce RTX 4080, 581.29, 3, 0, 2310, 16376, 48\n';
+const GPU_LINE = 'NVIDIA GeForce RTX 4080, 581.29, 3, 0, 2310, 16376, 48\n';
 const ENCODERS = ' V....D h264_nvenc NVENC\n V....D hevc_nvenc NVENC\n';
 
 export interface HealthRig {

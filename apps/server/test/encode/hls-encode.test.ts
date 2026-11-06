@@ -14,6 +14,7 @@ import {
   type Harness,
   type ProfileName,
 } from '../playback/harness.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 120_000;
 
@@ -50,7 +51,7 @@ async function encodeAndProbe(stream: 'sdr' | 'hdr', profile: ProfileName, segme
   return { session: body, probed, video, audio };
 }
 
-describe('HLS encode with local sources', () => {
+describe.skipIf(!hasNvenc())('HLS encode with local sources', () => {
   it(
     'keeps 4K HDR10 for a device that supports it (hevc Main10, PQ/BT.2020 tags, hvc1)',
     async () => {
@@ -175,7 +176,7 @@ describe('HLS encode with local sources', () => {
   );
 });
 
-describe('segments and playlist', () => {
+describe.skipIf(!hasNvenc())('segments and playlist', () => {
   it(
     'produces 4 s keyframe-aligned fMP4 segments whose start_time matches the playlist',
     async () => {
@@ -257,7 +258,7 @@ describe('segments and playlist', () => {
   );
 });
 
-describe('session lifecycle', () => {
+describe.skipIf(!hasNvenc())('session lifecycle', () => {
   it(
     'reports encoder stats while encoding',
     async () => {

@@ -8,7 +8,7 @@ import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
 import { startStubCdn, type StubCdn } from '../sourceproxy/stubCdn.js';
-import { bootHarness, PROFILES, type Harness } from './harness.js';
+import { bootHarness, PROFILES, type Harness } from '../playback/harness.js';
 
 const MB = 1024 * 1024;
 const SHUTDOWN_LIMIT_MS = 10_000;

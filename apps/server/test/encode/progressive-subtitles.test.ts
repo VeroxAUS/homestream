@@ -16,6 +16,7 @@ import {
   type HarnessOptions,
 } from '../playback/harness.js';
 import { generateSubtitleSources, TEXT_CUES } from '../playback/subtitleSources.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 180_000;
 const TEXT_ENG = 4;
@@ -142,7 +143,7 @@ async function startGatedSource(file: string): Promise<{ url: string; gate: { cl
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/movie.mkv`, gate };
 }
 
-describe('progressive text subtitles', () => {
+describe.skipIf(!hasNvenc())('progressive text subtitles', () => {
   it(
     'serves a master playlist, rendition playlists and aligned WebVTT segments with absolute times',
     async () => {

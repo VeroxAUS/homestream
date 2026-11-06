@@ -26,7 +26,7 @@ const RETRY_DELAY_MS = 250;
  * ffmpeg keeps a few seconds of input in its demuxer and encoder after its last finished segment, so the window is closed
  * this much early: the finished-segment lead then stays within the configured window.
  */
-export const ENCODER_PIPELINE_SEC = 4;
+const ENCODER_PIPELINE_SEC = 4;
 /** An extractor needing bytes this close ahead of an encoder stream waits for that stream to bring them (about a second at 60 Mbps). */
 const SHARE_AHEAD_BYTES = 8 * 1024 * 1024;
 

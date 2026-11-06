@@ -3,6 +3,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { makeTempDir, removeDir } from '../helpers.js';
 import { buildFailingFfmpeg, readCounter } from '../playback/failingFfmpeg.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 // Only checks the wrapper itself: the forwarded calls are `-version`, nothing encodes.
 function call(exe: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -22,7 +23,7 @@ beforeAll(() => {
 
 afterAll(() => removeDir(root));
 
-describe('failing ffmpeg wrapper', () => {
+describe.skipIf(!hasNvenc())('failing ffmpeg wrapper', () => {
   it('fails every encoder invocation but forwards everything else', async () => {
     const exe = path.join(root, 'always.exe');
     const counter = path.join(root, 'always.txt');

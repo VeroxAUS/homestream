@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { bootHarness, listFfmpegCommandLines, PROFILES, startSession, type Harness } from './harness.js';
+import { bootHarness, listFfmpegCommandLines, PROFILES, startSession, type Harness } from '../playback/harness.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const PROBE: ProbeResult = {
   durationSec: 120,
@@ -60,7 +61,7 @@ async function expectNoEncoder(run: () => Promise<void>): Promise<void> {
   expect(readdirSync(harness.transcodeDir)).toEqual([]);
 }
 
-describe('invalid session requests', () => {
+describe.skipIf(!hasNvenc())('invalid session requests', () => {
   it('rejects an unknown streamId with 404 and spawns nothing', async () => {
     await expectNoEncoder(async () => {
       const { status, body } = await post({ ...valid(), streamId: '0000000000000000' });
@@ -138,7 +139,7 @@ describe('invalid session requests', () => {
   });
 });
 
-describe('session start with a stubbed probe', () => {
+describe.skipIf(!hasNvenc())('session start with a stubbed probe', () => {
   it('returns the documented response shape and upserts the device', async () => {
     const { status, body } = await startSession(harness, 'movie', 'emulator', {
       audioIndex: 1,

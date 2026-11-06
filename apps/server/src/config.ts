@@ -7,7 +7,7 @@ import { DEFAULT_MAX_RSS_MB } from './playback/memoryWatchdog.js';
 import { registerSecret, registerSecretUrl } from './redact.js';
 
 export const REQUIRED_KEYS = ['GATEWAY_MANIFEST_URL', 'TMDB_READ_TOKEN'] as const;
-export type RequiredKey = (typeof REQUIRED_KEYS)[number];
+type RequiredKey = (typeof REQUIRED_KEYS)[number];
 
 const KNOWN_KEYS = [
   ...REQUIRED_KEYS,
@@ -32,10 +32,10 @@ const KNOWN_KEYS = [
   'LOG_LEVEL',
 ] as const;
 
-export const DEFAULT_PORT = 8600;
-export const SOURCE_PROXY_PORT_OFFSET = 50;
+const DEFAULT_PORT = 8600;
+const SOURCE_PROXY_PORT_OFFSET = 50;
 
-export interface ConfigFileInfo {
+interface ConfigFileInfo {
   path: string;
   exists: boolean;
   source: 'env' | 'repo' | 'appdata';
@@ -87,12 +87,12 @@ export interface LoadConfigOptions {
   defaultWebDir?: string | null;
 }
 
-export function appDataConfigPath(env: NodeJS.ProcessEnv = process.env): string {
+function appDataConfigPath(env: NodeJS.ProcessEnv = process.env): string {
   const appData = env.APPDATA?.trim() || path.join(os.homedir(), 'AppData', 'Roaming');
   return path.join(appData, 'HomeStream', 'config.env');
 }
 
-export function resolveConfigFile(env: NodeJS.ProcessEnv, repoRoot: string | null | undefined): ConfigFileInfo {
+function resolveConfigFile(env: NodeJS.ProcessEnv, repoRoot: string | null | undefined): ConfigFileInfo {
   const explicit = env.HOMESTREAM_ENV_FILE?.trim();
   if (explicit) return { path: explicit, exists: existsSync(explicit), source: 'env' };
 
@@ -138,10 +138,10 @@ function positiveInteger(raw: string | undefined, fallback: number, name: string
   return value;
 }
 
-export const DEFAULT_TORBOX_API_URL = 'https://api.torbox.app';
+const DEFAULT_TORBOX_API_URL = 'https://api.torbox.app';
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
-export type LogLevel = (typeof LOG_LEVELS)[number];
+type LogLevel = (typeof LOG_LEVELS)[number];
 
 function logLevelFrom(raw: string | undefined, warnings: string[]): LogLevel {
   if (raw === undefined) return 'info';

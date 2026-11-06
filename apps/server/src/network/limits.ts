@@ -1,5 +1,5 @@
 export const DEFAULT_MAX_DOWNLOAD_MBPS = 150;
-export const MIN_MAX_DOWNLOAD_MBPS = 5;
+const MIN_MAX_DOWNLOAD_MBPS = 5;
 export const DEFAULT_READ_AHEAD_SEC = 180;
 export const DEFAULT_READ_AHEAD_RESUME_SEC = 120;
 

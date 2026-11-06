@@ -9,6 +9,7 @@ import {
   startSession,
   type Harness,
 } from '../playback/harness.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 120_000;
 
@@ -33,7 +34,7 @@ afterAll(async () => {
   removeDir(root);
 });
 
-describe('memory watchdog in a session', () => {
+describe.skipIf(!hasNvenc())('memory watchdog in a session', () => {
   it(
     'fails the start with encoder_memory_limit, records an error event and leaves no ffmpeg, session or play record behind',
     async () => {

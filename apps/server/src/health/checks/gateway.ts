@@ -3,7 +3,7 @@ import type { GatewayStats } from '../../gateway/client.js';
 import { GATEWAY_LABEL } from '../../redact.js';
 import { failure, type CheckOutcome } from './types.js';
 
-export const GATEWAY_CHECK_TIMEOUT_MS = 10_000;
+const GATEWAY_CHECK_TIMEOUT_MS = 10_000;
 
 export type HealthFetch = (
   url: string,

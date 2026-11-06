@@ -1,6 +1,6 @@
 import type { Db } from './index.js';
 
-export interface ProgressMeta {
+interface ProgressMeta {
   title?: string;
   showTitle?: string | null;
   episodeTitle?: string | null;

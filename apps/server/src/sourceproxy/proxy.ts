@@ -14,10 +14,10 @@ import { PREFETCH_OWNER, SourceEntry, type Consumer } from './sourceEntry.js';
 import { UpstreamClient } from './upstream.js';
 
 export { PREFETCH_OWNER };
-export const LOOPBACK_HOST = '127.0.0.1';
-export const PREFETCH_TTL_MS = 10 * 60 * 1000;
+const LOOPBACK_HOST = '127.0.0.1';
+const PREFETCH_TTL_MS = 10 * 60 * 1000;
 /** Prefetches nobody has played yet; the oldest is dropped beyond this. */
-export const MAX_PREFETCH_ENTRIES = 3;
+const MAX_PREFETCH_ENTRIES = 3;
 const SWEEP_INTERVAL_MS = 30_000;
 const KEY_PATTERN = /^\/src\/([A-Za-z0-9_-]{8,64})$/;
 

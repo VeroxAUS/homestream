@@ -18,6 +18,7 @@ import {
   type HarnessOptions,
 } from '../playback/harness.js';
 import { generateHdrBitmapSource, generateSubtitleSources } from '../playback/subtitleSources.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 180_000;
 
@@ -124,7 +125,7 @@ async function lowerThirdOf(harness: Harness, sessionId: string, segment: string
   return lowerThird(file, frame);
 }
 
-describe('audio tracks', () => {
+describe.skipIf(!hasNvenc())('audio tracks', () => {
   it(
     'lists every track, selects English although Portuguese is default-flagged, and honours audioIndex at start',
     async () => {
@@ -255,7 +256,7 @@ describe('audio tracks', () => {
   );
 });
 
-describe('bitmap subtitles', () => {
+describe.skipIf(!hasNvenc())('bitmap subtitles', () => {
   it(
     'burns the track into the frames on PATCH and removes it again with null',
     async () => {

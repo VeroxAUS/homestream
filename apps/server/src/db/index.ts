@@ -5,7 +5,7 @@ import { MIGRATIONS, type Migration } from './migrations.js';
 
 export type Db = DatabaseSync;
 
-export const DB_FILE_NAME = 'homestream.db';
+const DB_FILE_NAME = 'homestream.db';
 
 export function migrate(db: Db, migrations: Migration[] = MIGRATIONS): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };

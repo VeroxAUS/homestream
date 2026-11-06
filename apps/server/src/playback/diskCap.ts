@@ -30,15 +30,15 @@ export interface DiskPlan {
 /** Watched segments kept behind the player so small backward seeks stay instant. */
 export const KEEP_BEHIND = 3;
 /** Above this share of the cap the encoder is parked (leaves room for what is written before it stops). */
-export const PARK_RATIO = 0.8;
+const PARK_RATIO = 0.8;
 /** Eviction aims for this share of the cap. */
-export const LOW_WATER_RATIO = 0.65;
+const LOW_WATER_RATIO = 0.65;
 /** Parked encoders restart below this share. */
-export const RESUME_RATIO = 0.6;
+const RESUME_RATIO = 0.6;
 /** Segments the encoder must be ahead of the player before it may be parked. */
-export const MIN_LEAD = 8;
+const MIN_LEAD = 8;
 /** A parked encoder restarts when it is less than this many segments ahead. */
-export const RESUME_LEAD = 30;
+const RESUME_LEAD = 30;
 /** Sessions without a request for this long can be dropped to make room for others. */
 export const IDLE_EVICT_MS = 30_000;
 

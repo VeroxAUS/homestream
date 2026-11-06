@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { logEvent, type EventLevel, type EventSource } from '../../src/events/record.js';
 import { clearSecrets, registerSecret } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { bootHealthRig, type HealthRig } from './rig.js';
+import { bootHealthRig, type HealthRig } from '../health/rig.js';
 
 let root: string;
 let rig: HealthRig;

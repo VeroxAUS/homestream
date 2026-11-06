@@ -19,7 +19,7 @@ import {
   seedUncachedMovie,
   type DownloadRig,
   type DownloadRigOptions,
-} from './rig.js';
+} from '../downloads/rig.js';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

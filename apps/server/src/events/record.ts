@@ -55,7 +55,7 @@ export function logEvent(deps: { db: Db; bus: EventBus }, input: LogEventInput):
   return row;
 }
 
-export function pruneEvents(db: Db, now = Date.now()): void {
+function pruneEvents(db: Db, now = Date.now()): void {
   db.prepare('DELETE FROM events WHERE ts < ?').run(now - RETENTION_MS);
   db.prepare('DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)').run(MAX_ROWS);
 }

@@ -1,8 +1,8 @@
 import type { CommandRunner } from '../exec.js';
 import { failure, type CheckOutcome } from './types.js';
 
-export const GPU_WARN_TEMP_C = 85;
-export const NVIDIA_SMI_ARGS = [
+const GPU_WARN_TEMP_C = 85;
+const NVIDIA_SMI_ARGS = [
   '--query-gpu=name,driver_version,utilization.gpu,utilization.encoder,memory.used,memory.total,temperature.gpu',
   '--format=csv,noheader,nounits',
 ];

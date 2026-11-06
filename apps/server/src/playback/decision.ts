@@ -29,7 +29,7 @@ export function fitDimensions(
   };
 }
 
-export function canKeepHdr(video: VideoInfo, device: CapabilityProfile): boolean {
+function canKeepHdr(video: VideoInfo, device: CapabilityProfile): boolean {
   const hasHdr10Base = video.hdr === 'hdr10' || (video.hdr === 'dv' && video.dolbyVisionProfile !== 5);
   return hasHdr10Base && device.hevc && device.hdr10 && device.hevcMain10;
 }

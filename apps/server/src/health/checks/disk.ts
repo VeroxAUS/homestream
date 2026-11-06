@@ -3,8 +3,8 @@ import type { Config } from '../../config.js';
 import type { DiskProbe } from '../exec.js';
 import { GIB, type CheckOutcome } from './types.js';
 
-export const DISK_WARN_FREE_GB = 20;
-export const DISK_ERROR_FREE_GB = 5;
+const DISK_WARN_FREE_GB = 20;
+const DISK_ERROR_FREE_GB = 5;
 
 export interface DiskCheckDeps {
   config: Pick<Config, 'transcodeDir' | 'dataDir' | 'transcodeMaxGb'>;

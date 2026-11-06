@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StreamOption, StreamsResponse } from '@homestream/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { loadConfig } from '../../src/config.js';
 import { createSilentLogger } from '../../src/logger.js';
@@ -19,7 +19,7 @@ let configured = false;
 beforeAll(async () => {
   root = makeTempDir('streams-live');
   const config = loadConfig({
-    env: { DATA_DIR: path.join(root, 'data'), TRANSCODE_DIR: path.join(root, 'transcode'), PORT: '0' },
+    env: { ...process.env, DATA_DIR: path.join(root, 'data'), TRANSCODE_DIR: path.join(root, 'transcode'), PORT: '0' },
     repoRoot,
   });
   configured = !!config.gatewayManifestUrl && !!config.tmdbReadToken;
@@ -53,8 +53,11 @@ function assertNoLeaks(body: string): void {
 }
 
 describe('live gateway lookups (2 real requests)', () => {
-  it('Shawshank (movie 278) returns a ranked, parsed list, then repeats from cache', async ({ skip }) => {
-    if (!configured) skip();
+  beforeEach(({ skip }) => {
+    if (!configured) skip('GATEWAY_MANIFEST_URL and TMDB_READ_TOKEN are not configured (.env)');
+  });
+
+  it('Shawshank (movie 278) returns a ranked, parsed list, then repeats from cache', async () => {
     const started = performance.now();
     const res = await app.inject('/api/streams/movie/278');
     const firstMs = performance.now() - started;
@@ -85,8 +88,7 @@ describe('live gateway lookups (2 real requests)', () => {
     expect(resolved?.url).toMatch(/^https?:\/\//);
   }, 60_000);
 
-  it('Breaking Bad S1E1 returns streams through the series endpoint', async ({ skip }) => {
-    if (!configured) skip();
+  it('Breaking Bad S1E1 returns streams through the series endpoint', async () => {
     const res = await app.inject('/api/streams/tv/1396/1/1');
     expect(res.statusCode).toBe(200);
     const body = res.json() as StreamsResponse;

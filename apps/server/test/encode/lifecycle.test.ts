@@ -16,6 +16,7 @@ import {
   type HarnessOptions,
 } from '../playback/harness.js';
 import { buildFailingFfmpeg, readCounter } from '../playback/failingFfmpeg.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 180_000;
 
@@ -93,7 +94,7 @@ function dirSize(dir: string): number {
   return total;
 }
 
-describe('seeking', () => {
+describe.skipIf(!hasNvenc())('seeking', () => {
   it(
     'restarts at a segment 20 minutes ahead within a few seconds, keeps one ffmpeg, then seeks backward',
     async () => {
@@ -148,7 +149,7 @@ describe('seeking', () => {
   );
 });
 
-describe('encoder stats, activity and events', () => {
+describe.skipIf(!hasNvenc())('encoder stats, activity and events', () => {
   it(
     'reports fps, speed, bitrate, outTime and head on the session, in activity and in session.update events',
     async () => {
@@ -214,7 +215,7 @@ describe('encoder stats, activity and events', () => {
   );
 });
 
-describe('idle timeout', () => {
+describe.skipIf(!hasNvenc())('idle timeout', () => {
   it(
     'stops a session without requests but not one that keeps pinging',
     async () => {
@@ -257,7 +258,7 @@ describe('idle timeout', () => {
   );
 });
 
-describe('session limit', () => {
+describe.skipIf(!hasNvenc())('session limit', () => {
   it(
     'answers 429 with a hint for a session over the limit and accepts one again after a stop',
     async () => {
@@ -302,7 +303,7 @@ describe('session limit', () => {
   );
 });
 
-describe('ffmpeg failure', () => {
+describe.skipIf(!hasNvenc())('ffmpeg failure', () => {
   it(
     'retries once, then fails the start with 502 encoder_failed and leaves no session, directory, play record or error event',
     async () => {
@@ -335,7 +336,7 @@ describe('ffmpeg failure', () => {
   );
 });
 
-describe('transcode disk cap', () => {
+describe.skipIf(!hasNvenc())('transcode disk cap', () => {
   it(
     'parks the encoder before the cap, keeps the head servable, and resumes when the player catches up',
     async () => {
@@ -375,7 +376,7 @@ describe('transcode disk cap', () => {
   );
 });
 
-describe('no residue', () => {
+describe.skipIf(!hasNvenc())('no residue', () => {
   it(
     'leaves no ffmpeg processes or session directories after all sessions ended',
     async () => {

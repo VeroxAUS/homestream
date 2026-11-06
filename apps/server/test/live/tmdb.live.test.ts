@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { loadConfig } from '../../src/config.js';
 import { createSilentLogger } from '../../src/logger.js';
@@ -17,7 +17,7 @@ let hasToken = false;
 beforeAll(async () => {
   root = makeTempDir('tmdb-live');
   const config = loadConfig({
-    env: { DATA_DIR: path.join(root, 'data'), TRANSCODE_DIR: path.join(root, 'transcode'), PORT: '0' },
+    env: { ...process.env, DATA_DIR: path.join(root, 'data'), TRANSCODE_DIR: path.join(root, 'transcode'), PORT: '0' },
     repoRoot,
   });
   hasToken = !!config.tmdbReadToken;
@@ -42,8 +42,8 @@ interface Item {
 }
 
 describe('live TMDB', () => {
-  it('has a TMDB token configured (repo .env)', () => {
-    expect(hasToken).toBe(true);
+  beforeEach(({ skip }) => {
+    if (!hasToken) skip('TMDB_READ_TOKEN is not configured (.env)');
   });
 
   it('home has four populated rows with absolute image urls', async () => {

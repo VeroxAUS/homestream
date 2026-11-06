@@ -12,7 +12,7 @@ import { mediaKeyFor } from '../db/plays.js';
 import { selectEntries } from './entries.js';
 import { findNextEpisode, localDay, type NextEpisode, type SeasonSource } from './upNext.js';
 
-export const CONTINUE_WATCHING_LIMIT = 20;
+const CONTINUE_WATCHING_LIMIT = 20;
 const NEXT_EPISODE_TTL_MS = 60 * 60 * 1000;
 
 const EPISODE_KEY = /^tv:(\d+):(\d+):(\d+)$/;

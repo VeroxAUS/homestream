@@ -13,9 +13,9 @@ import type { StreamQuery } from '../gateway/types.js';
 import type { TmdbService } from '../tmdb/service.js';
 
 /** How long the reply waits for the stream id; a cold TMDB or gateway lookup is answered with null instead. */
-export const STREAM_ID_BUDGET_MS = 300;
+const STREAM_ID_BUDGET_MS = 300;
 /** A finished prefetch keeps absorbing duplicates for this long. */
-export const MERGE_WINDOW_MS = 60_000;
+const MERGE_WINDOW_MS = 60_000;
 
 export interface PrefetchServiceOptions {
   tmdb: TmdbService;

@@ -18,10 +18,10 @@ import { makeFakeTmdb } from '../tmdb/fixtures.js';
 export const GATEWAY_ORIGIN = 'https://gw.example.test';
 export const TORBOX_KEY = 'tbkey-secret-0123456789';
 export const MOVIE_HASH = 'a'.repeat(40);
-export const DEVICE = PROFILES.chromecast4k;
+const DEVICE = PROFILES.chromecast4k;
 
 /** What the gateway answers for a stream's playback link. */
-export type PlaybackMode =
+type PlaybackMode =
   | 'downloading'
   | 'store_limit_exceeded'
   | 'download_failed'
@@ -40,7 +40,7 @@ export interface FakeStream {
   mode: PlaybackMode;
 }
 
-export interface GatewayCall {
+interface GatewayCall {
   kind: 'list' | 'playback';
   path: string;
   method: string;
@@ -48,7 +48,7 @@ export interface GatewayCall {
   redirect?: string;
 }
 
-export interface FakeGateway {
+interface FakeGateway {
   fetch: GatewayFetch;
   /** Streams per imdb id (or `imdb:s:e`). */
   lists: Map<string, FakeStream[]>;
@@ -57,7 +57,7 @@ export interface FakeGateway {
   listCalls(): GatewayCall[];
 }
 
-export function makeFakeGateway(): FakeGateway {
+function makeFakeGateway(): FakeGateway {
   const lists = new Map<string, FakeStream[]>();
   const calls: GatewayCall[] = [];
   const byToken = (token: string): FakeStream | undefined =>
@@ -135,7 +135,7 @@ export function makeFakeGateway(): FakeGateway {
   };
 }
 
-export interface FakeTorboxItem {
+interface FakeTorboxItem {
   hash: string;
   name?: string;
   download_state?: string;
@@ -146,12 +146,12 @@ export interface FakeTorboxItem {
   alternative_hashes?: string[];
 }
 
-export interface TorboxCall {
+interface TorboxCall {
   url: string;
   authorization: string | undefined;
 }
 
-export interface FakeTorbox {
+interface FakeTorbox {
   fetch: TorboxFetch;
   items: FakeTorboxItem[];
   status: number;
@@ -160,7 +160,7 @@ export interface FakeTorbox {
   calls: TorboxCall[];
 }
 
-export function makeFakeTorbox(): FakeTorbox {
+function makeFakeTorbox(): FakeTorbox {
   const fake: FakeTorbox = {
     items: [],
     status: 200,
@@ -175,7 +175,7 @@ export function makeFakeTorbox(): FakeTorbox {
   return fake;
 }
 
-export interface Clock {
+interface Clock {
   now: number;
   advance(ms: number): void;
 }
@@ -214,7 +214,7 @@ export function seedUncachedMovie(fakes: Fakes, overrides: Partial<FakeStream> =
 }
 
 /** Either the 202 download response or an error response, whichever Play answered with. */
-export interface PlayBody {
+interface PlayBody {
   status?: string;
   download: Download;
   error: { code: string; message: string; hint?: string };

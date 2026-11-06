@@ -6,7 +6,7 @@ import { SEGMENT_SECONDS, segmentExtension, segmentFormatFor } from './playlist.
 
 export type ToneMapper = 'libplacebo' | 'opencl';
 
-export const ENCODER_PLAYLIST = 'enc.m3u8';
+const ENCODER_PLAYLIST = 'enc.m3u8';
 
 export interface EncodeJob {
   inputUrl: string;
@@ -95,7 +95,7 @@ export function buildVideoFilter(job: EncodeJob): string {
  * A bitmap subtitle already on screen at the seek point started before it, and an input seek skips that event. Burn-in runs
  * therefore start a little earlier and the lead-in is trimmed from the output, which still begins exactly on the segment.
  */
-export const BURN_PREROLL_SEC = 10;
+const BURN_PREROLL_SEC = 10;
 
 function inputSeekSec(job: EncodeJob): number {
   const start = job.startSegment * SEGMENT_SECONDS;
@@ -152,7 +152,7 @@ function subtitleRate(job: EncodeJob): string {
  * Video chain, then the subtitle bitmap scaled to the output size and overlaid on the finished frames. HDR10 output overlays
  * in 10-bit YUV: with `format=auto` the overlay converted the whole 4K picture to 8-bit RGBA and back.
  */
-export function buildBurnFilterGraph(job: EncodeJob): string {
+function buildBurnFilterGraph(job: EncodeJob): string {
   const { width, height, dynamicRange } = job.decision;
   const hdr = dynamicRange === 'hdr10';
   const dim = hdr

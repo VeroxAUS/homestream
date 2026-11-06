@@ -2,11 +2,11 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from '../src/app.js';
-import { createSilentLogger } from '../src/logger.js';
-import { clearSecrets } from '../src/redact.js';
-import { SERVER_VERSION } from '../src/version.js';
-import { makeTempDir, makeWebDir, removeDir, startTestApp, testConfig } from './helpers.js';
+import { buildApp } from '../../src/app.js';
+import { createSilentLogger } from '../../src/logger.js';
+import { clearSecrets } from '../../src/redact.js';
+import { SERVER_VERSION } from '../../src/version.js';
+import { makeTempDir, makeWebDir, removeDir, startTestApp, testConfig } from '../helpers.js';
 
 let root: string;
 let app: FastifyInstance;

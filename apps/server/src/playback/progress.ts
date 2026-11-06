@@ -2,7 +2,7 @@ import type { EncoderStats } from '@homestream/shared';
 
 export type RawProgress = Omit<EncoderStats, 'headSegment'>;
 
-export const EMPTY_PROGRESS: RawProgress = { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0 };
+const EMPTY_PROGRESS: RawProgress = { fps: 0, speed: 0, bitrateKbps: 0, outTimeSec: 0 };
 
 /**
  * Parses `-progress pipe:1` output. ffmpeg prints `key=value` lines and ends each block with `progress=continue|end`;

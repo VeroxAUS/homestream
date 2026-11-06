@@ -51,7 +51,7 @@ describe('redact', () => {
 
   it('hides bearer tokens and JWTs', () => {
     expect(redact('Authorization: Bearer abcdef123456')).toBe('Authorization: Bearer <redacted>');
-    expect(redact('tok eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.sig_part-1 end')).toBe('tok <redacted> end');
+    expect(redact('tok eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.sig_part-1 end')).toBe('tok <redacted> end'); // gitleaks:allow (jwt.io sample token, sub 1234)
   });
 
   it('hides TorBox CDN URLs', () => {

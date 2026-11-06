@@ -15,7 +15,7 @@ export const HIGH_LEAD_SEC = 60;
 /** The at-risk state outlasts the moment a request waits, because the reader asks again a few milliseconds after each grant. */
 export const LOW_LEAD_MEMORY_MS = 200;
 /** While an at-risk encoder is waiting, other encoders get only tokens beyond this much of the cap (seconds), which covers the reader's gap between a grant and its next request. */
-export const SURPLUS_RESERVE_SEC = 0.05;
+const SURPLUS_RESERVE_SEC = 0.05;
 
 /** What other encoders may take while a session with a small lead is waiting. */
 export interface Guard {
@@ -41,7 +41,7 @@ export interface Clock {
   clearTimer(handle: unknown): void;
 }
 
-export const systemClock: Clock = {
+const systemClock: Clock = {
   now: () => Date.now(),
   setTimer: (ms, fn) => {
     const handle = setTimeout(fn, ms);

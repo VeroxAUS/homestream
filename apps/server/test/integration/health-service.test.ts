@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { logEvent } from '../../src/events/record.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { bootHealthRig, torboxAccount, type HealthRig } from './rig.js';
+import { bootHealthRig, torboxAccount, type HealthRig } from '../health/rig.js';
 
 const MINUTE = 60_000;
 const NEEDLES = [

@@ -75,20 +75,20 @@ import { SubtitleExtractor, selectTextTracks } from './subtitleExtractor.js';
 import { burnTarget, planPatch, requireAudio, requireSubtitle } from './tracks.js';
 import { renderSegment } from './vtt.js';
 
-export const SEGMENT_WAIT_MS = 30_000;
-export const FIRST_SEGMENT_WAIT_MS = 30_000;
+const SEGMENT_WAIT_MS = 30_000;
+const FIRST_SEGMENT_WAIT_MS = 30_000;
 /** Candidates an automatic start tries before it gives up. */
-export const MAX_START_ATTEMPTS = 3;
+const MAX_START_ATTEMPTS = 3;
 const FIRST_SEGMENT_POLL_MS = 25;
 /** A segment further ahead of the encoder than this triggers a restart at the requested position. */
-export const SEEK_WINDOW_SEGMENTS = 5;
+const SEEK_WINDOW_SEGMENTS = 5;
 /** Two streams at a time keeps the GPU to at most two encoders (AGENTS.md GPU safety rule 1). */
 export const MAX_SESSIONS = 2;
-export const IDLE_TIMEOUT_MS = 120_000;
-export const MONITOR_TICK_MS = 2_000;
+const IDLE_TIMEOUT_MS = 120_000;
+const MONITOR_TICK_MS = 2_000;
 const POLL_MS = 100;
 /** A subtitle segment that no extractor has reached yet is waited for this long before the client is told to retry. */
-export const SUBTITLE_HOLD_MS = 6_000;
+const SUBTITLE_HOLD_MS = 6_000;
 const SUBTITLE_PLAYLIST_TYPE = 'application/vnd.apple.mpegurl';
 const SUBTITLE_SEGMENT_TYPE = 'text/vtt; charset=utf-8';
 /** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */

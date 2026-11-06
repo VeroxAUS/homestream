@@ -7,9 +7,9 @@ import { RateLimiter } from './rateLimiter.js';
 import { placeholderName } from '../playback/resolveUrl.js';
 import { GATEWAY_USER_AGENT, gatewayPath, queryKey, streamId, type GatewayStream, type StreamQuery } from './types.js';
 
-export const GATEWAY_TIMEOUT_MS = 30_000;
+const GATEWAY_TIMEOUT_MS = 30_000;
 /** An uncached link can block while AIOStreams adds the item to TorBox. */
-export const PLAYBACK_TIMEOUT_MS = 60_000;
+const PLAYBACK_TIMEOUT_MS = 60_000;
 
 export type GatewayFetch = (
   url: string,

@@ -9,15 +9,15 @@ import { SubtitleStore } from './subtitleStore.js';
 
 export const MAX_TEXT_SUBTITLES = 10;
 /** An extractor starts this far before the position it is needed at, so cues already on screen there are not missed. */
-export const PREROLL_SEC = 40;
+const PREROLL_SEC = 40;
 /** A request this close ahead of a running extractor's head is simply waited for: 25x realtime gets there in seconds. */
-export const NEAR_AHEAD_SEC = 120;
+const NEAR_AHEAD_SEC = 120;
 /** A new run is unthrottled until it has read this far past the position it was started for (60 s of cues plus the coverage lag), but never for longer than `BURST_MAX_MS`. */
 const BURST_AHEAD_SEC = 72;
 const BURST_MAX_MS = 25_000;
 /** A run is stopped once it has read this far into the territory of a later run. */
 const HANDOVER_SEC = 10;
-export const DEFAULT_MAX_RUNS = 2;
+const DEFAULT_MAX_RUNS = 2;
 const ENGLISH = /^en(g|glish)?$/i;
 
 export interface TextTrack {
@@ -43,7 +43,7 @@ export function selectTextTracks(probe: Pick<ProbeResult, 'subtitles'>, keep?: n
   return text.filter((track) => chosen.has(track.index));
 }
 
-export interface RunEvent {
+interface RunEvent {
   event: 'start' | 'stop';
   runId: number;
   kind: RunKind;

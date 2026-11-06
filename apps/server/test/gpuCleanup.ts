@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
 
-export const GPU_PROCESS_NAMES = ['ffmpeg.exe', 'ffprobe.exe'];
+const GPU_PROCESS_NAMES = ['ffmpeg.exe', 'ffprobe.exe'];
 
 /** Pids of direct children of `parentPid` whose image name is in `names`. */
-export function listChildPids(names: string[], parentPid: number = process.pid): number[] {
+function listChildPids(names: string[], parentPid: number = process.pid): number[] {
   if (process.platform !== 'win32') return [];
   const clause = names.map((name) => `Name='${name}'`).join(' OR ');
   const out = execFileSync(

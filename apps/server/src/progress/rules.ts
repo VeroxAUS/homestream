@@ -1,6 +1,6 @@
 import { COMPLETION_RATIO, RESUME_MIN_SEC, type PingState } from '@homestream/shared';
 
-export { COMPLETION_RATIO, RESUME_MIN_SEC };
+export { RESUME_MIN_SEC };
 
 /** Playing time credited to one gap between pings is capped, so a client that went silent cannot add minutes. */
 export const MAX_PING_GAP_SEC = 30;

@@ -3,20 +3,20 @@ import { SEGMENT_SECONDS } from './playlist.js';
 const MIB = 1024 * 1024;
 
 /** Sources this tall or taller (and remux-class bitrates) share a source link that the encoder alone can nearly saturate. */
-export const HEAVY_HEIGHT = 2160;
+const HEAVY_HEIGHT = 2160;
 export const HEAVY_BITRATE_BPS = 45_000_000;
 /** Extractor read rate while the encoder is short of lead over the player or slower than `STARVED_SPEED`. */
 export const STARVED_BYTES_PER_SEC = 2 * MIB;
 /** Extractor read rate while a heavy source's encoder warms up; fast enough for cues soon, slow enough to leave the encoder the link. */
 export const WARMUP_BYTES_PER_SEC = 6 * MIB;
 /** The encoder is warm once its head is this many segments past the segment it started at. */
-export const WARMUP_LEAD_SEGMENTS = 10;
-export const WARMUP_SPEED = 2;
+const WARMUP_LEAD_SEGMENTS = 10;
+const WARMUP_SPEED = 2;
 /** A fast speed reading counts only once at least this many segments exist; the first reading is noisy. */
-export const WARMUP_MIN_SEGMENTS = 3;
-export const STARVED_LEAD_SEC = 30;
+const WARMUP_MIN_SEGMENTS = 3;
+const STARVED_LEAD_SEC = 30;
 /** Above the 1.2x floor the encoder must keep, so the throttle bites before the floor is reached. */
-export const STARVED_SPEED = 1.6;
+const STARVED_SPEED = 1.6;
 export const BURST_FLOOR_SPEED = 1.35;
 
 export interface SourceShape {

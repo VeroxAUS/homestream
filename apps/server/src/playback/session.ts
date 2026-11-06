@@ -20,7 +20,7 @@ import type { SubtitleExtractor, TextTrack } from './subtitleExtractor.js';
 import type { SourceHandle } from '../sourceproxy/proxy.js';
 import type { StartTimeline } from './startTimeline.js';
 
-export interface SessionMeta {
+interface SessionMeta {
   mediaKey: string;
   mediaType: 'movie' | 'tv';
   tmdbId: number;
@@ -36,7 +36,7 @@ export interface SessionMeta {
   backdropUrl: string | null;
 }
 
-export interface StatSamples {
+interface StatSamples {
   speedSum: number;
   speedCount: number;
   bitrateSum: number;

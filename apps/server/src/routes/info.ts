@@ -4,7 +4,7 @@ import type { AppContext } from '../context.js';
 import { getLanAddresses } from '../net.js';
 import { SERVER_VERSION } from '../version.js';
 
-export function listeningPort(app: FastifyInstance, fallback: number): number {
+function listeningPort(app: FastifyInstance, fallback: number): number {
   const address = app.server.address();
   return app.server.listening && address && typeof address === 'object' ? address.port : fallback;
 }

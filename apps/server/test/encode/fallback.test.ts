@@ -16,6 +16,7 @@ import {
   type Harness,
   type HarnessOptions,
 } from '../playback/harness.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const TIMEOUT = 180_000;
 
@@ -87,7 +88,7 @@ function pollProcesses(harness: Harness): () => Promise<string[]> {
   };
 }
 
-describe('auto start fallback with real ffmpeg', () => {
+describe.skipIf(!hasNvenc())('auto start fallback with real ffmpeg', () => {
   it(
     'skips a corrupt first source, plays the second and leaves nothing of the first',
     async () => {

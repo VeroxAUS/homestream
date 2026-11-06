@@ -13,9 +13,9 @@ const ENGLISH = /^(en|eng|english)([-_].*)?$/i;
 const FORCED_TITLE = /forced/i;
 const UNDETERMINED = new Set(['', 'und', 'zxx', 'mis', 'mul']);
 
-export const isEnglishLanguage = (language: string): boolean => ENGLISH.test(language.trim());
+const isEnglishLanguage = (language: string): boolean => ENGLISH.test(language.trim());
 
-export function isForcedSubtitle(track: Pick<SubtitleTrackInfo, 'forced' | 'title'>): boolean {
+function isForcedSubtitle(track: Pick<SubtitleTrackInfo, 'forced' | 'title'>): boolean {
   return track.forced || FORCED_TITLE.test(track.title);
 }
 

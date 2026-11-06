@@ -14,7 +14,7 @@ export const TEXT_CUES: Cue[] = [
   { startSec: 30, endSec: 34, text: 'Last text cue' },
 ];
 
-export const BITMAP_CUES: Cue[] = [
+const BITMAP_CUES: Cue[] = [
   { startSec: 4, endSec: 9, text: 'Bitmap subtitle one' },
   { startSec: 20, endSec: 26, text: 'Bitmap subtitle two' },
 ];
@@ -29,7 +29,7 @@ function srtTime(sec: number): string {
   return `${pad(Math.floor(ms / 3_600_000), 2)}:${pad(Math.floor(ms / 60_000) % 60, 2)}:${pad(Math.floor(ms / 1000) % 60, 2)},${pad(ms % 1000, 3)}`;
 }
 
-export function toSrt(cues: Cue[]): string {
+function toSrt(cues: Cue[]): string {
   return cues
     .map((cue, i) => `${i + 1}\n${srtTime(cue.startSec)} --> ${srtTime(cue.endSec)}\n${cue.text}\n`)
     .join('\n');
@@ -170,7 +170,7 @@ function sector(spu: Buffer, ms: number): Buffer {
 }
 
 /** Writes a VobSub .idx/.sub pair that renders each cue as a bitmap; ffmpeg reads it as a dvd_subtitle stream. */
-export async function writeVobsub(dir: string, name: string, cues: Cue[], language: string): Promise<string> {
+async function writeVobsub(dir: string, name: string, cues: Cue[], language: string): Promise<string> {
   mkdirSync(dir, { recursive: true });
   const sectors: Buffer[] = [];
   const stamps: string[] = [];

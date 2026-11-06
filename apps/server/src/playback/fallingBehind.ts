@@ -2,7 +2,7 @@ import type { ReadAheadState } from '../network/readAhead.js';
 
 /** An encoder below real time for longer than this while it is catching up counts as falling behind. */
 export const FALLING_BEHIND_AFTER_MS = 30_000;
-export const FALLING_BEHIND_SPEED = 1.0;
+const FALLING_BEHIND_SPEED = 1.0;
 
 export interface SpeedObservation {
   speed: number;

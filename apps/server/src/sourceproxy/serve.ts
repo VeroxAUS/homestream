@@ -25,14 +25,14 @@ export function newCounters(): ProxyCounters {
   return { requests: 0, servedBytes: 0, memoryBytes: 0, upstreamRequests: 0, upstreamBytes: 0, linkRefreshes: 0 };
 }
 
-export interface ByteRange {
+interface ByteRange {
   start: number;
   end: number;
   partial: boolean;
 }
 
 /** Null means unsatisfiable (416). Multi-range and malformed headers fall back to the whole resource. */
-export function parseRange(header: string | undefined, size: number): ByteRange | null {
+function parseRange(header: string | undefined, size: number): ByteRange | null {
   const whole: ByteRange = { start: 0, end: size - 1, partial: false };
   const match = header ? /^bytes=(\d*)-(\d*)$/i.exec(header.trim()) : null;
   if (!match || (match[1] === '' && match[2] === '')) return whole;

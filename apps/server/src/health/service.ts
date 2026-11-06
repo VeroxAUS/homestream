@@ -29,10 +29,10 @@ import { checkTorbox } from './checks/torbox.js';
 import type { CheckOutcome } from './checks/types.js';
 import { diskSpace, runCommand, type CommandRunner, type DiskProbe } from './exec.js';
 
-export const HEALTH_INTERVAL_MS = 60_000;
-export const LIVE_INTERVAL_MS = 5_000;
-export const TORBOX_CACHE_MS = 5 * 60_000;
-export const FFMPEG_CACHE_MS = 10 * 60_000;
+const HEALTH_INTERVAL_MS = 60_000;
+const LIVE_INTERVAL_MS = 5_000;
+const TORBOX_CACHE_MS = 5 * 60_000;
+const FFMPEG_CACHE_MS = 10 * 60_000;
 
 const NAMES: Record<HealthCheckId, string> = {
   config: 'Configuration',
@@ -84,7 +84,7 @@ interface CacheEntry {
   check: HealthCheck;
 }
 
-export function worstStatus(checks: readonly { status: HealthStatus }[]): HealthStatus {
+function worstStatus(checks: readonly { status: HealthStatus }[]): HealthStatus {
   return checks.reduce<HealthStatus>((worst, check) => (RANK[check.status] > RANK[worst] ? check.status : worst), 'ok');
 }
 

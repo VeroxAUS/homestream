@@ -7,8 +7,8 @@ import type { ProbeResult } from '../../src/playback/probe.js';
 import { StartTimeline } from '../../src/playback/startTimeline.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { FakeEncoders } from './fakeEncoder.js';
-import { bootHarness, startSession, type Harness } from './harness.js';
+import { FakeEncoders } from '../playback/fakeEncoder.js';
+import { bootHarness, startSession, type Harness } from '../playback/harness.js';
 
 const PROBE: ProbeResult = {
   durationSec: 120,

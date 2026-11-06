@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 
 export const DEFAULT_MAX_RSS_MB = 4096;
-export const WATCHDOG_INTERVAL_MS = 1000;
+const WATCHDOG_INTERVAL_MS = 1000;
 /** After the limit is hit the process gets this long to quit on `q` before it is killed. */
 export const WATCHDOG_STOP_GRACE_MS = 2000;
 

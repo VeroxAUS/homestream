@@ -4,6 +4,7 @@ import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
 import { bootHarness, listFfmpegCommandLines, PROFILES, type Harness } from '../playback/harness.js';
+import { hasNvenc } from '../hasNvenc.js';
 
 const PROBE: ProbeResult = {
   durationSec: 120,
@@ -65,7 +66,7 @@ function prefetchEvents(): EventRow[] {
     .all() as unknown as EventRow[];
 }
 
-describe('POST /api/prefetch', () => {
+describe.skipIf(!hasNvenc())('POST /api/prefetch', () => {
   it('answers 202 with the recommended stream id and warms the proxy and the probe once', async () => {
     const listed = (await harness.app.inject('/api/streams/movie/278')).json() as { recommendedId: string };
     const gatewayCalls = harness.stub.paths.length;

@@ -6,7 +6,7 @@ export interface EventRouteOptions {
   heartbeatMs?: number;
 }
 
-export const HEARTBEAT_MS = 15_000;
+const HEARTBEAT_MS = 15_000;
 
 function frame(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

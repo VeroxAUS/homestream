@@ -74,7 +74,7 @@ function cueBlock(cue: Cue, startMs: number, endMs: number): string {
   return `${formatVttTime(startMs)} --> ${formatVttTime(endMs)}${settings}\n${cue.text}\n`;
 }
 
-export const TIMESTAMP_MAP = 'X-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000';
+const TIMESTAMP_MAP = 'X-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000';
 
 /**
  * One HLS segment: every cue overlapping [fromMs, toMs) clipped to it, so a cue crossing a boundary is split and appears

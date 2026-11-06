@@ -6,8 +6,15 @@ import { MAX_SESSIONS } from '../../src/playback/manager.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { FakeEncoders } from './fakeEncoder.js';
-import { bootHarness, PROFILES, startSession, type Harness, type HarnessOptions, type ProfileName } from './harness.js';
+import { FakeEncoders } from '../playback/fakeEncoder.js';
+import {
+  bootHarness,
+  PROFILES,
+  startSession,
+  type Harness,
+  type HarnessOptions,
+  type ProfileName,
+} from '../playback/harness.js';
 
 const PROBE: ProbeResult = {
   durationSec: 120,

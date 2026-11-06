@@ -8,7 +8,7 @@ import type { TmdbService } from '../tmdb/service.js';
 import { buildFeatured, type FeaturedInput } from './featured.js';
 
 /** Recommendations may take this long on a cold cache; after that the banner goes without its "Because you watched" slot. */
-export const RECOMMENDATIONS_BUDGET_MS = 1500;
+const RECOMMENDATIONS_BUDGET_MS = 1500;
 
 export interface HomeServiceOptions {
   db: Db;

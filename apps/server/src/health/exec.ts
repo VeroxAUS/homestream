@@ -13,7 +13,7 @@ export interface CommandResult {
 
 export type CommandRunner = (file: string, args: string[], options: { timeoutMs: number }) => Promise<CommandResult>;
 
-export interface DiskSpace {
+interface DiskSpace {
   freeBytes: number;
   totalBytes: number;
 }

@@ -5,7 +5,7 @@ import { openDatabase, type Db } from '../../src/db/index.js';
 import { createSilentLogger } from '../../src/logger.js';
 import { AppError } from '../../src/errors.js';
 import { makeTempDir, removeDir, testConfig } from '../helpers.js';
-import { maxArrivalsInWindow, startStubGateway, stubStream, type StubGateway } from './stubGateway.js';
+import { maxArrivalsInWindow, startStubGateway, stubStream, type StubGateway } from '../gateway/stubGateway.js';
 
 let stub: StubGateway;
 let db: Db;

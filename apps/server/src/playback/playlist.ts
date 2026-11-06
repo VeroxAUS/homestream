@@ -2,9 +2,9 @@ import type { Decision } from '@homestream/shared';
 import { audioBitrateKbps, videoBitrate } from './decision.js';
 
 export const SEGMENT_SECONDS = 4;
-export const MASTER_PLAYLIST = 'index.m3u8';
-export const VIDEO_PLAYLIST = 'video.m3u8';
-export const SUBTITLE_GROUP = 'subs';
+const MASTER_PLAYLIST = 'index.m3u8';
+const VIDEO_PLAYLIST = 'video.m3u8';
+const SUBTITLE_GROUP = 'subs';
 
 export type SegmentFormat = 'fmp4' | 'mpegts';
 
@@ -64,7 +64,7 @@ export function renditionName(track: RenditionTrack): string {
   return `${label} [${track.index}]`;
 }
 
-export function subtitlePlaylistPath(index: number): string {
+function subtitlePlaylistPath(index: number): string {
   return `subs/${index}/index.m3u8`;
 }
 

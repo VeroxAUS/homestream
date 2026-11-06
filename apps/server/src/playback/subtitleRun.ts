@@ -13,9 +13,9 @@ export const SUBTITLE_DIR = 'subs';
 /** Marks extractor processes in the pid registry; it is part of every extractor command line (`-f webvtt`). */
 export const EXTRACTOR_MARKER = 'webvtt';
 /** A cue can start this long before a seek point and still be dropped by the seek; segments are trusted from `ss + MAX_CUE_SEC`. */
-export const MAX_CUE_SEC = 10;
+const MAX_CUE_SEC = 10;
 /** Cues sit in the cluster holding their start, and progress reports the last video packet read: the newest seconds may still be unread. */
-export const LAG_SEC = 6;
+const LAG_SEC = 6;
 const COVER_FILE = 'cover.txt';
 const COVER_TAIL_BYTES = 1024;
 const TAIL_INTERVAL_MS = 250;

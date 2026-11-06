@@ -8,14 +8,14 @@ import type {
   ShowDetails,
 } from '@homestream/shared';
 
-export const IMAGE_SIZES = { poster: 'w342', backdrop: 'w1280', still: 'w300' } as const;
+const IMAGE_SIZES = { poster: 'w342', backdrop: 'w1280', still: 'w300' } as const;
 
 export interface ImageConfig {
   /** Absolute base such as `https://image.tmdb.org/t/p/`, always ending in `/`. */
   baseUrl: string;
 }
 
-export const DEFAULT_IMAGE_BASE = 'https://image.tmdb.org/t/p/';
+const DEFAULT_IMAGE_BASE = 'https://image.tmdb.org/t/p/';
 
 type Json = Record<string, unknown>;
 

@@ -2,8 +2,8 @@ import type { Config } from '../../config.js';
 import type { CommandResult, CommandRunner } from '../exec.js';
 import { failure, type CheckOutcome } from './types.js';
 
-export const FFMPEG_VERSION_TIMEOUT_MS = 10_000;
-export const NVENC_TEST_TIMEOUT_MS = 20_000;
+const FFMPEG_VERSION_TIMEOUT_MS = 10_000;
+const NVENC_TEST_TIMEOUT_MS = 20_000;
 
 export interface FfmpegCheckDeps {
   config: Pick<Config, 'ffmpegPath' | 'ffprobePath' | 'configFile' | 'healthNvencTest'>;
