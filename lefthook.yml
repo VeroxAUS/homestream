@@ -6,6 +6,9 @@ min_version: 2.0.0
 pre-commit:
   parallel: true
   jobs:
+    - name: staged-files
+      run: git diff --cached --name-only --diff-filter=ACMR
+
     - name: prettier
       glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc,md,yml,yaml,css,html}'
       run: pnpm exec prettier --check --ignore-unknown --log-level warn {staged_files}
