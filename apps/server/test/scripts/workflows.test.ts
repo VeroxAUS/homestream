@@ -27,7 +27,7 @@ interface Workflow {
   name: string;
   on: Record<string, unknown>;
   permissions?: Record<string, string>;
-  concurrency?: { group: string; 'cancel-in-progress'?: boolean };
+  concurrency?: { group: string; 'cancel-in-progress'?: boolean | string };
   jobs: Record<string, Job>;
 }
 
@@ -74,10 +74,12 @@ describe('workflow hygiene', () => {
     for (const [name, text] of texts) expect(text, name).not.toContain('pull_request_target');
   });
 
-  it('CI runs on push to main, pull requests and manual dispatch, cancels superseded runs and skips wiki-only changes', () => {
+  it('CI runs on push to main, pull requests and manual dispatch, cancels superseded pull request runs only and skips wiki-only changes', () => {
     const ci = workflows.get('ci.yml');
     expect(Object.keys(ci?.on ?? {}).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch']);
-    expect(ci?.concurrency?.['cancel-in-progress']).toBe(true);
+    expect(ci?.concurrency?.['cancel-in-progress']).toBe("${{ github.ref != 'refs/heads/main' }}");
+    // A pending run in a shared group is replaced by a newer one, so every main run gets a group of its own.
+    expect(ci?.concurrency?.group).toBe("ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}");
     const on = ci?.on as {
       push: { branches: string[]; 'paths-ignore': string[] };
       pull_request: { 'paths-ignore': string[] };
@@ -211,6 +213,8 @@ describe('workflow hygiene', () => {
     expect(skip).toContain('::notice');
     expect(jobs['push-review']?.['continue-on-error']).toBe(true);
     expect(jobs['push-review']?.if).toBe("github.event_name == 'push'");
+    // Wiki-only pushes must still reach the script, which posts the short summary itself.
+    expect(JSON.stringify(workflow?.on)).not.toContain('paths-ignore');
     const push = (jobs['push-review']?.steps ?? []).map((step) => step.run ?? '').join('\n');
     expect(push).toContain('scripts/droid-push-review.mjs');
   });

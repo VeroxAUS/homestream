@@ -9,9 +9,11 @@ on:
     paths-ignore: ['droid-wiki/**']
   workflow_dispatch:
 
+# Only pull request runs are superseded. Every run on main must finish to leave its timing record, and a pending run in
+# a shared group is replaced by the next one, so each main run gets a group of its own.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

@@ -226,6 +226,60 @@ describe('droid-push-review main', () => {
     removeDir(repo);
   });
 
+  describe.each([
+    ['lockfile', 'pnpm-lock.yaml'],
+    ['generated wiki', 'droid-wiki/overview.md'],
+  ])('a push with only %s changes', (_label, file) => {
+    function generatedOnly() {
+      const { repo } = makeRepo();
+      const before = git(repo, 'rev-parse', 'HEAD');
+      mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+      writeFileSync(path.join(repo, file), 'regenerated\n');
+      git(repo, 'add', '.');
+      git(repo, 'commit', '-m', 'generated');
+      return { repo, before, sha: git(repo, 'rev-parse', 'HEAD') };
+    }
+    const envOf = (repo: string, sha: string, before: string, key?: string) =>
+      ({
+        ...(key ? { FACTORY_API_KEY: key } : {}),
+        GITHUB_TOKEN: 'ghs_x',
+        GITHUB_REPOSITORY: 'owner/repo',
+        GITHUB_SHA: sha,
+        BEFORE_SHA: before,
+        RUNNER_TEMP: repo,
+      }) as NodeJS.ProcessEnv;
+
+    it('gets one short summary comment without calling Droid, and a re-run replaces it', async () => {
+      const { repo, before, sha } = generatedOnly();
+      const github = fakeGithub();
+      const run = async () => {
+        throw new Error('Droid must not be called');
+      };
+      const env = envOf(repo, sha, before, 'fk-test-key-0000');
+      expect(await main(env, { github, run, cwd: repo })).toBe(0);
+      expect(await main(env, { github, run, cwd: repo })).toBe(0);
+      expect(github.comments).toHaveLength(1);
+      const body = github.comments[0]?.body ?? '';
+      expect(body).toContain(SUMMARY_MARKER);
+      expect(body).toContain('Droid review: no reviewable changes (only generated files)');
+      expect(body).toContain(sha.slice(0, 7));
+      expect(body).not.toContain('fk-test-key-0000');
+      removeDir(repo);
+    });
+
+    it('still gets the summary when the key is not available, because nothing needs Droid', async () => {
+      const { repo, before, sha } = generatedOnly();
+      const github = fakeGithub();
+      const run = async () => {
+        throw new Error('Droid must not be called');
+      };
+      expect(await main(envOf(repo, sha, before), { github, run, cwd: repo })).toBe(0);
+      expect(github.comments).toHaveLength(1);
+      expect(github.comments[0]?.body).toContain('no reviewable changes');
+      removeDir(repo);
+    });
+  });
+
   it('falls back to the parent commit when the previous tip is unknown or all zeros', async () => {
     const { repo, sha } = makeRepo();
     const github = fakeGithub();

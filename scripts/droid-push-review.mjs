@@ -7,8 +7,10 @@ import { git, isMain } from './lib/util.mjs';
 /**
  * Droid review of a push to main (run by .github/workflows/droid-review.yml). The changes between the previous tip and
  * the pushed commit go to `droid exec`; its findings become commit comments on the pushed commit: inline comments for
- * findings on lines the commit changed, and one summary comment per push. Needs FACTORY_API_KEY, GITHUB_TOKEN,
- * GITHUB_REPOSITORY, GITHUB_SHA and BEFORE_SHA. The pull request flow uses Factory's own action instead.
+ * findings on lines the commit changed, and one summary comment per push. Generated files (wiki, lockfile) are left out
+ * of the diff; when nothing else changed, the summary is a short note and Droid is not called. Needs GITHUB_TOKEN,
+ * GITHUB_REPOSITORY, GITHUB_SHA and BEFORE_SHA, plus FACTORY_API_KEY for a real review. The pull request flow uses
+ * Factory's own action instead.
  */
 
 export const SUMMARY_MARKER = '<!-- droid-push-review:summary -->';
@@ -99,6 +101,17 @@ export function renderSummary({ review, sha, base, runUrl, inlinePosted, leftOve
   return clampBody(lines.join('\n'));
 }
 
+export function renderNothingToReview({ sha, base, runUrl }) {
+  return [
+    SUMMARY_MARKER,
+    `### Droid review of \`${sha.slice(0, 7)}\``,
+    '',
+    'Droid review: no reviewable changes (only generated files).',
+    '',
+    `_Range \`${base.slice(0, 7)}..${sha.slice(0, 7)}\`. The generated wiki and the lockfile are not reviewed, so Droid was not called. ${runUrl ? `[Workflow run](${runUrl}). ` : ''}Automated, advisory only._`,
+  ].join('\n');
+}
+
 /** Splits findings into the ones that can be posted inline and the ones that go into the summary. */
 export function planFindings(findings, lines) {
   const inline = [];
@@ -158,12 +171,17 @@ async function postInline(github, sha, findings) {
   return { posted, failed };
 }
 
+/** Every push gets a summary comment, also when only generated files changed and Droid has nothing to review. */
+async function postNothingToReview({ client, env, sha, base, runUrl }) {
+  await removeOwnComments(client, sha);
+  const summary = renderNothingToReview({ sha, base, runUrl });
+  const posted = await client.request('POST', `{repo}/commits/${sha}/comments`, { body: summary });
+  console.log(`No reviewable changes between ${base} and ${sha}; posted the short summary: ${posted.html_url}`);
+  if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+}
+
 export async function main(env = process.env, { github = null, run = runDroid, cwd = process.cwd() } = {}) {
   const { GITHUB_SHA: sha, BEFORE_SHA: before, GITHUB_REPOSITORY: repository } = env;
-  if (!env.FACTORY_API_KEY) {
-    console.log('::notice title=Droid review skipped::FACTORY_API_KEY is not available to this run.');
-    return 0;
-  }
   if (!sha || !repository || !env.GITHUB_TOKEN) {
     console.error('[droid-push-review] missing GITHUB_SHA, GITHUB_REPOSITORY or GITHUB_TOKEN');
     return 1;
@@ -175,7 +193,11 @@ export async function main(env = process.env, { github = null, run = runDroid, c
   const base = resolveBase(sha, before, cwd);
   const { diff, truncated } = readDiff(base, sha, cwd);
   if (diff.trim() === '') {
-    console.log(`No reviewable changes between ${base} and ${sha}.`);
+    await postNothingToReview({ client, env, sha, base, runUrl });
+    return 0;
+  }
+  if (!env.FACTORY_API_KEY) {
+    console.log('::notice title=Droid review skipped::FACTORY_API_KEY is not available to this run.');
     return 0;
   }
   const dir = path.join(env.RUNNER_TEMP ?? cwd, 'droid-push-review');

@@ -18,7 +18,7 @@ import { isMain } from './lib/util.mjs';
  * collects job and step durations from the GitHub API and per-test durations from the merged test reports, compares
  * them with the median of the last 10 successful main runs stored on the ci-metrics branch, writes the comparison to the
  * job summary, and then either commits the record to ci-metrics (push to main; nothing is written to main) or posts
- * and updates the one sticky comment of the pull request.
+ * and updates the one sticky comment of the pull request. Every run on main counts (push or manual dispatch).
  *   node scripts/ci-timing.mjs --exclude-job "CI timing" [--reports reports] [--metrics-dir dir]
  */
 
@@ -73,9 +73,10 @@ export async function main(argv, env = process.env, github = null) {
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
   console.log(markdown);
 
-  const isMainPush = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF_NAME === 'main';
-  const pr = isMainPush ? null : pullRequestOf(env);
-  if (isMainPush) {
+  // Pull request runs have a ref name like "9/merge", so "main" is only ever a push, a manual dispatch or a schedule.
+  const isMainRun = env.GITHUB_EVENT_NAME !== 'pull_request' && env.GITHUB_REF_NAME === 'main';
+  const pr = isMainRun ? null : pullRequestOf(env);
+  if (isMainRun) {
     const result = await publishRecord({ dir: metricsDir, record, token: env.GITHUB_TOKEN });
     console.log(`${opened.created ? 'Created the ci-metrics branch. ' : ''}Committed ${result.file} to ci-metrics.`);
   } else if (pr?.fromFork) {

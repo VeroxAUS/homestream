@@ -5,15 +5,14 @@ name: Droid review
 # - pushes to main: scripts/droid-push-review.mjs runs `droid exec` and posts the findings as commit comments on the
 #   pushed commit (inline comments where the commit changed the line, one summary comment per push).
 # FACTORY_API_KEY is the only secret. Pull requests from forks and Dependabot pull requests get no secrets, so they skip
-# with a notice instead of failing. The wiki pull request is reviewed like any other; a push that only merges the
-# generated wiki changes no code and is skipped (same rule as ci.yml).
+# with a notice instead of failing. The wiki pull request is reviewed like any other. Every push gets a summary comment:
+# a push that only changes the generated wiki or the lockfile gets a short one from the script without a Droid call.
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
-    paths-ignore: ['droid-wiki/**']
 
 permissions:
   contents: read

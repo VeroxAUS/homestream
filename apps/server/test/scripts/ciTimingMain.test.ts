@@ -185,6 +185,30 @@ describe('ci-timing on main', () => {
   });
 });
 
+describe('ci-timing on other main runs', () => {
+  it('records a manually dispatched main run as well, exactly once', async () => {
+    const before = metricsFiles();
+    const dispatched = envFor(20, { GITHUB_EVENT_NAME: 'workflow_dispatch' });
+    expect(await main(argsFor('d1'), dispatched.env, fakeApi(20, 300))).toBe(0);
+    expect(metricsFiles()).toHaveLength(before.length + 1);
+    const added = metricsFiles().filter((name) => !before.includes(name));
+    expect(added).toHaveLength(1);
+    expect(JSON.parse(git(['show', `ci-metrics:${added[0]}`], remote)).run.id).toBe(20);
+
+    expect(
+      await main(argsFor('d2'), envFor(20, { GITHUB_EVENT_NAME: 'workflow_dispatch' }).env, fakeApi(20, 300)),
+    ).toBe(0);
+    expect(metricsFiles()).toHaveLength(before.length + 1);
+  });
+
+  it('does not record a run of another branch', async () => {
+    const before = metricsFiles();
+    const other = envFor(21, { GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_NAME: 'feature' });
+    expect(await main(argsFor('d3'), other.env, fakeApi(21, 300))).toBe(0);
+    expect(metricsFiles()).toEqual(before);
+  });
+});
+
 describe('ci-timing on pull requests', () => {
   function eventFile(number: number, headRepo: string) {
     const file = path.join(root, `event-${number}-${headRepo.replace('/', '-')}.json`);
