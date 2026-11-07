@@ -55,14 +55,30 @@ jobs:
           automatic_security_review: false
           review_depth: deep
 
-      # The action adds a "Droid finished" comment on every push; keep the newest one only.
+  # The action adds a "Droid finished" comment on every push and checks out the pull request head, which may predate
+  # this script, so the cleanup is its own job on the merge commit and keeps the newest comment only.
+  pr-review-cleanup:
+    name: Droid comment cleanup
+    needs: pr-review
+    if: ${{ always() && needs.pr-review.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: always()
         with:
           node-version-file: .nvmrc
 
       - name: Keep one Droid summary comment
-        if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

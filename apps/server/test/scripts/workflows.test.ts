@@ -208,13 +208,19 @@ describe('workflow hygiene', () => {
     const skip = (jobs['skip-notice']?.steps ?? []).map((step) => step.run ?? '').join('\n');
     const action = jobs['pr-review']?.steps?.find((step) => step.uses?.startsWith('Factory-AI/droid-action@'));
     expect(action?.with).toMatchObject({ automatic_review: true, use_sticky_comment: true });
-    const prRun = (jobs['pr-review']?.steps ?? []).map((step) => step.run ?? '').join('\n');
-    expect(prRun).toContain('scripts/droid-pr-cleanup.mjs');
     expect(skip).toContain('::notice');
     expect(jobs['push-review']?.['continue-on-error']).toBe(true);
     expect(jobs['push-review']?.if).toBe("github.event_name == 'push'");
     const push = (jobs['push-review']?.steps ?? []).map((step) => step.run ?? '').join('\n');
     expect(push).toContain('scripts/droid-push-review.mjs');
+  });
+
+  it('the Droid comment cleanup is its own advisory job after the review, so it runs from the merge commit', () => {
+    const job = workflows.get('droid-review.yml')?.jobs['pr-review-cleanup'];
+    expect(job?.needs).toBe('pr-review');
+    expect(job?.['continue-on-error']).toBe(true);
+    const run = (job?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(run).toContain('scripts/droid-pr-cleanup.mjs');
   });
 
   it('the daily code-health review only comments on the issue: no code pushes, no pull requests, one run at a time', () => {
