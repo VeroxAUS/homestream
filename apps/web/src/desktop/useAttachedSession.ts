@@ -1,7 +1,7 @@
 import type { Handover } from '@homestream/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { logger } from '../logger';
-import { fetchSession, stopSession } from '../player/sessionApi';
+import { fetchSession, stopSession, waitForStop } from '../player/sessionApi';
 import type { StartState } from '../player/useSessionStart';
 import { desktopBridge, inMiniPlayer } from './bridge';
 
@@ -12,7 +12,8 @@ export interface AttachedSession {
   gaveUp: boolean;
   /**
    * Retry: stop waiting for or using the handed-over session and let the caller start a new one. A session that could
-   * not be loaded here is ended on the server first, since nothing else owns it.
+   * not be loaded here is ended on the server first, since nothing else owns it; `gaveUp` turns true only once that
+   * has finished (or 4 s passed), and `state` reads as loading until then.
    */
   giveUp: () => void;
 }
@@ -28,6 +29,7 @@ export function useAttachedSession(enabled: boolean): AttachedSession {
   const [state, setState] = useState<StartState>({ status: 'loading' });
   const [handover, setHandover] = useState<Handover | null>(null);
   const [gaveUp, setGaveUp] = useState(false);
+  const [draining, setDraining] = useState(false);
 
   useEffect(() => {
     const bridge = desktopBridge();
@@ -71,9 +73,15 @@ export function useAttachedSession(enabled: boolean): AttachedSession {
   }, [enabled]);
 
   const giveUp = useCallback(() => {
-    if (state.status === 'error' && handover) void stopSession(handover.sessionId);
-    setGaveUp(true);
-  }, [state.status, handover]);
+    if (draining) return;
+    if (state.status !== 'error' || !handover) {
+      setGaveUp(true);
+      return;
+    }
+    // The session still holds its slot until the server has stopped it; a replacement started now can get a 429.
+    setDraining(true);
+    void waitForStop(stopSession(handover.sessionId)).then(() => setGaveUp(true));
+  }, [state.status, handover, draining]);
 
-  return { state, handover, gaveUp, giveUp };
+  return { state: draining && !gaveUp ? { status: 'loading' } : state, handover, gaveUp, giveUp };
 }

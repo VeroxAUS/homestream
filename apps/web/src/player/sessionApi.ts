@@ -72,6 +72,25 @@ export async function stopSession(sessionId: string, keepalive = false): Promise
   }
 }
 
+/** The server stops an encoder within 3 s; a little more covers the round trip. */
+const STOP_WAIT_MS = 4000;
+
+/**
+ * Resolves when `stopping` has finished or after `STOP_WAIT_MS`, whichever comes first. A replacement session is only
+ * accepted once the old one has left its slot, so callers wait here instead of racing the old DELETE.
+ */
+export async function waitForStop(stopping: Promise<unknown>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, STOP_WAIT_MS);
+  });
+  try {
+    await Promise.race([stopping.catch(() => undefined), limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function sendProgress(sessionId: string, positionSec: number, state: PingState): Promise<void> {
   try {
     await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}/progress`, {
@@ -92,17 +111,21 @@ export function beaconProgress(sessionId: string, positionSec: number, state: Pi
 }
 
 const PREFETCH_DEDUPE_MS = 1000;
-let lastPrefetch: { key: string; at: number } | null = null;
+/** When each title was last sent. Per title, so A, B, A within the window still sends A once (a gateway call each). */
+const recentPrefetches = new Map<string, number>();
 
 /**
  * Warms the stream `Play` would pick, so playback reaches the first segment fast. Fire and forget: errors are ignored,
- * and the same title asked twice within a second (re-render, double click) is sent once.
+ * and the same title asked twice within a second (re-render, double click, A, B, A) is sent once.
  */
 export function prefetchTitle(target: PlayTarget): void {
   const key = `${target.mediaType}:${target.tmdbId}:${target.season ?? ''}:${target.episode ?? ''}`;
   const now = Date.now();
-  if (lastPrefetch?.key === key && now - lastPrefetch.at < PREFETCH_DEDUPE_MS) return;
-  lastPrefetch = { key, at: now };
+  for (const [other, at] of recentPrefetches) {
+    if (now - at >= PREFETCH_DEDUPE_MS) recentPrefetches.delete(other);
+  }
+  if (recentPrefetches.has(key)) return;
+  recentPrefetches.set(key, now);
   void apiFetch('/api/prefetch', {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -112,5 +135,5 @@ export function prefetchTitle(target: PlayTarget): void {
 
 /** Clears the dedupe memory; tests start from a clean state. */
 export function resetPrefetchMemory(): void {
-  lastPrefetch = null;
+  recentPrefetches.clear();
 }

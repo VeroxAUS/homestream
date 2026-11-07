@@ -111,10 +111,33 @@ describe('prefetchTitle', () => {
     expect(calls).toHaveLength(1);
     prefetchTitle({ mediaType: 'movie', tmdbId: 1 });
     expect(calls).toHaveLength(2);
-    prefetchTitle(MOVIE);
     vi.advanceTimersByTime(1001);
     prefetchTitle(MOVIE);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('sends episode A once when the selection goes A, B, A within a second', () => {
+    const { calls } = mockApi({ 'POST /api/prefetch': Response.json({}, { status: 202 }) });
+    const episode = (n: number) => ({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: n }) as const;
+    prefetchTitle(episode(1));
+    prefetchTitle(episode(2));
+    prefetchTitle(episode(1));
+    prefetchTitle(episode(2));
+    expect(calls.map((call) => (call.body as { episode: number }).episode)).toEqual([1, 2]);
+    vi.advanceTimersByTime(1001);
+    prefetchTitle(episode(1));
+    prefetchTitle(episode(2));
     expect(calls).toHaveLength(4);
+  });
+
+  it('counts each title window from its own request, not from the latest request of any title', () => {
+    const { calls } = mockApi({ 'POST /api/prefetch': Response.json({}, { status: 202 }) });
+    prefetchTitle(MOVIE);
+    vi.advanceTimersByTime(600);
+    prefetchTitle({ mediaType: 'movie', tmdbId: 1 });
+    vi.advanceTimersByTime(600);
+    prefetchTitle(MOVIE);
+    expect(calls).toHaveLength(3);
   });
 
   it('ignores failures', async () => {

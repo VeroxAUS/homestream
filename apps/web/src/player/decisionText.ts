@@ -23,12 +23,19 @@ const AUDIO_CODECS: Record<string, string> = {
 
 const RANGES: Record<string, string> = { dv: 'Dolby Vision', hdr10: 'HDR10', hlg: 'HLG', sdr: 'SDR' };
 
-/** Wide films are cropped (3840 x 1600), so the width, not the height, decides the "p" name. */
+/** The short side, or for a cropped wide film the long side, at which each tier starts. */
+const TIERS = [
+  { label: '2160p', short: 2160, long: 3840 },
+  { label: '1440p', short: 1440, long: 2560 },
+  { label: '1080p', short: 1080, long: 1920 },
+  { label: '720p', short: 720, long: 1280 },
+] as const;
+
+/** Wide films are cropped (3840 x 1600), so either side may reach a tier; a portrait frame counts the same way. */
 export function resolutionLabel(width: number, height: number): string {
-  if (width >= 3200) return '2160p';
-  if (width >= 1800) return '1080p';
-  if (width >= 1200) return '720p';
-  return `${height}p`;
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  return TIERS.find((tier) => short >= tier.short || long >= tier.long)?.label ?? '480p';
 }
 
 function layoutLabel(channels: number): string {

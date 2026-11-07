@@ -100,6 +100,7 @@ export function usePlaybackModel(args: PlaybackModelArgs) {
     infoOpen,
     toggleInfo,
     desktop,
+    end,
     waiting: video.buffering || reloading || tracks.busy,
     audioItems: audioMenuItems(source),
     subtitleItems: subtitleMenuItems(source),

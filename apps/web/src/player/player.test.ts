@@ -171,11 +171,43 @@ describe('decision text', () => {
     expect(outputSummary(session().decision)).toBe('2160p H.264');
   });
 
-  it('names resolutions by width and formats encoder numbers', () => {
-    expect(resolutionLabel(1920, 800)).toBe('1080p');
-    expect(resolutionLabel(1280, 720)).toBe('720p');
-    expect(resolutionLabel(640, 480)).toBe('480p');
+  it('names resolutions by the long or short side, so cropped films keep their tier', () => {
+    const tiers: Array<[number, number, string]> = [
+      [3840, 2160, '2160p'],
+      [3840, 1600, '2160p'],
+      [2560, 1440, '1440p'],
+      [2560, 1080, '1440p'],
+      [3440, 1440, '1440p'],
+      [1920, 1080, '1080p'],
+      [1920, 800, '1080p'],
+      [1280, 720, '720p'],
+      [1280, 534, '720p'],
+      [854, 480, '480p'],
+      [640, 480, '480p'],
+      [720, 1280, '720p'],
+      [1440, 2560, '1440p'],
+    ];
+    for (const [width, height, label] of tiers)
+      expect(resolutionLabel(width, height), `${width}x${height}`).toBe(label);
+  });
+
+  it('formats encoder numbers', () => {
     expect(describeEncoder(session().encoder)).toEqual({ speed: '5.2x', fps: '125 fps', bitrate: '14.6 Mbps' });
+  });
+
+  it('labels a 2560x1440 decision as 1440p in the info text and the top-bar summary', () => {
+    const base = session().decision;
+    const decision = {
+      ...base,
+      width: 2560,
+      height: 1440,
+      sourceVideo: { ...base.sourceVideo, width: 2560, height: 1440 },
+    };
+    expect(describeDecision(decision)).toMatchObject({
+      sourceVideo: '1440p HEVC Dolby Vision',
+      outputVideo: '1440p H.264 SDR',
+    });
+    expect(outputSummary(decision)).toBe('1440p H.264');
   });
 });
 

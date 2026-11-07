@@ -1,9 +1,10 @@
 import type { Handover, SessionResponse } from '@homestream/shared';
-import type { RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import { MiniControls } from '../desktop/MiniControls';
 import { ControlBar } from './ControlBar';
 import { InfoPanel } from './InfoPanel';
 import { CenterPlay, PlayerBusy, PlayerError } from './PlayerOverlays';
+import { waitForStop } from './sessionApi';
 import type { PlayTarget } from './target';
 import type { TitleMeta } from './useTitleMeta';
 import { usePlaybackModel } from './usePlaybackModel';
@@ -28,7 +29,15 @@ interface PlaybackProps {
 export function Playback(props: PlaybackProps) {
   const { session, fullscreen, onRetry } = props;
   const model = usePlaybackModel(props);
-  const { videoRef, fatal, video, actions, tracks, menu, infoOpen, desktop } = model;
+  const { videoRef, fatal, video, actions, tracks, menu, infoOpen, desktop, end } = model;
+  const [retrying, setRetrying] = useState(false);
+  // The failed session ends before its replacement is requested, otherwise the replacement can meet a full server.
+  const retry = () => {
+    if (retrying) return;
+    setRetrying(true);
+    const positionSec = videoRef.current?.currentTime ?? 0;
+    void waitForStop(end()).then(() => onRetry(positionSec));
+  };
   return (
     <>
       <video
@@ -40,16 +49,17 @@ export function Playback(props: PlaybackProps) {
         onDoubleClick={desktop.mini ? undefined : actions.toggleFullscreen}
       />
       <div className={styles.scrims} />
-      {fatal ? (
+      {fatal && !retrying ? (
         <PlayerError
           title="Playback failed"
           message={fatal.message}
           hint={fatal.hint}
           retryLabel="Try again"
-          onRetry={() => onRetry(videoRef.current?.currentTime ?? 0)}
+          onRetry={retry}
           onBack={desktop.leave}
         />
       ) : null}
+      {retrying ? <PlayerBusy headline="Starting playback..." detail="The server is preparing the video." /> : null}
       {!fatal && model.waiting ? <PlayerBusy headline="Buffering..." detail="Playback resumes automatically." /> : null}
       {!fatal && !model.waiting && video.paused && !desktop.mini ? <CenterPlay onPlay={actions.togglePlay} /> : null}
       {infoOpen ? <InfoPanel session={tracks.current} subtitle={tracks.subtitle} /> : null}

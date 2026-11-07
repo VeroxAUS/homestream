@@ -7,6 +7,11 @@
   text-align: center;
 }
 
+/* Over the controls (z-index 3) but only informative: Back, Pause and the seek bar stay clickable while it shows. */
+.busy {
+  pointer-events: none;
+}
+
 .box {
   display: flex;
   flex-direction: column;

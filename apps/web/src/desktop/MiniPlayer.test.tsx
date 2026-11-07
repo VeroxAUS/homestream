@@ -314,6 +314,74 @@ describe('the main window taking the session back', () => {
       await waitFor(() => expect(posts(calls)).toHaveLength(1));
       expect(posts(calls)[0]?.body).toMatchObject({ startPositionSec: 1500 });
     });
+
+    /**
+     * Another device holds one of the two slots, so the old session must be gone before the replacement is accepted:
+     * the server answers 429 for as long as the old session drains.
+     */
+    function withOtherDeviceOnTheSecondSlot(gate: Promise<void>, loadFails: boolean) {
+      let oldSessionEnded = false;
+      return {
+        ...(loadFails ? { 'GET /api/sessions/s1': FAILED_LOAD['GET /api/sessions/s1'] } : {}),
+        'DELETE /api/sessions/s1': async () => {
+          await gate;
+          oldSessionEnded = true;
+          return new Response(null, { status: 204 });
+        },
+        'POST /api/sessions': () =>
+          oldSessionEnded
+            ? Response.json(session({ sessionId: 's2', playlistUrl: '/hls/s2/index.m3u8' }), { status: 201 })
+            : apiError(429, 'too_many_sessions', 'Two streams are already playing. Stop one to start another.'),
+      };
+    }
+
+    function gateOf() {
+      let open!: () => void;
+      const promise = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return { promise, open };
+    }
+
+    it.each([
+      ['the hand-over could not be loaded', true],
+      ['the stream of the attached session failed', false],
+    ])('waits for the old session to end before the replacement is requested when %s', async (_name, loadFails) => {
+      const gate = gateOf();
+      const routes = { ...ATTACH_ROUTES, ...withOtherDeviceOnTheSecondSlot(gate.promise, loadFails) };
+      const { calls } = openAttached('/play/movie/278?attach=1', {}, {}, routes);
+      if (loadFails) {
+        fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+      } else {
+        startVideo(await videoOf(), 1500);
+        act(() => FakeHls.last.emit('hlsError', { fatal: true, type: 'networkError', details: 'fragLoadError' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+      }
+      await waitFor(() => expect(deletes(calls)).toHaveLength(1));
+      await settle();
+      expect(posts(calls)).toHaveLength(0);
+      expect(screen.getByTestId('player-busy')).toBeInTheDocument();
+      gate.open();
+      await waitFor(() => expect(posts(calls)).toHaveLength(1));
+      expect(posts(calls)[0]?.body).toMatchObject({ startPositionSec: loadFails ? 1234 : 1500 });
+      await videoOf();
+      expect(screen.queryByTestId('player-error')).not.toBeInTheDocument();
+      expect(deletes(calls)).toHaveLength(1);
+    });
+
+    it('shows the normal busy error when the old session is still draining after the wait', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const gate = gateOf();
+      const routes = { ...ATTACH_ROUTES, ...withOtherDeviceOnTheSecondSlot(gate.promise, true) };
+      const { calls } = openAttached('/play/movie/278?attach=1', {}, {}, routes);
+      fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+      expect(posts(calls)).toHaveLength(0);
+      await act(() => vi.advanceTimersByTimeAsync(1500));
+      await waitFor(() => expect(posts(calls)).toHaveLength(1));
+      expect(await screen.findByTestId('player-error')).toHaveTextContent('Two streams are already playing.');
+      gate.open();
+    });
   });
 
   it('starts a normal session when the page was reloaded and no hand-over is waiting', async () => {

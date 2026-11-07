@@ -44,7 +44,7 @@ interface PlayerBusyProps {
 /** The spinner shown while a session starts and while the stream catches up. */
 export function PlayerBusy({ headline, detail }: PlayerBusyProps) {
   return (
-    <div className={styles.overlay}>
+    <div className={`${styles.overlay} ${styles.busy}`}>
       <div className={styles.box} role="status" data-testid="player-busy">
         <div className={styles.spinner} aria-hidden="true" />
         <b className={styles.busyTitle}>{headline}</b>
