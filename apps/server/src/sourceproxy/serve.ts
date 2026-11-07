@@ -184,6 +184,86 @@ async function waitForSharedBytes(
   return false;
 }
 
+interface PumpRun {
+  entry: SourceEntry;
+  reader: ReaderRef;
+  cache: BlockCache;
+  sink: Sink;
+  counters: ProxyCounters;
+  pacer: RatePacer | null;
+  signal: AbortSignal;
+}
+
+interface Stretch {
+  /** Next byte to deliver. */
+  pos: number;
+  failure: unknown;
+  /** The reader went away (or the entry shut down): nothing more to do. */
+  stop: boolean;
+}
+
+/**
+ * Passes one upstream response on to the reader and into the cache. It ends at the bound it was opened for, when the
+ * window closes, or when it reaches a block another stream has already stored (the rest then comes from memory).
+ */
+async function drainStretch(
+  response: IncomingMessage,
+  run: PumpRun,
+  front: Front,
+  collector: BlockCollector,
+): Promise<void> {
+  const { entry, reader, cache, sink, counters, pacer } = run;
+  for await (const chunk of response as AsyncIterable<Buffer>) {
+    if (sink.closed) break;
+    const room = front.end + 1 - front.pos;
+    const part = chunk.length > room ? chunk.subarray(0, room) : chunk;
+    if (pacer && entry.extractorLimit !== null) {
+      const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
+      if (wait > 0) await sleep(wait);
+    }
+    await entry.download(part.length, reader, run.signal);
+    if (sink.closed) break;
+    counters.upstreamBytes += part.length;
+    counters.servedBytes += part.length;
+    collector.add(part);
+    await sink.write(part);
+    front.pos += part.length;
+    if (front.pos > front.end || entry.isHeld(reader) || cache.has(entry, Math.floor(front.pos / BLOCK_SIZE))) break;
+  }
+}
+
+/**
+ * One upstream read from `pos` to `bound`. The stream is registered before the request goes out, so a reader that needs
+ * the same bytes a moment later waits for it instead of opening a second one.
+ */
+async function fetchStretch(run: PumpRun, pos: number, bound: number): Promise<Stretch> {
+  const { entry, reader, cache, sink, counters } = run;
+  const front: Front = { consumer: reader.consumer, begin: pos, pos, end: bound };
+  entry.fronts.add(front);
+  let response: IncomingMessage | null = null;
+  let failure: unknown = null;
+  let streaming = false;
+  try {
+    counters.upstreamRequests += 1;
+    response = await entry.open(`bytes=${pos}-${bound}`, run.signal);
+    if (rangeInfo(response)?.start !== pos) throw new Error('upstream ignored the range');
+    streaming = true;
+    const collector = new BlockCollector(pos, (index, data) => {
+      if (!entry.closed) cache.put(entry, index, data);
+    });
+    await drainStretch(response, run, front, collector);
+  } catch (error) {
+    if (sink.closed || isAbort(error)) return { pos: front.pos, failure: null, stop: true };
+    if (!streaming) throw error;
+    failure = error;
+  } finally {
+    entry.fronts.delete(front);
+    // Closing the connection when the window is full also drops what the socket buffered, so no more bytes arrive while waiting.
+    if (response && !response.complete) response.destroy();
+  }
+  return { pos: front.pos, failure, stop: false };
+}
+
 async function pumpRemote(
   entry: SourceEntry,
   reader: ReaderRef,
@@ -194,10 +274,18 @@ async function pumpRemote(
 ): Promise<void> {
   let pos = range.start;
   let stalls = 0;
-  const pacer = reader.consumer === 'extractor' ? new RatePacer() : null;
   const tailRegion = Math.max(entry.headTarget, entry.size - TAIL_BYTES);
   const lifetime = new AbortController();
   sink.onClose(() => lifetime.abort());
+  const run: PumpRun = {
+    entry,
+    reader,
+    cache,
+    sink,
+    counters,
+    pacer: reader.consumer === 'extractor' ? new RatePacer() : null,
+    signal: lifetime.signal,
+  };
 
   while (pos <= range.end && !sink.closed) {
     entry.touch();
@@ -221,60 +309,15 @@ async function pumpRemote(
     if (entry.streamApproaching(pos, null) && (await waitForSharedBytes(entry, cache, pos, range.end, sink))) continue;
     if (sink.closed) return;
 
-    const bound = upstreamBound(entry, cache, pos, range.end);
-    const collector = new BlockCollector(pos, (index, data) => {
-      if (!entry.closed) cache.put(entry, index, data);
-    });
-
-    let response: IncomingMessage;
-    try {
-      counters.upstreamRequests += 1;
-      response = await entry.open(`bytes=${pos}-${bound}`, lifetime.signal);
-    } catch (error) {
-      if (sink.closed || isAbort(error)) return;
-      throw error;
-    }
-    if (rangeInfo(response)?.start !== pos) {
-      response.destroy();
-      throw new Error('upstream ignored the range');
-    }
-
     const before = pos;
-    const front: Front = { consumer: reader.consumer, begin: pos, pos, end: bound };
-    entry.fronts.add(front);
-    let failure: unknown = null;
-    try {
-      for await (const chunk of response as AsyncIterable<Buffer>) {
-        if (sink.closed) break;
-        const part = chunk.length > bound + 1 - pos ? chunk.subarray(0, bound + 1 - pos) : chunk;
-        if (pacer && entry.extractorLimit !== null) {
-          const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
-          if (wait > 0) await sleep(wait);
-        }
-        await entry.download(part.length, reader, lifetime.signal);
-        if (sink.closed) break;
-        counters.upstreamBytes += part.length;
-        counters.servedBytes += part.length;
-        collector.add(part);
-        await sink.write(part);
-        pos += part.length;
-        front.pos = pos;
-        if (pos > bound || entry.isHeld(reader)) break;
-      }
-    } catch (error) {
-      if (sink.closed || isAbort(error)) return;
-      failure = error;
-    } finally {
-      entry.fronts.delete(front);
-      // Closing the connection when the window is full also drops what the socket buffered, so no more bytes arrive while waiting.
-      if (!response.complete) response.destroy();
-    }
-    if (sink.closed) return;
+    const stretch = await fetchStretch(run, pos, upstreamBound(entry, cache, pos, range.end));
+    if (stretch.stop || sink.closed) return;
+    pos = stretch.pos;
     // A read that fails after delivering data is simply resumed from where it stopped; only a read that makes no progress counts.
     if (pos > before) stalls = 0;
     else {
       stalls += 1;
-      if (stalls >= MAX_STALLS) throw failure ?? new Error('upstream returned no data');
+      if (stalls >= MAX_STALLS) throw stretch.failure ?? new Error('upstream returned no data');
     }
   }
 }

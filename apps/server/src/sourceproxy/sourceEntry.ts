@@ -12,7 +12,7 @@ import {
   type Priority,
 } from '../network/downloadGate.js';
 import { RateMeter } from '../network/rateMeter.js';
-import type { ReadAheadState } from '../network/readAhead.js';
+import { encoderWindowSec, type ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
 import { ReaderHolds } from './readerHolds.js';
 import type { UpstreamClient } from './upstream.js';
@@ -32,11 +32,6 @@ export const HEAD_BYTES = 16 * 1024 * 1024;
 export const TAIL_BYTES = 8 * 1024 * 1024;
 const MAX_ATTEMPTS = 4;
 const RETRY_DELAY_MS = 250;
-/**
- * ffmpeg keeps a few seconds of input in its demuxer and encoder after its last finished segment, so the window is closed
- * this much early: the finished-segment lead then stays within the configured window.
- */
-const ENCODER_PIPELINE_SEC = 4;
 /** An extractor needing bytes this close ahead of an encoder stream waits for that stream to bring them (about a second at 60 Mbps). */
 const SHARE_AHEAD_BYTES = 8 * 1024 * 1024;
 
@@ -149,11 +144,8 @@ export class SourceEntry implements BlockOwner {
     this.cdnUrl = resolvedUrl;
     this.keys = keys;
     this.local = !/^https?:\/\//i.test(resolvedUrl);
-    this.holds = new ReaderHolds(
-      Math.max(1, deps.readAheadSec - ENCODER_PIPELINE_SEC),
-      deps.resumeSec,
-      deps.newToken,
-      () => this.wakeHolds(),
+    this.holds = new ReaderHolds(encoderWindowSec(deps.readAheadSec), deps.resumeSec, deps.newToken, () =>
+      this.wakeHolds(),
     );
   }
 

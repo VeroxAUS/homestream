@@ -1,4 +1,5 @@
 import { AppError } from '../errors.js';
+import { encoderWindowSec } from '../network/readAhead.js';
 import type { PlaybackContext } from './context.js';
 import { maxExtractorRuns } from './extractorSchedule.js';
 import type { MemoryLimitHit } from './memoryWatchdog.js';
@@ -31,7 +32,7 @@ export class SubtitleHandoff {
       sessionDir: rec.dir,
       inputUrl: (runId) => rec.source.extractorRunUrl(runId),
       readAhead: {
-        holdSec: options.config.readAheadSec,
+        holdSec: encoderWindowSec(options.config.readAheadSec),
         resumeSec: options.config.readAheadResumeSec,
         playheadSec: () => this.pacing.reachSec(rec),
         setHold: (runId, held) => rec.source.setExtractorHold(runId, held),
@@ -98,7 +99,10 @@ export class SubtitleHandoff {
       }
       if (rec.stopping) throw notFound('This session has ended.');
       // Cues beyond the read-ahead window are not read yet: the request keeps getting 503 until the player is closer.
-      if (segment * SEGMENT_SECONDS <= this.pacing.reachSec(rec) + this.ctx.options.config.readAheadSec) {
+      if (
+        segment * SEGMENT_SECONDS <
+        this.pacing.reachSec(rec) + encoderWindowSec(this.ctx.options.config.readAheadSec)
+      ) {
         extractor.ensureExtractorFor(segment * SEGMENT_SECONDS);
       }
       if (Date.now() >= deadline || signal?.aborted) break;

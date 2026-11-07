@@ -1,7 +1,7 @@
 import path from 'node:path';
-import { ReadAheadWindow } from '../network/readAhead.js';
 import type { EncoderExit, EncoderHandle, EncoderProcessOptions } from './encoderProcess.js';
 import { burstActive } from './extractorSchedule.js';
+import { ExtractorWindows } from './extractorWindow.js';
 import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import type { PidRegistry } from './pidRegistry.js';
 import { SEGMENT_SECONDS } from './playlist.js';
@@ -33,6 +33,11 @@ const ENGLISH = /^en(g|glish)?$/i;
 /** Where a run needed for `sec` starts: `PREROLL_SEC` before the segment holding `sec`, which the player asks for first. */
 export function prerollStart(sec: number): number {
   return Math.max(0, Math.floor(sec / SEGMENT_SECONDS) * SEGMENT_SECONDS - PREROLL_SEC);
+}
+
+/** True when `run` started at or before `sec` and is close enough to it to get there within seconds. */
+function reaches(run: SubtitleRun, sec: number): boolean {
+  return run.ss <= sec && sec <= run.headSec + NEAR_AHEAD_SEC;
 }
 
 export interface TextTrack {
@@ -113,7 +118,7 @@ export class SubtitleExtractor {
   private stopped = false;
   private gaveUp = false;
   private launching: Promise<void> | null = null;
-  private readonly windows = new Map<number, ReadAheadWindow>();
+  private readonly windows: ExtractorWindows | null;
   private readonly warmAt = new WeakMap<SubtitleRun, number>();
 
   private readonly maxRuns: number;
@@ -121,6 +126,14 @@ export class SubtitleExtractor {
   constructor(private readonly options: SubtitleExtractorOptions) {
     this.store = new SubtitleStore(options.durationSec, options.tracks);
     this.maxRuns = Math.max(1, options.maxRuns ?? DEFAULT_MAX_RUNS);
+    this.windows = options.readAhead
+      ? new ExtractorWindows({
+          holdSec: options.readAhead.holdSec,
+          resumeSec: options.readAhead.resumeSec,
+          behindSec: NEAR_AHEAD_SEC,
+          setHold: options.readAhead.setHold,
+        })
+      : null;
   }
 
   /** Starts the main run; call together with the encoder. */
@@ -164,12 +177,37 @@ export class SubtitleExtractor {
     return this.runs.filter((run) => run.running && run.pid !== undefined).map((run) => run.pid as number);
   }
 
+  /** The read position of every run that is still reading, and whether the run waits at the end of its window. */
+  get readPositions(): Array<{ runId: number; kind: RunKind; ss: number; headSec: number; held: boolean }> {
+    return this.active().map((run) => ({
+      runId: run.id,
+      kind: run.kind,
+      ss: run.ss,
+      headSec: run.headSec,
+      held: this.isHeld(run),
+    }));
+  }
+
+  /**
+   * The encoder was restarted at `sec` because the player jumped there. A run that cannot get to `sec` soon is of no use
+   * any more, and left running it would keep reading the interleaved file far from the player; `ensureExtractorFor` starts
+   * a new one when a subtitle request lands there.
+   */
+  noteSeek(sec: number): void {
+    if (this.stopped) return;
+    for (const run of this.active()) if (!reaches(run, sec)) void run.stop();
+    this.syncHolds();
+  }
+
   /** Makes sure something is reading toward `sec`; a no-op when it is covered or an extractor is about to get there. */
   ensureExtractorFor(sec: number): void {
     if (this.stopped || this.gaveUp || this.options.tracks.length === 0) return;
     if (this.store.complete || this.store.segmentCovered(Math.floor(sec / 4))) return;
+    // A run started this far behind the player would be stopped again at once.
+    const playhead = this.options.readAhead?.playheadSec();
+    if (playhead !== undefined && sec + NEAR_AHEAD_SEC < playhead) return;
     // A run that started before `sec` covers it as soon as its head is a few seconds past; a second run there would only split the bandwidth.
-    if (this.active().some((run) => !this.isHeld(run) && run.ss <= sec && sec <= run.headSec + NEAR_AHEAD_SEC)) return;
+    if (this.active().some((run) => !this.isHeld(run) && reaches(run, sec))) return;
     if (this.launching) return;
     const ss = prerollStart(sec);
     this.launching = this.launchSeek(sec, ss).finally(() => {
@@ -200,7 +238,9 @@ export class SubtitleExtractor {
         .sort((a, b) => sec - b.headSec - (sec - a.headSec))[0];
       // Main is only given up when it is the sole candidate left.
       victim ??= this.active().sort((a, b) => a.headSec - b.headSec)[0];
-      await victim?.stop();
+      // Runs already told to stop (a seek left them behind) still hold their slot until they have exited.
+      const leaving = this.runs.filter((run) => run.stopRequested && run.holdsSlot);
+      await Promise.all([victim?.stop(), ...leaving.map((run) => run.waitForExit())]);
     }
     if (this.stopped || this.gaveUp || this.slotsTaken() >= this.maxRuns) return;
     if (this.store.segmentCovered(Math.floor(sec / 4))) return;
@@ -296,27 +336,23 @@ export class SubtitleExtractor {
   }
 
   /**
-   * Holds the reads of every run that is a full read-ahead window past the player and releases them once the player has
-   * caught up to within the resume lead. A run is measured from its own start when the player is still before it (a seek
-   * run started for a position the next ping has not reported yet).
+   * Holds the reads of every run whose read position is a full window past the player and releases them once the player
+   * has caught up to within the resume lead. The distance is the run's head minus the player, whatever second the run
+   * started at, so a run left ahead of the player by a backward seek waits as well. A run far behind the player is stopped.
    */
   syncHolds(): void {
-    const window = this.options.readAhead;
-    if (!window) return;
-    const playhead = window.playheadSec();
-    for (const run of this.active()) {
-      const state = this.windows.get(run.id) ?? new ReadAheadWindow(window.holdSec, window.resumeSec);
-      this.windows.set(run.id, state);
-      if (state.update(run.headSec - Math.max(playhead, run.ss))) window.setHold(run.id, state.waiting);
-    }
+    if (!this.windows || !this.options.readAhead) return;
+    const active = this.active();
+    const behind = this.windows.sync(active, this.options.readAhead.playheadSec());
+    for (const run of active) if (behind.includes(run.id)) void run.stop();
   }
 
   /** True when the run is waiting at the end of the window. */
   private isHeld(run: SubtitleRun): boolean {
-    return this.windows.get(run.id)?.waiting ?? false;
+    return this.windows?.isHeld(run.id) ?? false;
   }
 
   private release(run: SubtitleRun): void {
-    if (this.windows.delete(run.id)) this.options.readAhead?.setHold(run.id, false);
+    this.windows?.release(run.id);
   }
 }

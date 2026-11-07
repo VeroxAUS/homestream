@@ -12,9 +12,6 @@
     "apps/server/src/health/checks/torbox.ts": {
       "functionLines": 83
     },
-    "apps/server/src/sourceproxy/serve.ts": {
-      "functionLines": 86
-    },
     "apps/server/src/sourceproxy/sourceEntry.ts": {
       "functionLines": 82
     },

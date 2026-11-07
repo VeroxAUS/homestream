@@ -20,6 +20,8 @@ export interface StubCdn {
   aborted: number;
   /** Bytes written to clients. */
   sentBytes: number;
+  /** The byte interval (inclusive) each finished or aborted response actually wrote, in the order they ended. */
+  served: Array<{ start: number; end: number }>;
   /** Rejects the next ranged request that does not start at offset 0 with this status. */
   failNextMiddle(status: number): void;
   /** Rejects requests whose `gen` query is below this number with 403 (a link that expired). */
@@ -46,6 +48,7 @@ export async function startStubCdn(options: StubCdnOptions = {}): Promise<StubCd
     ranges: [],
     aborted: 0,
     sentBytes: 0,
+    served: [],
     failNextMiddle: (status) => {
       failMiddle = status;
     },
@@ -100,6 +103,7 @@ export async function startStubCdn(options: StubCdnOptions = {}): Promise<StubCd
     });
     res.on('close', () => {
       if (!finished) cdn.aborted += 1;
+      if (pos > start) cdn.served.push({ start, end: pos - 1 });
     });
     let pos = start;
     const step = (): void => {

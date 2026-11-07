@@ -1,6 +1,17 @@
 export type ReadAheadState = 'filling' | 'waiting';
 
 /**
+ * ffmpeg keeps a few seconds of input in its demuxer and encoder after its last finished segment, so the window is closed
+ * this much early: the finished-segment lead then stays within the configured window.
+ */
+export const ENCODER_PIPELINE_SEC = 4;
+
+/** Lead at which the encoder's reads wait; subtitle extractors hold at the same distance so a full window stops all reads. */
+export function encoderWindowSec(readAheadSec: number): number {
+  return Math.max(1, readAheadSec - ENCODER_PIPELINE_SEC);
+}
+
+/**
  * Hysteresis for the read-ahead window: reading stops once the lead reaches `holdAtSec` and resumes only when it is back
  * below `resumeSec`, so a player advancing second by second does not start and stop the download on every segment.
  */

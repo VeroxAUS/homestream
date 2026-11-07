@@ -21,6 +21,8 @@ import { notFound, POLL_MS, sleep, type ServedFile, type WaitOutcome } from './s
 
 /** A request that keeps finding its segment evicted or skipped gives up after this many encoder restarts. */
 const MAX_SERVE_ATTEMPTS = 3;
+/** Segment requests this many segments before the previous one count as a seek back, not as a player re-fetching. */
+const BACK_JUMP_SEGMENTS = 2;
 
 /** Answers the playlist, init and segment requests of a session, restarting the encoder for a seek. */
 export class HlsServing {
@@ -66,8 +68,10 @@ export class HlsServing {
     }
     // A track switch replaces the files on disk; nothing from before it may be served.
     while (rec.restart) await rec.restart.catch(() => undefined);
+    // A request well before the previous one is a backward seek; the last ping still names the position the player left.
+    const jumpedBack = file.index < rec.playerSegment - BACK_JUMP_SEGMENTS;
     rec.playerSegment = file.index;
-    if (Date.now() - rec.pingedAt > 30_000) rec.positionSec = file.index * SEGMENT_SECONDS;
+    if (jumpedBack || Date.now() - rec.pingedAt > 30_000) rec.positionSec = file.index * SEGMENT_SECONDS;
     this.pacing.followPlayhead(rec);
 
     const target = path.join(rec.dir, segmentFileName(file.index, rec.format));

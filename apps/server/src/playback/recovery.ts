@@ -5,6 +5,7 @@ import type { PlaybackContext } from './context.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
 import { DISCARD_STOP } from './encoderProcess.js';
 import { describeMemoryLimitHit, type MemoryLimitHit } from './memoryWatchdog.js';
+import { SEGMENT_SECONDS } from './playlist.js';
 import { toActivitySession, type SessionRecord } from './session.js';
 import { endStats, scrub, subjectOf } from './support.js';
 
@@ -144,6 +145,9 @@ export class Recovery {
     const previous = rec.process;
     rec.generation += 1;
     this.ctx.options.observer?.restarted('seek');
+    // The player is at the segment it asked for; its last ping (up to 10 s old) still names the position it jumped from.
+    rec.positionSec = index * SEGMENT_SECONDS;
+    rec.subtitles?.noteSeek(rec.positionSec);
     await previous?.stop(DISCARD_STOP);
     if (rec.stopping) return;
     rec.retried = false;
