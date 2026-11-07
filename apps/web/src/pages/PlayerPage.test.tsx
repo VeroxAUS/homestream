@@ -183,11 +183,49 @@ describe('progress pings', () => {
         video.dispatchEvent(new Event('seeked'));
       });
       expect(pings()).toHaveLength(4);
-      await act(() => vi.advanceTimersByTimeAsync(30_000));
-      expect(pings()).toHaveLength(4);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps pinging every 10 s while paused so the server does not stop the idle session', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const { calls } = openPlayer();
+      const video = (await vi.waitUntil(() => screen.queryByTestId('player-video'))) as HTMLVideoElement;
+      startVideo(video, 90);
+      act(() => video.pause());
+      const pings = () => calls.filter((call) => call.path === '/api/sessions/s1/progress');
+      const before = pings().length;
+      await act(() => vi.advanceTimersByTimeAsync(5 * 60_000));
+      expect(pings().length - before).toBe(30);
+      expect(pings().at(-1)?.body).toEqual({ positionSec: 90, state: 'paused' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends no ping, with position 0, before the video has metadata', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const { calls } = openPlayer({}, '/play/movie/278?start=600');
+      const video = (await vi.waitUntil(() => screen.queryByTestId('player-video'))) as HTMLVideoElement;
+      act(() => void video.dispatchEvent(new Event('pause')));
+      await act(() => vi.advanceTimersByTimeAsync(30_000));
+      expect(calls.filter((call) => call.path === '/api/sessions/s1/progress')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaving before the video has metadata ends the session without overwriting the saved position', async () => {
+    const { calls } = openPlayer({}, '/play/movie/278?start=600');
+    await videoOf();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'DELETE' && call.path === '/api/sessions/s1')).toBe(true),
+    );
+    expect(calls.filter((call) => call.path === '/api/sessions/s1/progress')).toHaveLength(0);
   });
 });
 

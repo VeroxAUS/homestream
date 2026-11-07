@@ -260,6 +260,103 @@ describe('spawn mode', () => {
   });
 });
 
+describe('overlapping requests', () => {
+  const alive = (children: FakeChild[]) => children.filter((child) => !child.exited);
+
+  async function runningSlowToStop() {
+    const harness = setup();
+    await harness.supervisor.start();
+    await harness.bringUp();
+    harness.world.answer = 'none';
+    const first = harness.world.children[0];
+    if (!first) throw new Error('no child');
+    first.politeness = false;
+    return { ...harness, first };
+  }
+
+  it('two restarts at once spawn one new server', async () => {
+    const { world, supervisor, first } = await runningSlowToStop();
+    const results = Promise.all([supervisor.restart(), supervisor.restart()]);
+    await vi.advanceTimersByTimeAsync(10);
+    first.exit({ code: 0, signal: null });
+    expect(await results).toEqual([{ ok: true }, { ok: true }]);
+    expect(world.children).toHaveLength(2);
+    expect(alive(world.children)).toHaveLength(1);
+    expect(first.kills).toBe(0);
+  });
+
+  it('a restart and a Retry at once leave one server running', async () => {
+    const { world, supervisor, first } = await runningSlowToStop();
+    const both = Promise.all([supervisor.restart(), supervisor.retry()]);
+    await vi.advanceTimersByTimeAsync(10);
+    first.exit({ code: 0, signal: null });
+    await vi.advanceTimersByTimeAsync(10);
+    await both;
+    expect(alive(world.children)).toHaveLength(1);
+  });
+
+  it('a restart that was waiting for the old server does not start a new one after quit', async () => {
+    const { world, supervisor, first } = await runningSlowToStop();
+    const restarting = supervisor.restart();
+    await vi.advanceTimersByTimeAsync(10);
+    const stopping = supervisor.stop();
+    first.exit({ code: 0, signal: null });
+    await Promise.all([restarting, stopping]);
+    expect(supervisor.status).toEqual({ kind: 'stopped' });
+    expect(world.children).toHaveLength(1);
+    expect(alive(world.children)).toHaveLength(0);
+  });
+});
+
+describe('quit while a request is waiting', () => {
+  it('a Retry that was waiting for the old server does not start a new one', async () => {
+    const { world, supervisor } = setup();
+    await supervisor.start();
+    const first = world.children[0];
+    if (!first) throw new Error('no child');
+    first.politeness = false;
+    const retrying = supervisor.retry();
+    await vi.advanceTimersByTimeAsync(10);
+    const stopping = supervisor.stop();
+    first.exit({ code: 0, signal: null });
+    await Promise.all([retrying, stopping]);
+    expect(supervisor.status).toEqual({ kind: 'stopped' });
+    expect(world.children).toHaveLength(1);
+  });
+
+  it('Start server asked just before quit starts nothing', async () => {
+    const { world, supervisor } = setup('homestream');
+    await supervisor.start();
+    world.answer = 'none';
+    await vi.advanceTimersByTimeAsync(300);
+    expect(supervisor.status.kind).toBe('lost');
+    const starting = supervisor.startServer();
+    const stopping = supervisor.stop();
+    await Promise.all([starting, stopping]);
+    expect(world.children).toHaveLength(0);
+    expect(supervisor.status).toEqual({ kind: 'stopped' });
+  });
+
+  it('a start whose probe was running when quit came neither attaches nor spawns', async () => {
+    for (const answer of ['homestream', 'none'] as const) {
+      let release: (value: 'homestream' | 'none') => void = () => undefined;
+      const probe = vi.fn(() => new Promise<'homestream' | 'none'>((resolve) => void (release = resolve)));
+      const spawn = vi.fn(() => new FakeChild(1));
+      const slow = new Supervisor({ spawn, probe, logger: quiet }, TIMING);
+      const starting = slow.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(probe).toHaveBeenCalledTimes(1);
+      await slow.stop();
+      release(answer);
+      await starting;
+      expect(slow.status).toEqual({ kind: 'stopped' });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(spawn).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe('stop', () => {
   it('asks the server to shut down on its stdin line and waits for it', async () => {
     const { world, supervisor, bringUp } = setup();

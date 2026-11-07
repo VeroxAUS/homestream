@@ -64,6 +64,16 @@ describe('leaving the page', () => {
     expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1);
   });
 
+  it('sends no beacon position when the page closes before the video has metadata', async () => {
+    const sendBeacon = vi.fn(() => true);
+    vi.stubGlobal('navigator', { ...navigator, sendBeacon });
+    const { calls } = openPlayer({}, '/play/movie/278?start=600');
+    await videoOf();
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    expect(sendBeacon).not.toHaveBeenCalled();
+    await waitFor(() => expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1));
+  });
+
   it('keeps the session when the page is only frozen into the back/forward cache', async () => {
     const { calls } = openPlayer();
     await videoOf();

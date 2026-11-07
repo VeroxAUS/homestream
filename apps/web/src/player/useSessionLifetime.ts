@@ -17,15 +17,16 @@ function pingState(video: HTMLVideoElement): PingState {
 }
 
 /**
- * Progress pings every 10 s while playing, and one on pause and on seek. `last` always holds the most recent position
- * so the final ping still has one after the video element is gone. Nothing is sent before the video has metadata,
- * otherwise a not yet started resume would overwrite the saved position with 0.
+ * Progress pings every 10 s, playing or paused (the server stops a session after 120 s without activity, and a paused
+ * player requests no segments), and one on pause and on seek. `last` holds the most recent position so the final ping
+ * still has one after the video element is gone; it stays `null` until the video has metadata. Nothing is sent before
+ * that, otherwise a not yet started resume would overwrite the saved position with 0.
  */
 export function useProgressPings(
   sessionId: string,
   videoRef: RefObject<HTMLVideoElement | null>,
-): RefObject<LastKnown> {
-  const last = useRef<LastKnown>({ positionSec: 0, state: 'paused' });
+): RefObject<LastKnown | null> {
+  const last = useRef<LastKnown | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -33,15 +34,14 @@ export function useProgressPings(
     const ready = () => video.readyState >= 1;
     const ping = () => {
       if (!ready()) return;
-      last.current = { positionSec: video.currentTime, state: pingState(video) };
-      void sendProgress(sessionId, last.current.positionSec, last.current.state);
+      const known = { positionSec: video.currentTime, state: pingState(video) };
+      last.current = known;
+      void sendProgress(sessionId, known.positionSec, known.state);
     };
     const track = () => {
       if (ready()) last.current = { positionSec: video.currentTime, state: pingState(video) };
     };
-    const timer = window.setInterval(() => {
-      if (!video.paused) ping();
-    }, PING_INTERVAL_MS);
+    const timer = window.setInterval(ping, PING_INTERVAL_MS);
     video.addEventListener('timeupdate', track);
     video.addEventListener('pause', ping);
     video.addEventListener('seeked', ping);
@@ -59,12 +59,11 @@ export function useProgressPings(
 /**
  * Ends a session exactly once, whichever way the player is left: Back, Esc, a media key, the browser's own back
  * button or a closing page. A last ping goes first so the saved position is the final one, then DELETE.
- * While 
-eleased is true the session lives on elsewhere (the desktop mini player took it over): nothing is sent.
+ * While `released` is true the session lives on elsewhere (the desktop mini player took it over): nothing is sent.
  */
 export function useSessionEnd(
   sessionId: string,
-  last: RefObject<LastKnown>,
+  last: RefObject<LastKnown | null>,
   released?: RefObject<boolean>,
 ): () => Promise<void> {
   const queryClient = useQueryClient();
@@ -75,7 +74,7 @@ export function useSessionEnd(
     if (ended.current) return;
     ended.current = true;
     if (released?.current) return;
-    await sendProgress(sessionId, last.current.positionSec, 'paused');
+    if (last.current) await sendProgress(sessionId, last.current.positionSec, 'paused');
     invalidateWatchState(queryClient);
     await stopSession(sessionId);
   }, [sessionId, last, queryClient, released]);
@@ -85,7 +84,7 @@ export function useSessionEnd(
     const onPageHide = (event: PageTransitionEvent) => {
       if (event.persisted || ended.current || released?.current) return;
       ended.current = true;
-      beaconProgress(sessionId, last.current.positionSec, 'paused');
+      if (last.current) beaconProgress(sessionId, last.current.positionSec, 'paused');
       void stopSession(sessionId, true);
     };
     window.addEventListener('pagehide', onPageHide);

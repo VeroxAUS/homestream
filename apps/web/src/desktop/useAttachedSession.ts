@@ -1,7 +1,7 @@
 import type { Handover } from '@homestream/shared';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { logger } from '../logger';
-import { fetchSession } from '../player/sessionApi';
+import { fetchSession, stopSession } from '../player/sessionApi';
 import type { StartState } from '../player/useSessionStart';
 import { desktopBridge, inMiniPlayer } from './bridge';
 
@@ -10,6 +10,11 @@ export interface AttachedSession {
   handover: Handover | null;
   /** No hand-over arrived in time (a reloaded page): the caller starts a session the normal way instead. */
   gaveUp: boolean;
+  /**
+   * Retry: stop waiting for or using the handed-over session and let the caller start a new one. A session that could
+   * not be loaded here is ended on the server first, since nothing else owns it.
+   */
+  giveUp: () => void;
 }
 
 const HANDOVER_WAIT_MS = 3000;
@@ -39,7 +44,12 @@ export function useAttachedSession(enabled: boolean): AttachedSession {
       setHandover(incoming);
       fetchSession(incoming.sessionId).then(
         (session) =>
-          active && setState({ status: 'ready', session: { ...session, startPositionSec: incoming.positionSec } }),
+          // A text subtitle is chosen in the player only, so the server still reports its own default for it.
+          active &&
+          setState({
+            status: 'ready',
+            session: { ...session, startPositionSec: incoming.positionSec, selectedSubtitle: incoming.subtitle },
+          }),
         (error: unknown) => {
           if (!active) return;
           const failed = () => setState({ status: 'error', error });
@@ -60,5 +70,10 @@ export function useAttachedSession(enabled: boolean): AttachedSession {
     };
   }, [enabled]);
 
-  return { state, handover, gaveUp };
+  const giveUp = useCallback(() => {
+    if (state.status === 'error' && handover) void stopSession(handover.sessionId);
+    setGaveUp(true);
+  }, [state.status, handover]);
+
+  return { state, handover, gaveUp, giveUp };
 }

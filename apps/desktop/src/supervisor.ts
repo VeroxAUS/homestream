@@ -76,6 +76,10 @@ export class Supervisor {
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
   private watchTimer: ReturnType<typeof setTimeout> | undefined;
   private shuttingDown = false;
+  private queue: Promise<unknown> = Promise.resolve();
+  private stopEpoch = 0;
+  private ending: Promise<void> | null = null;
+  private restarting: Promise<RestartResult> | null = null;
   private readonly listeners = new Set<(status: SupervisorStatus) => void>();
 
   constructor(
@@ -106,7 +110,61 @@ export class Supervisor {
   }
 
   /** Attach to a running HomeStream server, or spawn one. */
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    return this.serial(async (quit) => {
+      if (!quit()) await this.begin();
+    });
+  }
+
+  /** The Retry button: forget the crash history and attach or spawn again. */
+  retry(): Promise<void> {
+    return this.serial(async (quit) => {
+      this.crashes = [];
+      await this.stopChild();
+      if (!quit()) await this.begin();
+    });
+  }
+
+  /** Requests made while a restart is under way share it, so they cannot spawn a second server. */
+  restart(): Promise<RestartResult> {
+    this.restarting ??= this.serial((quit) => this.restartNow(quit)).finally(() => {
+      this.restarting = null;
+    });
+    return this.restarting;
+  }
+
+  /** "Start server" after an attached server went away. */
+  startServer(): Promise<void> {
+    return this.serial(async (quit) => {
+      if (quit() || this.state.kind !== 'lost') return;
+      this.crashes = [];
+      this.invalidate();
+      this.spawnChild(this.generation);
+    });
+  }
+
+  /** Quit: stop the server this app started. An attached server is left running. */
+  async stop(): Promise<void> {
+    this.stopEpoch += 1;
+    this.shuttingDown = true;
+    this.invalidate();
+    await this.stopChild();
+    this.set({ kind: 'stopped' });
+  }
+
+  /**
+   * Start, Retry, restart and startServer run one after the other: each stops the child and then spawns or attaches
+   * across awaits, and two running at once would each spawn a server. `quit()` tells a task that `stop()` was called
+   * after the request was made, so it must not start anything. `stop()` itself never waits in the queue.
+   */
+  private serial<T>(task: (quit: () => boolean) => Promise<T>): Promise<T> {
+    const epoch = this.stopEpoch;
+    const run = this.queue.then(() => task(() => this.stopEpoch !== epoch));
+    this.queue = Promise.allSettled([run]);
+    return run;
+  }
+
+  private async begin(): Promise<void> {
     this.shuttingDown = false;
     const generation = this.invalidate();
     this.set({ kind: 'starting' });
@@ -117,40 +175,17 @@ export class Supervisor {
     if (this.isCurrent(generation)) this.spawnChild(generation);
   }
 
-  /** The Retry button: forget the crash history and attach or spawn again. */
-  async retry(): Promise<void> {
-    this.crashes = [];
-    await this.stopChild();
-    await this.start();
-  }
-
-  async restart(): Promise<RestartResult> {
+  private async restartNow(quit: () => boolean): Promise<RestartResult> {
     if (this.state.kind === 'attached' || this.state.kind === 'lost') {
       return { ok: false, message: EXTERNAL_SERVER_MESSAGE };
     }
     this.crashes = [];
     await this.stopChild();
+    if (quit()) return { ok: true };
     this.invalidate();
     this.spawnChild(this.generation);
     return { ok: true };
   }
-
-  /** "Start server" after an attached server went away. */
-  async startServer(): Promise<void> {
-    if (this.state.kind !== 'lost') return;
-    this.crashes = [];
-    this.invalidate();
-    this.spawnChild(this.generation);
-  }
-
-  /** Quit: stop the server this app started. An attached server is left running. */
-  async stop(): Promise<void> {
-    this.shuttingDown = true;
-    this.invalidate();
-    await this.stopChild();
-    this.set({ kind: 'stopped' });
-  }
-
   private invalidate(): number {
     this.generation += 1;
     clearTimeout(this.restartTimer);
@@ -251,8 +286,21 @@ export class Supervisor {
   /** Clean stop first (the `shutdown` line, so the mDNS goodbye is sent), then the process tree after the grace time. */
   private async stopChild(): Promise<void> {
     const child = this.child;
-    if (!child) return;
+    if (!child) {
+      // A restart may be ending the child already: Quit has to wait for it too.
+      await this.ending;
+      return;
+    }
     this.child = null;
+    this.ending = this.endChild(child);
+    try {
+      await this.ending;
+    } finally {
+      this.ending = null;
+    }
+  }
+
+  private async endChild(child: ServerChild): Promise<void> {
     const exited = new Promise<void>((resolve) => child.onExit(() => resolve()));
     child.requestShutdown();
     const timedOut = await Promise.race([exited.then(() => false), sleep(this.timing.stopGraceMs).then(() => true)]);

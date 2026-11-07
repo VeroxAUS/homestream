@@ -144,9 +144,18 @@ function PlayerRoute({ target, startSec, attach }: RouteProps) {
     if (mini) void desktopBridge()?.closeMiniPlayer();
     else navigate(detailsPath(target), { replace: true });
   }, [navigate, target, mini]);
+  const { giveUp } = attached;
+  const handedOverSec = attached.handover?.positionSec;
   const retry = useCallback(
-    (resumeSec?: number) => setAttempt((old) => ({ n: old.n + 1, startSec: resumeSec ?? old.startSec })),
-    [],
+    (resumeSec?: number) => {
+      // The attached session is not started by this page, so Retry replaces it with a new one at the same position.
+      if (attaching) giveUp();
+      setAttempt((old) => ({
+        n: old.n + 1,
+        startSec: resumeSec ?? (attaching ? handedOverSec : undefined) ?? old.startSec,
+      }));
+    },
+    [attaching, giveUp, handedOverSec],
   );
   useDownloadingHandoff(state, target, leave);
   useEscapeToLeave(state.status !== 'ready', leave);

@@ -27,8 +27,8 @@ afterEach(async () => {
 
 const videoOf = async () => (await screen.findByTestId('player-video')) as HTMLVideoElement;
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 20)));
-const deletes = (calls: Array<{ method: string }>) => calls.filter((call) => call.method === 'DELETE');
-const posts = (calls: Array<{ method: string; path: string }>) =>
+const deletes = <T extends { method: string }>(calls: T[]) => calls.filter((call) => call.method === 'DELETE');
+const posts = <T extends { method: string; path: string }>(calls: T[]) =>
   calls.filter((call) => call.method === 'POST' && call.path === '/api/sessions');
 
 const HANDOVER: Handover = {
@@ -239,6 +239,38 @@ describe('the mini player window', () => {
     expect(video.paused).toBe(true);
   });
 
+  it('shows the subtitle the main window had chosen, not the one the server picked by default', async () => {
+    openAttached(
+      '/play/movie/278?attach=1&mini=1',
+      { subtitle: { index: 1, mode: 'sidecar' } },
+      { isMiniPlayer: true },
+    );
+    await videoOf();
+    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    expect(FakeHls.last.subtitleTrack).toBe(0);
+    expect(FakeHls.last.subtitleDisplay).toBe(true);
+  });
+
+  it('keeps subtitles off when they were switched off in the main window', async () => {
+    openAttached('/play/movie/278?attach=1&mini=1', { subtitle: null }, { isMiniPlayer: true });
+    await videoOf();
+    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    expect(FakeHls.last.subtitleTrack).toBe(-1);
+  });
+
+  it('hands the chosen subtitle on again when the session goes back to the main window', async () => {
+    const { mocks } = openAttached(
+      '/play/movie/278?attach=1&mini=1',
+      { subtitle: { index: 1, mode: 'sidecar' } },
+      { isMiniPlayer: true },
+    );
+    startVideo(await videoOf(), 1300);
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the full window' }));
+    expect(mocks.returnToMain).toHaveBeenCalledWith(
+      expect.objectContaining({ subtitle: { index: 1, mode: 'sidecar' } }),
+    );
+  });
+
   it('closes itself when no hand-over arrives', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const mocks = installBridge({ isMiniPlayer: true });
@@ -256,6 +288,32 @@ describe('the main window taking the session back', () => {
     expect(screen.getByRole('button', { name: 'Mini player, stays on top (P)' })).toBeInTheDocument();
     expect(FakeHls.last.config).toMatchObject({ startPosition: 1234 });
     expect(posts(calls)).toHaveLength(0);
+  });
+
+  describe('Retry after the session failed', () => {
+    const FAILED_LOAD = {
+      'GET /api/sessions/s1': () => apiError(502, 'bad_gateway', 'The server did not answer.', 'Try again.'),
+      'DELETE /api/sessions/s1': () => new Response(null, { status: 204 }),
+    };
+
+    it('starts a new session at the handed-over position when the hand-over could not be loaded', async () => {
+      const { calls } = openAttached('/play/movie/278?attach=1', {}, {}, FAILED_LOAD);
+      fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+      await waitFor(() => expect(posts(calls)).toHaveLength(1));
+      expect(posts(calls)[0]?.body).toMatchObject({ startPositionSec: 1234 });
+      await waitFor(() => expect(deletes(calls)).toHaveLength(1));
+      expect(deletes(calls)[0]).toMatchObject({ path: '/api/sessions/s1' });
+      await videoOf();
+    });
+
+    it('starts a new session at the playing position when the stream of the attached session fails', async () => {
+      const { calls } = openAttached('/play/movie/278?attach=1');
+      startVideo(await videoOf(), 1500);
+      act(() => FakeHls.last.emit('hlsError', { fatal: true, type: 'networkError', details: 'fragLoadError' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(posts(calls)).toHaveLength(1));
+      expect(posts(calls)[0]?.body).toMatchObject({ startPositionSec: 1500 });
+    });
   });
 
   it('starts a normal session when the page was reloaded and no hand-over is waiting', async () => {
