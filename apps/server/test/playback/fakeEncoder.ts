@@ -8,8 +8,13 @@ import {
   type StopOptions,
 } from '../../src/playback/encoderProcess.js';
 
-/** `run`: writes the first segment and keeps running. `fail`: exits with code 1 at once. `hang`: neither. */
-export type EncoderMode = 'run' | 'fail' | 'hang';
+/**
+ * `run`: writes the first segment and keeps running. `fail`: exits with code 1 at once. `hang`: neither.
+ * `memory`: the memory watchdog hits it before any segment exists, as it does for a real process: the session is told first, then the process is stopped.
+ */
+export type EncoderMode = 'run' | 'fail' | 'hang' | 'memory';
+
+const WATCHDOG_HIT = { pid: 4242, rssBytes: 3 * 1024 ** 3, limitBytes: 2 * 1024 ** 3 };
 
 /** Stands in for the ffmpeg child: no process, just the files and the exit the session manager reacts to. */
 export class FakeEncoder implements EncoderHandle {
@@ -25,6 +30,15 @@ export class FakeEncoder implements EncoderHandle {
     });
     if (mode === 'fail') setImmediate(() => this.end(1));
     if (mode === 'run') setImmediate(() => writeFirstSegment(options));
+    if (mode === 'memory') {
+      setImmediate(() => {
+        try {
+          options.onMemoryLimit?.(WATCHDOG_HIT);
+        } finally {
+          void this.stop();
+        }
+      });
+    }
   }
 
   /** The options of every `stop()` call, in order, so tests can see how long each path was willing to wait. */

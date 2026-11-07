@@ -40,6 +40,8 @@ interface AttemptContext {
   details: TitleDetails;
   attempts: StartAttempt[];
   timeline: StartTimeline;
+  /** No other stream will be tried after this one fails: an explicit id, an uncached title or the last automatic candidate. */
+  lastCandidate: boolean;
   /** Where the stream's link already led, when the downloads probe followed it (spares a second gateway request). */
   resolvedUrl?: string;
 }
@@ -115,10 +117,19 @@ export class SessionStarter {
     const begun = await this.beginDownload(body, details, plan);
     if (begun?.status === 'downloading') return begun;
     const attempts: StartAttempt[] = [];
-    for (const streamId of plan.streamIds) {
+    for (const [index, streamId] of plan.streamIds.entries()) {
       try {
         const resolvedUrl = begun?.streamId === streamId ? begun.target : undefined;
-        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts, timeline, resolvedUrl });
+        const lastCandidate = !plan.auto || !plan.cached || index === plan.streamIds.length - 1;
+        return await this.attemptStart(body, clientIp, {
+          streamId,
+          device,
+          details,
+          attempts,
+          timeline,
+          lastCandidate,
+          resolvedUrl,
+        });
       } catch (error) {
         this.noteFailedAttempt(error, streamId, plan, attempts);
       }
@@ -314,8 +325,12 @@ export class SessionStarter {
     try {
       await this.waitForFirstSegment(rec);
     } catch (error) {
-      // An explicit stream gets one attempt, so its failure is final; an automatic start's failed candidates stay quiet.
-      const final = body.streamId !== 'auto' && error instanceof AppError && error.code !== 'shutting_down';
+      // An explicit stream gets one attempt, so its failure is final; an automatic start's failed candidates stay quiet,
+      // except that the last one's memory-limit stop, which the watchdog left unpublished, must be reported.
+      const final =
+        error instanceof AppError &&
+        error.code !== 'shutting_down' &&
+        (body.streamId !== 'auto' || (context.lastCandidate && error.code === 'encoder_memory_limit'));
       await slots.abandon(rec, final ? error : undefined);
       throw error;
     }

@@ -159,26 +159,22 @@ export class SessionSlots {
 
   private recordStartFailure(rec: SessionRecord, failure: AppError): void {
     const { options } = this.host;
-    // The memory watchdog logs and finalizes its own failure while the session is opening.
-    const recorded = rec.errorCode !== null;
     rec.state = 'error';
     rec.error ??= { message: scrub(failure.message), hint: failure.hint };
-    if (!recorded) {
-      options.logger.error({ sessionId: rec.id, code: failure.code }, 'Playback start failed');
-      this.host.event({
-        level: 'error',
-        source: 'ffmpeg',
-        message: rec.error.message,
-        details: { code: failure.code, hint: rec.error.hint },
-        sessionId: rec.id,
-      });
-      finalizePlay(options.db, rec.id, {
-        endedAt: Date.now(),
-        status: 'error',
-        errorMessage: rec.error.message,
-        ...endStats(rec),
-      });
-      options.bus.emit('session.update', toActivitySession(rec));
-    }
+    options.logger.error({ sessionId: rec.id, code: failure.code }, 'Playback start failed');
+    this.host.event({
+      level: 'error',
+      source: 'ffmpeg',
+      message: rec.error.message,
+      details: { code: failure.code, hint: rec.error.hint },
+      sessionId: rec.id,
+    });
+    finalizePlay(options.db, rec.id, {
+      endedAt: Date.now(),
+      status: 'error',
+      errorMessage: rec.error.message,
+      ...endStats(rec),
+    });
+    options.bus.emit('session.update', toActivitySession(rec));
   }
 }

@@ -86,6 +86,8 @@ export class Recovery {
   /**
    * An ffmpeg process of the session grew past the memory limit. The session ends with an error right away (the generation bump
    * keeps the encoder's exit handler from retrying) and every process of it is stopped gently; the caller already stops the offender.
+   * While the session is still opening nothing is published: the start waiting on it either tries the next stream or, when this
+   * failure is final, records it through `SessionSlots.abandon`.
    */
   onMemoryLimit(rec: SessionRecord, who: string, hit: MemoryLimitHit): void {
     if (rec.stopping || rec.state === 'error') return;
@@ -98,17 +100,34 @@ export class Recovery {
       hint: 'Playback ended. Try again, or switch subtitles off. If it keeps happening, check the ffmpeg tile on the health dashboard.',
     };
     rec.generation += 1;
-    if (!rec.opening) options.observer?.failed(subjectOf(rec), { stage: 'running', code: 'encoder_memory_limit' });
     rec.source.setExtractorLimit(null);
-    options.logger.error({ sessionId: rec.id, pid: hit.pid, usedMb, limitMb }, 'ffmpeg stopped by the memory watchdog');
-    this.ctx.event({
-      level: 'error',
-      source: 'ffmpeg',
-      message: rec.error.message,
-      details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb, hint: rec.error.hint },
-      sessionId: rec.id,
-    });
-    this.finalizeFailed(rec);
+    if (rec.opening) {
+      options.logger.warn(
+        { sessionId: rec.id, pid: hit.pid, usedMb, limitMb },
+        'ffmpeg stopped by the memory watchdog before the first segment',
+      );
+      this.ctx.event({
+        level: 'warn',
+        source: 'ffmpeg',
+        message: rec.error.message,
+        details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb },
+        sessionId: rec.id,
+      });
+    } else {
+      options.observer?.failed(subjectOf(rec), { stage: 'running', code: 'encoder_memory_limit' });
+      options.logger.error(
+        { sessionId: rec.id, pid: hit.pid, usedMb, limitMb },
+        'ffmpeg stopped by the memory watchdog',
+      );
+      this.ctx.event({
+        level: 'error',
+        source: 'ffmpeg',
+        message: rec.error.message,
+        details: { code: 'encoder_memory_limit', pid: hit.pid, usedMb, limitMb, hint: rec.error.hint },
+        sessionId: rec.id,
+      });
+      this.finalizeFailed(rec);
+    }
     void Promise.all([rec.process?.stop(), rec.subtitles?.stop()]).catch(() => undefined);
   }
 

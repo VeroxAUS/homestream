@@ -146,3 +146,51 @@ describe('a start that fails for good', () => {
     expect(events.filter((event) => event.type === 'session.update' && event.data.state === 'error')).toEqual([]);
   });
 });
+
+describe('a candidate stopped by the memory watchdog before its first segment', () => {
+  const NAMES = ['1080p.WEB-DL.x264-A', '1080p.WEB-DL.x264-B', '1080p.WEB-DL.x264-C'];
+
+  it('stays quiet when the next candidate plays: no error log, event, state error update or health warning', async () => {
+    const { harness, encoders, events } = await boot(NAMES, (index) => (index === 0 ? 'memory' : 'run'));
+
+    const res = await post(harness, 'auto');
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      streamId: harness.streamIds.s1,
+      attempts: [{ streamId: harness.streamIds.s0, code: 'encoder_memory_limit' }],
+    });
+    expect(encoders.started).toBe(2);
+    expect(encoders.handles[0]?.running).toBe(false);
+    expect(encoders.handles[0]?.stopCalls.length).toBeGreaterThan(0);
+    expect(plays(harness)).toEqual([{ sessionId: res.json().sessionId, status: 'ok', message: null }]);
+    expect(harness.db.prepare("SELECT COUNT(*) AS n FROM events WHERE level = 'error'").get()).toEqual({ n: 0 });
+    expect(((await harness.app.inject('/api/logs?level=error')).json() as { events: LogEvent[] }).events).toEqual([]);
+    expect(countSessionErrors(harness.db, 0)).toBe(0);
+    expect(sessionsCheck(harness).status).toBe('ok');
+    expect(events.filter((event) => event.type === 'session.update' && event.data.state === 'error')).toEqual([]);
+  });
+
+  it('is still recorded as encoder_memory_limit for an explicit stream', async () => {
+    const { harness, encoders, events } = await boot(NAMES, 'memory');
+
+    const res = await post(harness, harness.streamIds.s0 as string);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: { code: 'encoder_memory_limit', hint: expect.any(String) } });
+    expect(encoders.handles[0]?.running).toBe(false);
+    await expectRecordedFailure(harness, events, 'encoder_memory_limit');
+  });
+
+  it('is reported once when every automatic candidate hit the limit', async () => {
+    const { harness, encoders, events } = await boot(NAMES, 'memory');
+
+    const res = await post(harness, 'auto');
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: { code: 'all_streams_failed' } });
+    expect(encoders.started).toBe(3);
+    expect(encoders.handles.every((handle) => !handle.running)).toBe(true);
+    await expectRecordedFailure(harness, events, 'encoder_memory_limit');
+  });
+});
