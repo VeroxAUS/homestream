@@ -16,16 +16,13 @@
       "functionLines": 82
     },
     "apps/server/test/health/checks.test.ts": {
-      "lines": 427
+      "lines": 426
     },
     "apps/server/test/integration/downloads.test.ts": {
       "lines": 785
     },
     "apps/server/test/integration/progress-routes.test.ts": {
       "lines": 825
-    },
-    "apps/server/test/playback/ffmpegArgs.test.ts": {
-      "lines": 405
     },
     "apps/server/test/playback/harness.ts": {
       "lines": 412
