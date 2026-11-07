@@ -75,13 +75,27 @@ export function normalizeReview(answer) {
   return { summary: clean(parsed.summary, 4000), findings, structured: true };
 }
 
+// Without a shell tool the review never asks for a permission that a non-interactive run cannot grant.
+const READ_ONLY_TOOLS = 'Read,Grep,Glob,LS';
+
 /**
  * Runs `droid exec` read-only with the prompt in a file and returns the answer text. The key stays in the environment;
  * anything printed from the child's stderr passes through redactValues first.
  */
 export function runDroid({ promptFile, cwd, env = process.env, spawnImpl = spawn, timeoutMs = DROID_TIMEOUT_MS }) {
   return new Promise((resolve, reject) => {
-    const child = spawnImpl('droid', ['exec', '--output-format', 'json', '--file', promptFile, '--cwd', cwd], {
+    const args = [
+      'exec',
+      '--output-format',
+      'json',
+      '--only-tools',
+      READ_ONLY_TOOLS,
+      '--file',
+      promptFile,
+      '--cwd',
+      cwd,
+    ];
+    const child = spawnImpl('droid', args, {
       cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],

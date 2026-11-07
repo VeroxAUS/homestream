@@ -93,7 +93,17 @@ describe('runDroid', () => {
     });
     expect(answer).toBe('{"summary":"ok","findings":[]}');
     expect(spawn.calls[0]?.command).toBe('droid');
-    expect(spawn.calls[0]?.args).toEqual(['exec', '--output-format', 'json', '--file', '/tmp/p.md', '--cwd', '/work']);
+    expect(spawn.calls[0]?.args).toEqual([
+      'exec',
+      '--output-format',
+      'json',
+      '--only-tools',
+      'Read,Grep,Glob,LS',
+      '--file',
+      '/tmp/p.md',
+      '--cwd',
+      '/work',
+    ]);
     expect(spawn.calls[0]?.args.join(' ')).not.toMatch(/--auto|skip-permissions/);
   });
 
