@@ -10,7 +10,7 @@ HomeStream is a home media server. A Windows PC runs the server and does all vid
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `apps/server`     | `@homestream/server`: Fastify 5 + TypeScript server on Node 24 (`node:sqlite`, ffmpeg, no native npm dependencies) |
 | `apps/web`        | `@homestream/web`: React 19 + Vite web UI, served by the server at `/`                                             |
-| `apps/desktop`    | `@homestream/desktop`: Electron 45 desktop shell around the web UI (skeleton and telemetry plan so far)            |
+| `apps/desktop`    | `@homestream/desktop`: Electron 45 desktop shell around the web UI (tray, server supervisor, mini player)          |
 | `packages/shared` | `@homestream/shared`: zod schemas and types shared by every client and the server (the API contract)               |
 | `scripts`         | Repository tooling (bootstrap, checks, reports). Plain Node `.mjs`, no build step                                  |
 | `docs`            | Architecture, database, API export, privacy, runbooks. See [docs/architecture.md](docs/architecture.md)            |

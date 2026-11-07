@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
+import { installBridge } from '../test/desktopBridge';
 import { INFO } from '../test/fixtures';
 import SettingsPage from './SettingsPage';
 
@@ -103,7 +104,7 @@ describe('SettingsPage', () => {
   });
 
   it('labels the device type for the desktop shell', () => {
-    window.homestream = { isDesktop: true } as typeof window.homestream;
+    installBridge();
     mockApi({ 'GET /api/info': INFO });
     renderWithProviders(<SettingsPage />);
     expect(screen.getByText('Desktop app')).toBeInTheDocument();

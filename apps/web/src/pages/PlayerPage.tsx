@@ -1,7 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
+import type { Handover } from '@homestream/shared';
 import { Icon } from '../components/Icon';
+import { desktopBridge, inMiniPlayer } from '../desktop/bridge';
+import { useAttachedSession } from '../desktop/useAttachedSession';
 import { NotFound } from '../components/NotFound';
 import { describeError } from '../lib/errors';
 import { INFO_TOAST_MS, showToast } from '../notices/toastStore';
@@ -79,11 +82,12 @@ interface ScreenProps {
   line: string;
   stageRef: RefObject<HTMLElement | null>;
   fullscreen: boolean;
+  handover: Handover | null;
   onLeave: () => void;
   onRetry: (startSec?: number) => void;
 }
 
-function Screen({ state, target, meta, line, stageRef, fullscreen, onLeave, onRetry }: ScreenProps) {
+function Screen({ state, target, meta, line, stageRef, fullscreen, handover, onLeave, onRetry }: ScreenProps) {
   if (state.status === 'ready') {
     return (
       <Playback
@@ -94,6 +98,8 @@ function Screen({ state, target, meta, line, stageRef, fullscreen, onLeave, onRe
         line={line}
         stageRef={stageRef}
         fullscreen={fullscreen}
+        handover={handover}
+        onHandedOver={onLeave}
         onLeave={onLeave}
         onRetry={onRetry}
       />
@@ -115,15 +121,29 @@ function Screen({ state, target, meta, line, stageRef, fullscreen, onLeave, onRe
   return <PlayerBusy headline="Starting playback..." detail="The server is preparing the video." />;
 }
 
-function PlayerRoute({ target, startSec }: { target: PlayTarget; startSec: number | undefined }) {
+interface RouteProps {
+  target: PlayTarget;
+  startSec: number | undefined;
+  /** Desktop app: the session is handed over by the other window instead of being started here. */
+  attach: boolean;
+}
+
+function PlayerRoute({ target, startSec, attach }: RouteProps) {
   const navigate = useNavigate();
   const stageRef = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState<StartAttempt>({ n: 0, startSec });
-  const state = useSessionStart(target, attempt);
+  const attached = useAttachedSession(attach);
+  const attaching = attach && !attached.gaveUp;
+  const started = useSessionStart(target, attempt, !attaching);
+  const state = attaching ? attached.state : started;
   const meta = useTitleMeta(target);
   const fullscreen = useFullscreen(stageRef);
+  const mini = inMiniPlayer();
 
-  const leave = useCallback(() => navigate(detailsPath(target), { replace: true }), [navigate, target]);
+  const leave = useCallback(() => {
+    if (mini) void desktopBridge()?.closeMiniPlayer();
+    else navigate(detailsPath(target), { replace: true });
+  }, [navigate, target, mini]);
   const retry = useCallback(
     (resumeSec?: number) => setAttempt((old) => ({ n: old.n + 1, startSec: resumeSec ?? old.startSec })),
     [],
@@ -135,8 +155,15 @@ function PlayerRoute({ target, startSec }: { target: PlayTarget; startSec: numbe
   const line = [meta.line, summary].filter(Boolean).join(' \u00b7 ');
   const clearCaptionButtons = Boolean(window.homestream?.isDesktop) && !fullscreen;
   return (
-    <div ref={stageRef} className={styles.stage} data-chrome="visible" data-testid="player-stage">
-      <TopBar title={meta.title ?? ''} line={line} clearCaptionButtons={clearCaptionButtons} onBack={leave} />
+    <div
+      ref={stageRef}
+      className={`${styles.stage} ${mini ? styles.mini : ''}`}
+      data-chrome="visible"
+      data-testid="player-stage"
+    >
+      {mini ? null : (
+        <TopBar title={meta.title ?? ''} line={line} clearCaptionButtons={clearCaptionButtons} onBack={leave} />
+      )}
       <Screen
         state={state}
         target={target}
@@ -144,6 +171,7 @@ function PlayerRoute({ target, startSec }: { target: PlayTarget; startSec: numbe
         line={line}
         stageRef={stageRef}
         fullscreen={fullscreen}
+        handover={attaching ? attached.handover : null}
         onLeave={leave}
         onRetry={retry}
       />
@@ -162,5 +190,6 @@ export default function PlayerPage() {
       <NotFound title="Nothing to play here" message="This player address does not point to a movie or episode." />
     );
   }
-  return <PlayerRoute key={splat} target={target} startSec={startSec} />;
+  const attach = search.get('attach') === '1' && desktopBridge() !== null;
+  return <PlayerRoute key={splat} target={target} startSec={startSec} attach={attach} />;
 }

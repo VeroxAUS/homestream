@@ -39,6 +39,8 @@ const SYSTEM_VARIABLES = new Set([
   'TMP',
   'HOME',
   'USERPROFILE',
+  // Electron's own switch; the desktop shell clears it for the server it starts.
+  'ELECTRON_RUN_AS_NODE',
 ]);
 
 /** Keys with an assignment line, commented or not: `KEY=` or `# KEY=`. */

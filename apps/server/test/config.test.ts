@@ -122,6 +122,20 @@ describe('loadConfig', () => {
     expect(bad.warnings.join('\n')).toContain('LOG_LEVEL');
   });
 
+  it('advertises on the network unless HOMESTREAM_MDNS is off', () => {
+    const file = envFile('mdns.env', '');
+    const mdns = (value?: string): boolean =>
+      loadConfig({
+        env: { HOMESTREAM_ENV_FILE: file, ...(value === undefined ? {} : { HOMESTREAM_MDNS: value }) },
+        repoRoot: null,
+      }).mdnsEnabled;
+    expect(mdns()).toBe(true);
+    expect(mdns('on')).toBe(true);
+    expect(mdns('off')).toBe(false);
+    expect(mdns('OFF')).toBe(false);
+    expect(mdns('0')).toBe(false);
+  });
+
   it('names only the keys that are missing', () => {
     const file = envFile('partial.env', 'GATEWAY_MANIFEST_URL=https://gw.test/stremio/a/b/manifest.json\n');
     const config = loadConfig({ env: { HOMESTREAM_ENV_FILE: file }, repoRoot: null });

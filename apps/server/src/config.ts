@@ -30,6 +30,7 @@ export const KNOWN_KEYS = [
   'READ_AHEAD_SEC',
   'READ_AHEAD_RESUME_SEC',
   'HOMESTREAM_WEB_DIR',
+  'HOMESTREAM_MDNS',
   'HEALTH_NVENC_TEST',
   'LOG_LEVEL',
   'HOMESTREAM_TELEMETRY',
@@ -88,6 +89,8 @@ export interface Config {
   readAheadResumeSec: number;
   /** Whether the ffmpeg health check runs its 1 s NVENC test encode. Off: only versions and encoder names are checked. */
   healthNvencTest: boolean;
+  /** HOMESTREAM_MDNS=off: do not advertise on the local network (extra local and test servers). */
+  mdnsEnabled: boolean;
   /** Console and server.log verbosity; `debug` adds the playback start timing lines. */
   logLevel: LogLevel;
   serverName: string;
@@ -223,6 +226,10 @@ function telemetryFrom(
   };
 }
 
+function mdnsEnabledFrom(values: Record<string, string | undefined>): boolean {
+  return !/^(0|false|off|no)$/i.test(values.HOMESTREAM_MDNS ?? '');
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): Config {
   const env = options.env ?? process.env;
   const warnings: string[] = [];
@@ -274,6 +281,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     readAheadSec: limits.readAheadSec,
     readAheadResumeSec: limits.readAheadResumeSec,
     healthNvencTest: !/^(0|false|off|no)$/i.test(values.HEALTH_NVENC_TEST ?? ''),
+    mdnsEnabled: mdnsEnabledFrom(values),
     logLevel: logLevelFrom(values.LOG_LEVEL, warnings),
     serverName: values.SERVER_NAME ?? `HomeStream on ${os.hostname()}`,
     telemetry: telemetryFrom(values, env, warnings),

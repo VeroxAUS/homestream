@@ -4,6 +4,7 @@ import { resetToasts } from '../notices/toastStore';
 import { resetPrefetchMemory } from '../player/sessionApi';
 import { download, movieDetails, session } from '../test/fixtures';
 import { FakeHls } from '../test/fakeHls';
+import { installBridge } from '../test/desktopBridge';
 import { apiError } from '../test/render';
 import { openPlayer, startVideo, stubMedia } from '../test/player';
 
@@ -229,7 +230,7 @@ describe('playback failures', () => {
 
 describe('desktop window', () => {
   it('keeps the top bar clear of the caption buttons only in the desktop window and not in fullscreen', async () => {
-    window.homestream = { isDesktop: true };
+    installBridge();
     openPlayer();
     await videoOf();
     expect(screen.getByTestId('player-topbar').className).toContain('topDesktop');
@@ -249,7 +250,7 @@ describe('desktop window', () => {
   });
 
   it('also clears the caption buttons on the loading and error screens', async () => {
-    window.homestream = { isDesktop: true };
+    installBridge();
     openPlayer({ 'POST /api/sessions': apiError(502, 'all_streams_failed', 'Every stream failed.') });
     await screen.findByTestId('player-error');
     expect(screen.getByTestId('player-topbar').className).toContain('topDesktop');

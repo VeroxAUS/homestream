@@ -42,7 +42,9 @@ export function startSentry(config: TelemetryConfig): boolean {
         ...defaults.filter((integration) => KEPT_INTEGRATIONS.has(integration.name)),
         Sentry.breadcrumbsIntegration({ dom: false, fetch: true, history: true, xhr: true }),
       ],
-      initialScope: { tags: { app: 'web', process: 'renderer', 'device.kind': deviceKind() } },
+      initialScope: {
+        tags: { app: deviceKind() === 'desktop' ? 'desktop' : 'web', process: 'renderer', 'device.kind': deviceKind() },
+      },
     });
   } catch {
     return false;

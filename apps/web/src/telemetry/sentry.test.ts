@@ -105,6 +105,8 @@ describe('startSentry', () => {
   it('tags the device kind desktop inside the Electron window', () => {
     window.homestream = { isDesktop: true };
     expect(deviceKind()).toBe('desktop');
+    startSentry(CONFIG);
+    expect(initOptions().initialScope.tags).toEqual({ app: 'desktop', process: 'renderer', 'device.kind': 'desktop' });
     delete window.homestream;
     expect(deviceKind()).toBe('web');
   });

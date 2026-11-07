@@ -1,0 +1,102 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 10px 8px;
+}
+
+/* The whole video area moves the window; only the controls take clicks. */
+.round,
+.skip,
+.play,
+.seek {
+  -webkit-app-region: no-drag;
+}
+
+.top {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.round {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 0;
+  border-radius: 50%;
+}
+
+.round:hover,
+.on {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.centre {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.skip {
+  min-width: 40px;
+  height: 32px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 0;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.play {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 0;
+  border-radius: 50%;
+}
+
+.skip:hover,
+.play:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.bottom {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.time {
+  font-size: 12px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.seek {
+  flex: 1;
+  min-width: 0;
+}

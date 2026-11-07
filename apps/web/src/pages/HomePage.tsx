@@ -5,6 +5,8 @@ import { Banner } from '../components/Banner';
 import { ContinueWatchingRow } from '../components/ContinueWatchingRow';
 import { ErrorPanel } from '../components/ErrorPanel';
 import { PosterRow } from '../components/PosterRow';
+import { FinishSetup } from '../desktop/FinishSetup';
+import { useMissingKeys } from '../desktop/useMissingKeys';
 import { useContentShown } from '../lib/useContentShown';
 import styles from './HomePage.module.css';
 
@@ -43,8 +45,10 @@ function HomeRows({ home }: { home: HomeResponse }) {
 
 export default function HomePage() {
   const { data, error, isPending, refetch } = useQuery(homeQuery());
-  useContentShown(!isPending);
+  const missingKeys = useMissingKeys();
+  useContentShown(!isPending || missingKeys !== null);
 
+  if (missingKeys) return <FinishSetup keys={missingKeys} />;
   return (
     <main className={styles.page}>
       <h1 className="visually-hidden">Home</h1>

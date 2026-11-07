@@ -85,6 +85,20 @@ const PATHS = {
   ),
   fullscreen: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   fullscreenExit: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />,
+  popOut: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <rect x="12" y="11" width="7" height="5.5" rx="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  pin: <path d="M9 4h6l-1 6 3 3v1.5H7V13l3-3zM12 14.5V21" />,
+  expand: <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" />,
+  unplug: (
+    <>
+      <path d="m9 6 3.5 3.5M15 6l-3.5 3.5" />
+      <path d="M7 9.5h10v3a5 5 0 0 1-10 0zM12 17.5V21" />
+    </>
+  ),
 } satisfies Record<string, ReactElement>;
 
 type IconName = keyof typeof PATHS;

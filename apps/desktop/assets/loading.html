@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>HomeStream</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a0e;
+        --s1: #14141a;
+        --line: #26262e;
+        --text: #f5f5f7;
+        --mut: #a1a1ab;
+        --dim: #6b6b76;
+        --accent: #e50914;
+        --err: #ff453a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.45 'Segoe UI',
+          system-ui,
+          sans-serif;
+        overflow: hidden;
+        user-select: none;
+      }
+      .drag {
+        position: fixed;
+        inset: 0 138px auto 0;
+        height: 40px;
+        -webkit-app-region: drag;
+      }
+      main {
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
+      .stage {
+        display: grid;
+        justify-items: center;
+        gap: 14px;
+        text-align: center;
+        max-width: 520px;
+        padding: 0 24px;
+      }
+      .logo {
+        width: 88px;
+        height: 88px;
+        margin-bottom: 14px;
+      }
+      .bar {
+        width: 220px;
+        height: 3px;
+        border-radius: 2px;
+        background: var(--line);
+        overflow: hidden;
+        position: relative;
+      }
+      .bar::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        background: var(--accent);
+        border-radius: 2px;
+        animation: slide 1.3s ease-in-out infinite;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+      h1 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 8px 0 0;
+      }
+      .lead {
+        color: var(--mut);
+        font-size: 13px;
+        margin: 0;
+      }
+      .version {
+        position: fixed;
+        bottom: 18px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .card {
+        background: var(--s1);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 28px 32px;
+        width: 520px;
+        text-align: left;
+        display: grid;
+        gap: 14px;
+      }
+      .card h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      .card p {
+        margin: 0;
+        color: var(--mut);
+      }
+      .warn {
+        width: 36px;
+        height: 36px;
+        color: var(--err);
+      }
+      .hint {
+        background: #1d1d25;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 13.5px;
+        color: var(--text);
+      }
+      .code {
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .buttons .spacer {
+        flex: 1;
+      }
+      button {
+        -webkit-app-region: no-drag;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 9px 18px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--text);
+        color: #000;
+        border-color: var(--text);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="drag"></div>
+    <main>
+      <section id="starting" class="stage" hidden>
+        <svg class="logo" viewBox="0 0 88 88" aria-hidden="true">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ff3d47" />
+              <stop offset="1" stop-color="#e50914" />
+            </linearGradient>
+          </defs>
+          <rect width="88" height="88" rx="20" fill="url(#g)" />
+          <path d="M34 26v36l30-18z" fill="#fff" />
+        </svg>
+        <div class="bar" role="progressbar" aria-label="Starting"></div>
+        <h1>Starting the server…</h1>
+        <p class="lead">Checking ffmpeg and the GPU. This usually takes a few seconds.</p>
+      </section>
+      <section id="failed" class="card" hidden>
+        <svg class="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 3 2 21h20L12 3z" stroke-linejoin="round" />
+          <path d="M12 10v5M12 18v.5" stroke-linecap="round" />
+        </svg>
+        <h1>The server didn't start</h1>
+        <p>
+          HomeStream tried to start it 5 times in the last minute and then stopped trying. Your TV and other devices
+          can't play anything until it runs.
+        </p>
+        <div class="hint" id="hint" hidden><strong>Hint:</strong> <span id="hintText"></span></div>
+        <div class="code" id="code" hidden></div>
+        <div class="buttons">
+          <button class="primary" id="retry" type="button">Retry</button>
+          <button id="logs" type="button">Open logs</button>
+          <span class="spacer"></span>
+          <button id="quit" type="button">Quit</button>
+        </div>
+      </section>
+    </main>
+    <div class="version" id="version"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var failed = params.get('state') === 'failed';
+        document.getElementById(failed ? 'failed' : 'starting').hidden = false;
+        var version = params.get('v');
+        if (version) document.getElementById('version').textContent = 'v' + version;
+        if (failed) {
+          var hint = params.get('hint');
+          if (hint) {
+            document.getElementById('hint').hidden = false;
+            document.getElementById('hintText').textContent = hint;
+          }
+          var code = params.get('code');
+          if (code) {
+            var line = 'Error code: ' + code;
+            var at = Number(params.get('at'));
+            if (at > 0) {
+              line +=
+                ' \u00b7 last attempt ' + new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            var el = document.getElementById('code');
+            el.hidden = false;
+            el.textContent = line;
+          }
+        }
+        function bind(id, name) {
+          document.getElementById(id).addEventListener('click', function () {
+            if (window.homestream) void window.homestream[name]();
+          });
+        }
+        bind('retry', 'retry');
+        bind('logs', 'openLogs');
+        bind('quit', 'quit');
+      })();
+    </script>
+  </body>
+</html>

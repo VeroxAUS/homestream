@@ -59,8 +59,14 @@ export function useProgressPings(
 /**
  * Ends a session exactly once, whichever way the player is left: Back, Esc, a media key, the browser's own back
  * button or a closing page. A last ping goes first so the saved position is the final one, then DELETE.
+ * While 
+eleased is true the session lives on elsewhere (the desktop mini player took it over): nothing is sent.
  */
-export function useSessionEnd(sessionId: string, last: RefObject<LastKnown>): () => Promise<void> {
+export function useSessionEnd(
+  sessionId: string,
+  last: RefObject<LastKnown>,
+  released?: RefObject<boolean>,
+): () => Promise<void> {
   const queryClient = useQueryClient();
   const ended = useRef(false);
   const pendingUnmount = useRef<number | undefined>(undefined);
@@ -68,15 +74,16 @@ export function useSessionEnd(sessionId: string, last: RefObject<LastKnown>): ()
   const end = useCallback(async () => {
     if (ended.current) return;
     ended.current = true;
+    if (released?.current) return;
     await sendProgress(sessionId, last.current.positionSec, 'paused');
     invalidateWatchState(queryClient);
     await stopSession(sessionId);
-  }, [sessionId, last, queryClient]);
+  }, [sessionId, last, queryClient, released]);
 
   useEffect(() => {
     window.clearTimeout(pendingUnmount.current);
     const onPageHide = (event: PageTransitionEvent) => {
-      if (event.persisted || ended.current) return;
+      if (event.persisted || ended.current || released?.current) return;
       ended.current = true;
       beaconProgress(sessionId, last.current.positionSec, 'paused');
       void stopSession(sessionId, true);
@@ -87,7 +94,7 @@ export function useSessionEnd(sessionId: string, last: RefObject<LastKnown>): ()
       // Deferred so React's development remount (cleanup, then setup again) does not end a live session.
       pendingUnmount.current = window.setTimeout(() => void end(), 0);
     };
-  }, [sessionId, last, end]);
+  }, [sessionId, last, end, released]);
 
   return end;
 }

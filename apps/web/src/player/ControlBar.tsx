@@ -19,6 +19,8 @@ interface ControlBarProps {
   onMenu: (menu: MenuName | null) => void;
   infoOpen: boolean;
   onInfo: () => void;
+  /** Desktop app only: hand the session to the mini player. */
+  onPopOut?: (() => void) | null;
   audioItems: MenuItem[];
   subtitleItems: MenuItem[];
 }
@@ -130,6 +132,9 @@ export function ControlBar(props: ControlBarProps) {
           ) : null}
         </div>
         <RoundButton label="Info" icon="info" active={infoOpen} pressed={infoOpen} onClick={onInfo} />
+        {props.onPopOut ? (
+          <RoundButton label="Mini player, stays on top (P)" icon="popOut" onClick={props.onPopOut} />
+        ) : null}
         <RoundButton
           label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           icon={fullscreen ? 'fullscreenExit' : 'fullscreen'}

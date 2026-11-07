@@ -18,10 +18,10 @@
       "project": ["src/**/*.{ts,tsx}"],
     },
     "apps/desktop": {
-      "entry": ["src/index.ts", "test/**/*.test.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"],
-      // The Electron runtime is launched by the shell's start script, which does not exist yet; nothing imports it.
-      "ignoreDependencies": ["electron"],
+      "entry": ["src/main.ts", "src/preload.cts", "scripts/*.mjs", "test/**/*.test.ts", "test/smoke/*.ts"],
+      "project": ["src/**/*.{ts,cts}", "scripts/*.mjs", "test/**/*.ts"],
+      // The tray's Open config.env falls back to the Windows editor.
+      "ignoreBinaries": ["notepad.exe"],
     },
     "packages/shared": {
       "entry": ["test/**/*.test.ts"],

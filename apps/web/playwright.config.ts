@@ -25,6 +25,7 @@ function serverEnv(name: 'plain' | 'stub', port: number): Record<string, string>
     NODE_OPTIONS: `--import ${pathToFileURL(path.join(webRoot, 'e2e', 'support', 'redirect-fetch.mjs')).href}`,
     // The server under test sends no telemetry of its own; the web telemetry is what the e2e suite looks at.
     HOMESTREAM_TELEMETRY: 'off',
+    HOMESTREAM_MDNS: 'off',
     SOURCE_PROXY_PORT: '0',
     MAX_DOWNLOAD_MBPS: '60',
     LOG_LEVEL: 'warn',

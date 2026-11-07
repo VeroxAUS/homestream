@@ -13,6 +13,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
+      // Electron glue: needs the real runtime. The launch smoke test (test/smoke) covers it end to end.
+      exclude: ['src/main.ts', 'src/shell/**'],
       reporter: coverageReporters,
       reportsDirectory: 'coverage',
       thresholds: coverageThresholds,

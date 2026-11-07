@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { health } from '../test/fixtures';
+import { installBridge } from '../test/desktopBridge';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
 import { App } from '../App';
 import { describeHealth } from './HealthPill';
@@ -145,7 +146,7 @@ describe('navigation bar in the desktop app', () => {
   });
 
   it('becomes the drag region and keeps the full health text as label and tooltip for the dot-only pill', async () => {
-    window.homestream = { isDesktop: true };
+    installBridge();
     mockApi({ 'GET /api/health': health('error', ['error', 'error']) });
     renderWithProviders(<App />, '/settings');
     const pill = await screen.findByRole('link', { name: '2 problems' });

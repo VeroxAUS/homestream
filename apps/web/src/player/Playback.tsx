@@ -1,5 +1,6 @@
-import type { SessionResponse } from '@homestream/shared';
+import type { Handover, SessionResponse } from '@homestream/shared';
 import type { RefObject } from 'react';
+import { MiniControls } from '../desktop/MiniControls';
 import { ControlBar } from './ControlBar';
 import { InfoPanel } from './InfoPanel';
 import { CenterPlay, PlayerBusy, PlayerError } from './PlayerOverlays';
@@ -18,13 +19,16 @@ interface PlaybackProps {
   onLeave: () => void;
   /** Starts a new session at this position after a stream failure. */
   onRetry: (positionSec: number) => void;
+  /** Desktop app: set when this page took the session over from the other window. */
+  handover?: Handover | null;
+  onHandedOver: () => void;
 }
 
 /** The playing session: video, scrims, controls, menus, info panel and the failure card. */
 export function Playback(props: PlaybackProps) {
-  const { session, fullscreen, onLeave, onRetry } = props;
+  const { session, fullscreen, onRetry } = props;
   const model = usePlaybackModel(props);
-  const { videoRef, fatal, video, actions, tracks, menu, infoOpen } = model;
+  const { videoRef, fatal, video, actions, tracks, menu, infoOpen, desktop } = model;
   return (
     <>
       <video
@@ -33,7 +37,7 @@ export function Playback(props: PlaybackProps) {
         playsInline
         data-testid="player-video"
         onClick={actions.togglePlay}
-        onDoubleClick={actions.toggleFullscreen}
+        onDoubleClick={desktop.mini ? undefined : actions.toggleFullscreen}
       />
       <div className={styles.scrims} />
       {fatal ? (
@@ -43,25 +47,40 @@ export function Playback(props: PlaybackProps) {
           hint={fatal.hint}
           retryLabel="Try again"
           onRetry={() => onRetry(videoRef.current?.currentTime ?? 0)}
-          onBack={onLeave}
+          onBack={desktop.leave}
         />
       ) : null}
       {!fatal && model.waiting ? <PlayerBusy headline="Buffering..." detail="Playback resumes automatically." /> : null}
-      {!fatal && !model.waiting && video.paused ? <CenterPlay onPlay={actions.togglePlay} /> : null}
+      {!fatal && !model.waiting && video.paused && !desktop.mini ? <CenterPlay onPlay={actions.togglePlay} /> : null}
       {infoOpen ? <InfoPanel session={tracks.current} subtitle={tracks.subtitle} /> : null}
-      <ControlBar
-        videoRef={videoRef}
-        durationSec={session.durationSec}
-        video={video}
-        actions={actions}
-        fullscreen={fullscreen}
-        menu={menu}
-        onMenu={model.setMenu}
-        infoOpen={infoOpen}
-        onInfo={model.toggleInfo}
-        audioItems={model.audioItems}
-        subtitleItems={model.subtitleItems}
-      />
+      {desktop.mini ? (
+        <MiniControls
+          title={props.meta.title ?? props.handover?.title ?? ''}
+          videoRef={videoRef}
+          durationSec={session.durationSec}
+          video={video}
+          actions={actions}
+          pinned={desktop.pinned}
+          onPin={desktop.togglePin}
+          onExpand={desktop.expand}
+          onClose={desktop.leave}
+        />
+      ) : (
+        <ControlBar
+          videoRef={videoRef}
+          durationSec={session.durationSec}
+          video={video}
+          actions={actions}
+          fullscreen={fullscreen}
+          menu={menu}
+          onMenu={model.setMenu}
+          infoOpen={infoOpen}
+          onInfo={model.toggleInfo}
+          onPopOut={desktop.popOut}
+          audioItems={model.audioItems}
+          subtitleItems={model.subtitleItems}
+        />
+      )}
     </>
   );
 }

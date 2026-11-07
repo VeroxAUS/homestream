@@ -4,9 +4,11 @@
   "private": true,
   "license": "GPL-3.0-only",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/main.js",
   "scripts": {
-    "build": "pnpm --filter @homestream/shared build && tsc -p tsconfig.build.json",
+    "build": "pnpm --filter @homestream/shared build && tsc -p tsconfig.build.json && node scripts/copyAssets.mjs",
+    "start": "node scripts/start.mjs",
+    "smoke": "vitest run --config vitest.smoke.config.ts",
     "size": "size-limit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

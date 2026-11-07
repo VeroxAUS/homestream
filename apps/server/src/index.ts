@@ -69,16 +69,19 @@ async function main(): Promise<void> {
     nodeMajor: Number(process.versions.node.split('.')[0]),
   });
 
-  const discovery = startDiscovery({
-    name: config.serverName,
-    version: SERVER_VERSION,
-    port,
-    onError: (error) => logger.warn(`mDNS advertisement problem: ${error.message}`),
-  });
+  const discovery = config.mdnsEnabled
+    ? startDiscovery({
+        name: config.serverName,
+        version: SERVER_VERSION,
+        port,
+        onError: (error) => logger.warn(`mDNS advertisement problem: ${error.message}`),
+      })
+    : null;
+  if (!discovery) logger.info('mDNS advertising is off (HOMESTREAM_MDNS=off)');
 
   const stopAll = createShutdown({
     stop: async () => {
-      await discovery.stop();
+      await discovery?.stop();
       await app.close();
       await appLogger.close();
     },

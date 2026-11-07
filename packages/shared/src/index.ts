@@ -11,3 +11,4 @@ export * from './sanitize.js';
 export * from './analytics.js';
 export * from './flags.js';
 export * from './identity.js';
+export * from './desktop.js';

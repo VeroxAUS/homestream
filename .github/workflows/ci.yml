@@ -260,3 +260,20 @@ jobs:
           pnpm --filter @homestream/server exec vitest run --project unit
           test/config.test.ts test/redact.test.ts test/playback/playlist.test.ts
           test/playback/decision.test.ts test/playback/ffmpegArgs.test.ts test/db.test.ts
+
+      # The one test that starts the real Electron shell: it launches the built app with the built server and web UI,
+      # drives it over DevTools and quits it with --quit. It needs a desktop session, which this runner has.
+      - name: Build the app, server and web UI for the Electron smoke test
+        shell: bash
+        run: |
+          pnpm --filter @homestream/server build
+          pnpm --filter @homestream/web build
+          pnpm --filter @homestream/desktop build
+
+      - name: Electron launch smoke test
+        shell: bash
+        env:
+          ELECTRON_CACHE: ${{ runner.temp }}\electron-cache
+        run: |
+          node apps/desktop/node_modules/electron/install.js
+          pnpm --filter @homestream/desktop smoke

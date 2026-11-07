@@ -92,3 +92,8 @@
   color: #c8c8d0;
   font-size: 13px;
 }
+
+/* The mini player window: the video area moves the window, the controls opt out of dragging. */
+.mini {
+  -webkit-app-region: drag;
+}

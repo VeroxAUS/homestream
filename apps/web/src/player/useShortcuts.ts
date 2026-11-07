@@ -11,6 +11,7 @@ export type Shortcut =
   | 'fullscreen'
   | 'subtitles'
   | 'info'
+  | 'miniPlayer'
   | 'escape';
 
 const KEYS: Record<string, Shortcut> = {
@@ -24,11 +25,20 @@ const KEYS: Record<string, Shortcut> = {
   f: 'fullscreen',
   c: 'subtitles',
   i: 'info',
+  p: 'miniPlayer',
   Escape: 'escape',
 };
 
 /** Holding these down must not fire them over and over. */
-const NO_REPEAT: ReadonlySet<Shortcut> = new Set(['togglePlay', 'mute', 'fullscreen', 'subtitles', 'info', 'escape']);
+const NO_REPEAT: ReadonlySet<Shortcut> = new Set([
+  'togglePlay',
+  'mute',
+  'fullscreen',
+  'subtitles',
+  'info',
+  'miniPlayer',
+  'escape',
+]);
 
 /** The shortcut a key press stands for, or `null`. Modified presses (Ctrl, Alt, Meta) belong to the app and the OS. */
 export function shortcutFor(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey'>): Shortcut | null {
@@ -36,7 +46,7 @@ export function shortcutFor(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altK
   return KEYS[event.key] ?? KEYS[event.key.toLowerCase()] ?? null;
 }
 
-function typesText(target: EventTarget | null): boolean {
+export function typesText(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
     return true;
@@ -48,11 +58,13 @@ interface ShortcutHandlers {
   actions: PlayerActions;
   toggleSubtitles: () => void;
   toggleInfo: () => void;
+  /** Only in the desktop app; without it the P key is left alone. */
+  miniPlayer?: (() => void) | null;
   escape: () => void;
 }
 
 /**
- * Player keys (Space/K, arrows, M, F, C, I, Esc). They work while the controls are hidden because they listen on the
+ * Player keys (Space/K, arrows, M, F, C, I, P, Esc). They work while the controls are hidden because they listen on the
  * document. Space is swallowed on key up as well, so a focused button is not also "clicked" by the same press.
  */
 export function useShortcuts(handlers: ShortcutHandlers): void {
@@ -61,7 +73,7 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
 
   useEffect(() => {
     const run = (shortcut: Shortcut) => {
-      const { actions, toggleSubtitles, toggleInfo, escape } = ref.current;
+      const { actions, toggleSubtitles, toggleInfo, miniPlayer, escape } = ref.current;
       const table: Record<Shortcut, () => void> = {
         togglePlay: actions.togglePlay,
         skipBack: () => actions.skip(-SKIP_BACK_SEC),
@@ -72,6 +84,7 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
         fullscreen: actions.toggleFullscreen,
         subtitles: toggleSubtitles,
         info: toggleInfo,
+        miniPlayer: () => miniPlayer?.(),
         escape,
       };
       table[shortcut]();
@@ -79,7 +92,7 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || typesText(event.target)) return;
       const shortcut = shortcutFor(event);
-      if (!shortcut) return;
+      if (!shortcut || (shortcut === 'miniPlayer' && !ref.current.miniPlayer)) return;
       event.preventDefault();
       if (event.repeat && NO_REPEAT.has(shortcut)) return;
       run(shortcut);

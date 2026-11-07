@@ -1,25 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent } from 'react';
 import { infoQuery } from '../api/queries';
 import { Badge } from '../components/Badge';
 import { ErrorPanel } from '../components/ErrorPanel';
 import { describePlaybackProfile, deviceKind, getDeviceName, registerDevice, setDeviceName } from '../device/identity';
 import { useContentShown } from '../lib/useContentShown';
+import { AboutDesktopRow, DesktopSettings } from '../desktop/DesktopSettings';
+import { Row } from './SettingsRow';
 import styles from './SettingsPage.module.css';
 
 type SaveState = 'idle' | 'saved' | 'local-only';
-
-function Row({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
-  return (
-    <div className={styles.row}>
-      <div className={styles.label}>
-        <span>{label}</span>
-        {help ? <span className={styles.help}>{help}</span> : null}
-      </div>
-      <div className={styles.value}>{children}</div>
-    </div>
-  );
-}
 
 function ThisDevice() {
   const [name, setName] = useState(getDeviceName);
@@ -79,6 +69,7 @@ function About() {
       ) : null}
       {data ? (
         <div className={styles.card}>
+          <AboutDesktopRow />
           <Row label="Server name">{data.name}</Row>
           <Row label="Version">
             <span className="tabular">{data.version}</span>
@@ -123,6 +114,7 @@ export default function SettingsPage() {
     <main className={styles.page}>
       <h1 className={styles.title}>Settings</h1>
       <ThisDevice />
+      <DesktopSettings />
       <About />
     </main>
   );

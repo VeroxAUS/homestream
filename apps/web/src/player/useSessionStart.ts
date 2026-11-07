@@ -17,15 +17,17 @@ export interface StartAttempt {
 
 /**
  * Starts a session for the title (`streamId: "auto"`, no subtitle field) and reports loading, ready, downloading
- * (HTTP 202) or the error. A session that arrives after the player was left is stopped at once.
+ * (HTTP 202) or the error. A session that arrives after the player was left is stopped at once. While enabled is false
+ * (the desktop player is waiting for a hand-over) nothing is requested.
  */
-export function useSessionStart(target: PlayTarget, attempt: StartAttempt): StartState {
+export function useSessionStart(target: PlayTarget, attempt: StartAttempt, enabled = true): StartState {
   const [state, setState] = useState<StartState>({ status: 'loading' });
   const { mediaType, tmdbId, season, episode } = target;
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
+    if (!enabled) return;
     // A microtask, so React's development remount (setup, cleanup, setup) sends one request, not two.
     queueMicrotask(() => {
       if (cancelled) return;
@@ -57,7 +59,7 @@ export function useSessionStart(target: PlayTarget, attempt: StartAttempt): Star
     return () => {
       cancelled = true;
     };
-  }, [mediaType, tmdbId, season, episode, attempt.n, attempt.startSec]);
+  }, [mediaType, tmdbId, season, episode, attempt.n, attempt.startSec, enabled]);
 
   return state;
 }

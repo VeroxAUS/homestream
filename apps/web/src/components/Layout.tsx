@@ -1,5 +1,7 @@
 import { Suspense, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router';
+import { AppKeys } from '../desktop/AppKeys';
+import { UnreachableBanner } from '../desktop/UnreachableBanner';
 import { DownloadNotices } from '../notices/DownloadNotices';
 import { ToastHost } from '../notices/ToastHost';
 import { usePageView } from '../telemetry/usePageView';
@@ -26,9 +28,11 @@ export function Layout() {
   return (
     <>
       {inPlayer ? null : <Nav />}
+      {inPlayer ? null : <UnreachableBanner />}
       <Suspense fallback={<div className={inPlayer ? styles.playerFallback : styles.fallback} aria-busy="true" />}>
         <Outlet />
       </Suspense>
+      <AppKeys />
       <DownloadNotices />
       <ToastHost />
     </>

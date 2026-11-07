@@ -1,6 +1,6 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export interface LoggerSink {
+interface LoggerSink {
   write(line: string): void;
 }
 

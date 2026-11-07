@@ -1,3 +1,4 @@
+import type { HomestreamBridge } from '@homestream/shared';
 import type { RawTelemetryConfig } from './telemetry/config';
 
 declare global {
@@ -5,7 +6,7 @@ declare global {
   const HS_TELEMETRY: RawTelemetryConfig;
 
   interface Window {
-    /** Set by the Electron preload; absent in a browser. */
-    homestream?: { isDesktop?: boolean };
+    /** Set by the Electron preload (see desktopBridge()); absent in a browser. */
+    homestream?: Partial<Omit<HomestreamBridge, 'isDesktop'>> & { isDesktop?: boolean };
   }
 }
