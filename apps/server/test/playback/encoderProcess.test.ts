@@ -1,6 +1,6 @@
 // Runs `node` children in place of ffmpeg: no ffmpeg process starts and the GPU is not touched.
-import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_STOP_GRACE_MS, EncoderProcess } from '../../src/playback/encoderProcess.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_STOP_GRACE_MS, DISCARD_GRACE_MS, EncoderProcess } from '../../src/playback/encoderProcess.js';
 
 const started: EncoderProcess[] = [];
 
@@ -76,5 +76,67 @@ describe('EncoderProcess.stop', () => {
     await proc.exited;
 
     await expect(proc.stop({ graceMs: 0 })).resolves.toBeUndefined();
+  });
+});
+
+describe('EncoderProcess discard stop', () => {
+  it('uses a one second grace', () => {
+    expect(DISCARD_GRACE_MS).toBe(1000);
+  });
+
+  it('cuts the input, then lets a process that honours q exit without a kill', async () => {
+    const proc = spawnNode(QUITS_ON_Q);
+    await whenReady(proc);
+    const cutInput = vi.fn();
+    const startedAt = Date.now();
+
+    await proc.stop({ graceMs: DISCARD_GRACE_MS, cutInput });
+
+    const exit = await proc.exited;
+    expect(cutInput).toHaveBeenCalledTimes(1);
+    expect(exit.code).toBe(0);
+    expect(exit.killed).toBeFalsy();
+    expect(Date.now() - startedAt).toBeLessThan(DISCARD_GRACE_MS);
+  });
+
+  it('kills a process that ignores q once the one second grace has passed, not earlier', async () => {
+    const proc = spawnNode(IGNORES_Q);
+    await whenReady(proc);
+    const cutInput = vi.fn();
+    const startedAt = Date.now();
+
+    await proc.stop({ graceMs: DISCARD_GRACE_MS, cutInput });
+
+    const elapsed = Date.now() - startedAt;
+    const exit = await proc.exited;
+    expect(cutInput).toHaveBeenCalledTimes(1);
+    expect(exit.killed).toBe(true);
+    expect(proc.running).toBe(false);
+    expect(elapsed).toBeGreaterThanOrEqual(DISCARD_GRACE_MS - 50);
+    expect(elapsed).toBeLessThan(DEFAULT_STOP_GRACE_MS);
+  });
+
+  it('still stops when cutting the input throws', async () => {
+    const proc = spawnNode(QUITS_ON_Q);
+    await whenReady(proc);
+
+    await proc.stop({
+      graceMs: DISCARD_GRACE_MS,
+      cutInput: () => {
+        throw new Error('proxy gone');
+      },
+    });
+
+    expect((await proc.exited).code).toBe(0);
+  });
+
+  it('does not cut the input of a process that already exited', async () => {
+    const proc = spawnNode('process.exit(0)');
+    await proc.exited;
+    const cutInput = vi.fn();
+
+    await proc.stop({ graceMs: DISCARD_GRACE_MS, cutInput });
+
+    expect(cutInput).not.toHaveBeenCalled();
   });
 });

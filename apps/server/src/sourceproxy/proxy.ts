@@ -9,6 +9,7 @@ import type { ReadAheadState } from '../network/readAhead.js';
 import type { ProbeResult, ProbeRunner } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
 import { BlockCache, GLOBAL_CAP_BYTES, PER_SOURCE_CAP_BYTES, type BlockCacheStats } from './blockCache.js';
+import { InputCuts } from './inputCuts.js';
 import { newCounters, serveSource, type ProxyCounters } from './serve.js';
 import { PREFETCH_OWNER, SourceEntry, type Consumer, type ReaderRef } from './sourceEntry.js';
 import { UpstreamClient } from './upstream.js';
@@ -56,8 +57,10 @@ export interface SourceHandle {
   setExtractorHold(runId: number, held: boolean): void;
   /** Seconds of encoded video ahead of the player; the encoder's reads stop at the read-ahead window and resume below the resume lead. */
   setLead(leadSec: number): void;
-  /** Encoder start, seek or restart: the window is measured from here again. */
+  /** Encoder start, seek or restart: the window is measured from here again, and an input cut by `cutEncoderInput` reopens. */
   resetReadAhead(): void;
+  /** Tears down this owner's encoder reads and refuses new ones, so an encoder being discarded is not blocked on a read. */
+  cutEncoderInput(): void;
   readonly readAhead: ReadAheadState;
   /** Settles when the head of the file has been downloaded (or the download stopped). */
   readonly headReady: Promise<void>;
@@ -103,6 +106,7 @@ export class SourceProxy {
   private readonly gate: DownloadGate;
   private readonly upstream = new UpstreamClient();
   private readonly counters = newCounters();
+  private readonly cuts = new InputCuts();
   private readonly server: http.Server;
   private listening: Promise<number> | null = null;
   private sweeper: NodeJS.Timeout | null = null;
@@ -269,7 +273,12 @@ export class SourceProxy {
         if (!released) entry.setLead(owner, leadSec);
       },
       resetReadAhead: () => {
-        if (!released) entry.resetReadAhead(owner);
+        if (released) return;
+        this.cuts.reopen(token);
+        entry.resetReadAhead(owner);
+      },
+      cutEncoderInput: () => {
+        if (!released) this.cuts.cutOff(token);
       },
       get readAhead() {
         return entry.readAheadOf(owner);
@@ -301,6 +310,7 @@ export class SourceProxy {
       release: () => {
         if (released) return;
         released = true;
+        this.cuts.reopen(token);
         entry.refs.delete(owner);
         entry.forgetOwner(owner);
         if (entry.refs.size === 0) this.drop(entry);
@@ -356,6 +366,11 @@ export class SourceProxy {
       owner: token ? target.entry.ownerOf(token) : null,
       runId: run ? Number(run[1]) : null,
     };
+    const encoderToken = target.consumer === 'main' && reader.owner !== null ? token : undefined;
+    if (encoderToken) {
+      if (this.cuts.isCut(encoderToken)) return fail(503);
+      this.cuts.track(encoderToken, res);
+    }
     try {
       await serveSource(req, res, target.entry, reader, this.cache, this.counters);
     } catch {

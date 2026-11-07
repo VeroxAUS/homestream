@@ -10,6 +10,8 @@ export interface EncoderExit {
   stderrTail: string;
   /** Set when the memory watchdog stopped the process. */
   memoryLimit?: MemoryLimitHit;
+  /** Set when the process did not quit on `q` in time and its process tree was killed. */
+  killed?: boolean;
 }
 
 export interface EncoderProcessOptions {
@@ -26,16 +28,19 @@ export interface EncoderProcessOptions {
 export interface StopOptions {
   /** How long ffmpeg may take to quit after `q` before its process tree is killed; 0 kills at once without sending `q`. */
   graceMs?: number;
+  /** Runs first, before `q`: ends the encoder's input so ffmpeg is not blocked on a read when it should quit. */
+  cutInput?: () => void;
 }
 
 /** Ends of sessions and shutdown let ffmpeg finish its segment and release the GPU cleanly. */
 export const DEFAULT_STOP_GRACE_MS = 3000;
 
 /**
- * For a run whose output is thrown away (track switch, seek restart): nothing is worth waiting for.
- * Segments are written through temp files (`hls_flags temp_file`), so a kill leaves no torn segment.
+ * For a run whose output is thrown away (track switch, seek restart, abandoned start): with its input cut ffmpeg
+ * quits within moments, so a second is plenty before the tree kill. A force-kill of a busy NVENC encoder is what
+ * the 2026-11-05 driver error followed, so the grace is short but never zero.
  */
-export const DISCARD_STOP: StopOptions = { graceMs: 0 };
+export const DISCARD_GRACE_MS = 1000;
 
 /** What the session manager needs from an encoder; tests substitute fakes so no ffmpeg runs. */
 export interface EncoderHandle {
@@ -70,6 +75,7 @@ export class EncoderProcess implements EncoderHandle {
   private readonly child: ChildProcess;
   private done = false;
   private memoryLimit: MemoryLimitHit | undefined;
+  private killed = false;
 
   constructor(options: EncoderProcessOptions) {
     const parser = new ProgressParser();
@@ -106,7 +112,7 @@ export class EncoderProcess implements EncoderHandle {
       this.child.once('close', (code, signal) => {
         this.done = true;
         unwatch?.();
-        resolve({ code, signal, stderrTail: stderr.trim(), memoryLimit: this.memoryLimit });
+        resolve({ code, signal, stderrTail: stderr.trim(), memoryLimit: this.memoryLimit, killed: this.killed });
       });
     });
   }
@@ -125,8 +131,13 @@ export class EncoderProcess implements EncoderHandle {
     return !this.done;
   }
 
-  async stop({ graceMs = DEFAULT_STOP_GRACE_MS }: StopOptions = {}): Promise<void> {
+  async stop({ graceMs = DEFAULT_STOP_GRACE_MS, cutInput }: StopOptions = {}): Promise<void> {
     if (this.done) return;
+    try {
+      cutInput?.();
+    } catch {
+      // a failing cut must not keep the process running
+    }
     if (graceMs > 0) {
       try {
         this.child.stdin?.write('q\n');
@@ -137,6 +148,8 @@ export class EncoderProcess implements EncoderHandle {
       const timer = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), graceMs).unref());
       if ((await Promise.race([this.exited, timer])) !== 'timeout') return;
     }
+    if (this.done) return;
+    this.killed = true;
     if (this.pid !== undefined) await killTree(this.pid);
     await Promise.race([this.exited, new Promise((resolve) => setTimeout(resolve, 5000).unref())]);
   }

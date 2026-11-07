@@ -134,6 +134,50 @@ describe('encoder crash after the start', () => {
     await rig.start('desktop');
     expect(rig.spawned[2]?.args.join(' ')).toContain('tonemap_opencl');
   });
+
+  describe('HLG source on an HDR10 device', () => {
+    const VULKAN_ERROR = '[vf#0:0] Error initializing filter libplacebo: Failed to create Vulkan device (-12)';
+    const argsOf = (index: number) => rig.spawned[index]?.args.join(' ') ?? '';
+
+    it('falls back from the libplacebo HLG-to-PQ chain to zscale once, for later sessions too, with no second fallback', async () => {
+      rig = await bootRig({ probe: probeOf({}, 'hlg') });
+      const session = await rig.start('chromecast4k');
+      expect(argsOf(0)).toContain('libplacebo=');
+      expect(argsOf(0)).toContain('vulkan');
+      expect(argsOf(0)).not.toContain('zscale');
+      rmSync(path.join(rig.dir(session.sessionId), 'seg-0.m4s'), { force: true });
+
+      rig.encoders.handles[0]?.crash(VULKAN_ERROR);
+      await until(() => rig.spawned.length === 2);
+      expect(argsOf(1)).toContain('zscale=');
+      expect(argsOf(1)).toContain('tin=arib-std-b67:t=smpte2084');
+      expect(argsOf(1)).not.toContain('libplacebo');
+      expect(argsOf(1)).not.toContain('vulkan');
+      expect(rig.playback.get(session.sessionId).state).not.toBe('error');
+
+      rig.encoders.handles[1]?.crash('zscale failed');
+      await until(() => rig.playback.get(session.sessionId).state === 'error');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(rig.spawned).toHaveLength(2);
+
+      await rig.playback.stop(session.sessionId);
+      await rig.start('chromecast4k');
+      expect(argsOf(2)).toContain('zscale=');
+      expect(argsOf(2)).not.toContain('libplacebo');
+    });
+
+    it('keeps libplacebo for the retry when the first run already produced its first segment', async () => {
+      rig = await bootRig({ probe: probeOf({}, 'hlg') });
+      const session = await rig.start('chromecast4k');
+
+      rig.encoders.handles[0]?.crash(VULKAN_ERROR);
+      await until(() => rig.spawned.length === 2);
+
+      expect(argsOf(1)).toContain('libplacebo=');
+      expect(argsOf(1)).not.toContain('zscale');
+      await rig.playback.stop(session.sessionId);
+    });
+  });
 });
 
 describe('memory watchdog', () => {

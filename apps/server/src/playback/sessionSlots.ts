@@ -1,6 +1,7 @@
 import { finalizePlay, deletePlay } from '../db/plays.js';
 import { AppError } from '../errors.js';
 import type { LogEventInput } from '../events/record.js';
+import { stopDiscarded } from './discardStop.js';
 import type { FallingBehindWatch } from './fallingBehind.js';
 import { toActivitySession, type SessionRecord } from './session.js';
 import { endStats, notFound, scrub, subjectOf, type PlaybackManagerOptions, type StopReason } from './support.js';
@@ -141,7 +142,15 @@ export class SessionSlots {
     this.sessions.delete(rec.id);
     this.host.fallingBehind.forget(rec.id);
     await rec.restart?.catch(() => undefined);
-    await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
+    await Promise.all([
+      stopDiscarded(rec.process, {
+        sessionId: rec.id,
+        reason: 'abandon',
+        logger: this.host.options.logger,
+        source: rec.source,
+      }),
+      rec.subtitles?.stop(),
+    ]);
     rec.source.release();
     await this.host.removeDir(rec.dir);
     if (failure) this.recordStartFailure(rec, failure);

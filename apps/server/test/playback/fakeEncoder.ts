@@ -1,10 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type {
-  EncoderExit,
-  EncoderHandle,
-  EncoderProcessOptions,
-  StopOptions,
+import {
+  DEFAULT_STOP_GRACE_MS,
+  type EncoderExit,
+  type EncoderHandle,
+  type EncoderProcessOptions,
+  type StopOptions,
 } from '../../src/playback/encoderProcess.js';
 
 /** `run`: writes the first segment and keeps running. `fail`: exits with code 1 at once. `hang`: neither. */
@@ -29,13 +30,35 @@ export class FakeEncoder implements EncoderHandle {
   /** The options of every `stop()` call, in order, so tests can see how long each path was willing to wait. */
   readonly stopCalls: Array<StopOptions | undefined> = [];
 
-  stop(options?: StopOptions): Promise<void> {
+  /** What a stop did, in order: `cut` (input cut), `q` (asked to quit), `kill` (tree kill after the grace). */
+  readonly order: Array<'cut' | 'q' | 'kill'> = [];
+  /** Real time the encoder was allowed before a kill, per stop that ended in one. */
+  readonly killedAfterMs: number[] = [];
+  private ignoresQ = false;
+
+  /** Like an ffmpeg that is stuck: it only dies to the kill that follows the grace. */
+  ignoreQ(): void {
+    this.ignoresQ = true;
+  }
+
+  async stop(options?: StopOptions): Promise<void> {
     this.stopCalls.push(options);
-    if (!this.gate) {
-      this.end(0);
-      return Promise.resolve();
+    if (!this.running) return;
+    if (options?.cutInput) {
+      this.order.push('cut');
+      options.cutInput();
     }
-    return this.gate.then(() => this.end(0));
+    const grace = options?.graceMs ?? DEFAULT_STOP_GRACE_MS;
+    if (grace > 0) this.order.push('q');
+    if (this.gate) await this.gate;
+    if (this.ignoresQ) {
+      await new Promise((resolve) => setTimeout(resolve, grace));
+      this.order.push('kill');
+      this.killedAfterMs.push(grace);
+      this.end(1, true);
+      return;
+    }
+    this.end(0);
   }
 
   /** The next `stop()` does not finish until the returned function is called, like an ffmpeg that is slow to quit. */
@@ -48,14 +71,17 @@ export class FakeEncoder implements EncoderHandle {
   }
 
   /** Dies on its own with a failure exit code, as an ffmpeg that hit an error would. */
-  crash(): void {
+  crash(stderrTail = 'fake encoder'): void {
+    this.stderrTail = stderrTail;
     this.end(1);
   }
 
-  private end(code: number): void {
+  private stderrTail = 'fake encoder';
+
+  private end(code: number, killed = false): void {
     if (!this.running) return;
     this.running = false;
-    this.finish({ code, signal: null, stderrTail: 'fake encoder' });
+    this.finish({ code, signal: null, stderrTail: this.stderrTail, killed });
   }
 }
 

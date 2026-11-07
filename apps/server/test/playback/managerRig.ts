@@ -20,7 +20,7 @@ export const TEXT_TRACK: SubtitleTrackInfo = {
   default: false,
 };
 
-export function probeOf(overrides: Partial<ProbeResult> = {}, hdr: 'sdr' | 'hdr10' = 'sdr'): ProbeResult {
+export function probeOf(overrides: Partial<ProbeResult> = {}, hdr: 'sdr' | 'hdr10' | 'hlg' = 'sdr'): ProbeResult {
   return {
     durationSec: 1200,
     video: {
@@ -62,6 +62,7 @@ export interface RigOptions {
   probe?: ProbeResult;
   env?: Record<string, string>;
   playback?: HarnessOptions['playback'];
+  logger?: HarnessOptions['logger'];
 }
 
 /** The `-start_number` an encoder was started with. */
@@ -78,6 +79,7 @@ export async function bootRig(options: RigOptions = {}): Promise<Rig> {
     root: makeTempDir('inst'),
     sources: { movie: { filename: 'Movie.1994.1080p.WEB-DL.x264.mkv', path: path.join(root, 'absent.mkv') } },
     probe: async () => probe,
+    logger: options.logger,
     env: { FFMPEG_PATH: path.join(root, 'no-such-ffmpeg.exe'), ...options.env },
     playback: {
       createEncoder: (encoderOptions) => {

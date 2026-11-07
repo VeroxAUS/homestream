@@ -3,7 +3,7 @@ import path from 'node:path';
 import { finalizePlay } from '../db/plays.js';
 import type { PlaybackContext } from './context.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
-import { DISCARD_STOP } from './encoderProcess.js';
+import { stopDiscarded, type DiscardReason } from './discardStop.js';
 import { needsHlgToPq } from './decision.js';
 import { describeMemoryLimitHit, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SEGMENT_SECONDS } from './playlist.js';
@@ -117,7 +117,7 @@ export class Recovery {
     const previous = rec.process;
     rec.generation += 1;
     this.ctx.options.observer?.restarted('tracks');
-    await previous?.stop(DISCARD_STOP);
+    await this.discard(rec, previous, 'tracks');
     if (rec.stopping) return;
     for (const name of await readdir(rec.dir).catch(() => [] as string[])) {
       if (/^seg-\d+\.(?:ts|m4s)$/.test(name) || name === 'init-ready.mp4') {
@@ -147,10 +147,19 @@ export class Recovery {
     // The player is at the segment it asked for; its last ping (up to 10 s old) still names the position it jumped from.
     rec.positionSec = index * SEGMENT_SECONDS;
     rec.subtitles?.noteSeek(rec.positionSec);
-    await previous?.stop(DISCARD_STOP);
+    await this.discard(rec, previous, 'seek');
     if (rec.stopping) return;
     rec.retried = false;
     this.encoder.launch(rec, index);
+  }
+
+  private discard(rec: SessionRecord, previous: SessionRecord['process'], reason: DiscardReason): Promise<void> {
+    return stopDiscarded(previous, {
+      sessionId: rec.id,
+      reason,
+      logger: this.ctx.options.logger,
+      source: rec.source,
+    });
   }
 
   private async fail(rec: SessionRecord, code: number | null, stderrTail: string): Promise<void> {
