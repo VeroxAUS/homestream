@@ -259,6 +259,32 @@ describe('automatic start with fallback', () => {
     expect(resolved).toEqual([1, 2]);
   });
 
+  it('starts with the known 1440p stream, not the unknown one, for cached [2160p, 1440p, unknown] on a 1080p device', async () => {
+    const { harness, resolved } = await boot({
+      names: ['2160p.WEB-DL.x265-A', '1440p.WEB-DL.x264-B', 'WEB-DL.x264-C'],
+    });
+    const res = await post(harness, 'auto', 'emulator');
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ streamId: harness.streamIds.s1, attempts: [] });
+    expect(resolved).toEqual([1]);
+  });
+
+  it('keeps the unknown stream as the last fallback, after every known candidate failed', async () => {
+    const { harness, resolved } = await boot({
+      names: ['2160p.WEB-DL.x265-A', '1440p.WEB-DL.x264-B', 'WEB-DL.x264-C'],
+      resolveFails: { 0: notCached, 1: notCached },
+    });
+    const res = await post(harness, 'auto', 'emulator');
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as SessionResponse;
+    expect(body.streamId).toBe(harness.streamIds.s2);
+    expect(body.attempts).toEqual([
+      { streamId: harness.streamIds.s1, code: 'stream_not_cached' },
+      { streamId: harness.streamIds.s0, code: 'stream_not_cached' },
+    ]);
+    expect(resolved).toEqual([1, 0, 2]);
+  });
+
   it('does not fall back for a bad audio track request', async () => {
     const { harness, resolved, encoders } = await boot({ names: SAME });
     const res = await harness.app.inject({

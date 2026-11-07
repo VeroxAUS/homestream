@@ -95,16 +95,35 @@ describe('rankStreams', () => {
 describe('deviceMaxRank', () => {
   it.each([
     [3840, 2160, 5],
+    [3840, 1440, 5],
+    [3840, 1080, 5],
+    [4096, 1716, 5],
     [2560, 1440, 4],
-    [1920, 1440, 3],
-    [3840, 1440, 4],
+    [2560, 1080, 4],
+    [3200, 1440, 4],
+    [1920, 1440, 4],
     [1920, 1080, 3],
+    [2400, 1080, 3],
+    [1920, 720, 3],
     [1280, 720, 2],
+    [1280, 544, 2],
+    [1024, 720, 2],
     [854, 480, 1],
-    [1920, 720, 2],
-    [3840, 1080, 3],
+    [640, 360, 1],
   ])('%ix%i -> rank %i', (maxWidth, maxHeight, rank) => {
     expect(deviceMaxRank({ maxWidth, maxHeight })).toBe(rank);
+  });
+
+  it.each([
+    [1080, 2400, 3],
+    [1440, 3200, 4],
+    [1440, 3840, 5],
+    [2160, 3840, 5],
+    [720, 1280, 2],
+    [1440, 1920, 4],
+  ])('a portrait %ix%i profile gives the same rank as its landscape form (%i)', (maxWidth, maxHeight, rank) => {
+    expect(deviceMaxRank({ maxWidth, maxHeight })).toBe(rank);
+    expect(deviceMaxRank({ maxWidth: maxHeight, maxHeight: maxWidth })).toBe(rank);
   });
 });
 
@@ -120,8 +139,13 @@ describe('startCandidates', () => {
   it('lists cached device-fitting streams in rank order, capped at the limit', () => {
     expect(ids(startCandidates(ranked, 5, 3).streams)).toEqual(ids([w2160, r2160, w1080]));
     expect(ids(startCandidates(ranked, 3, 3).streams)).toEqual(ids([w1080, b1080, w720]));
-    expect(ids(startCandidates(ranked, 2, 5).streams)).toEqual(ids([w720, u]));
     expect(ids(startCandidates(ranked, null, 2).streams)).toEqual(ids([w2160, r2160]));
+  });
+
+  it('follows with the known streams above the device, lowest tier first, and unknown last', () => {
+    expect(ids(startCandidates(ranked, 2, 9).streams)).toEqual(ids([w720, w1080, b1080, w2160, r2160, u]));
+    expect(ids(startCandidates(ranked, 1, 9).streams)).toEqual(ids([w720, w1080, b1080, w2160, r2160, u]));
+    expect(ids(startCandidates(ranked, 5, 9).streams)).toEqual(ids([w2160, r2160, w1080, b1080, w720, u]));
   });
 
   it('starts with the recommended stream', () => {
@@ -132,7 +156,19 @@ describe('startCandidates', () => {
 
   it('falls back to the lowest resolution when nothing fits', () => {
     const only = [w2160, r2160, w1080];
-    expect(ids(startCandidates(only, 2, 3).streams)).toEqual(ids([w1080]));
+    expect(ids(startCandidates(only, 2, 3).streams)).toEqual(ids([w1080, w2160, r2160]));
+    expect(ids(startCandidates(only, 2, 1).streams)).toEqual(ids([w1080]));
+  });
+
+  it('keeps an unknown stream out of the first slot while any known cached stream exists', () => {
+    const k2160 = opt({ resolution: '2160p' });
+    const k1440 = opt({ resolution: '1440p' });
+    const unknown = opt({ resolution: 'unknown' });
+    const list = [k2160, k1440, unknown];
+    expect(ids(startCandidates(list, 3, 3).streams)).toEqual(ids([k1440, k2160, unknown]));
+    expect(ids(startCandidates(list, 3, 2).streams)).toEqual(ids([k1440, k2160]));
+    expect(ids(startCandidates(list, null, 3).streams)).toEqual(ids([k2160, k1440, unknown]));
+    expect(ids(startCandidates([unknown], 3, 3).streams)).toEqual(ids([unknown]));
   });
 
   it('offers only the recommended stream when nothing is cached', () => {
@@ -171,8 +207,12 @@ describe('recommendStream', () => {
     expect(recommendStream([s2160, first1080, second1080], 1)?.id).toBe(first1080.id);
   });
 
-  it('treats unknown resolution as fitting any device', () => {
-    expect(recommendStream([s2160, sUnknown], 2)?.id).toBe(sUnknown.id);
+  it('never lets unknown resolution beat a known stream, even one above the device', () => {
+    expect(recommendStream([s2160, sUnknown], 2)?.id).toBe(s2160.id);
+    expect(recommendStream([sUnknown, s2160], 2)?.id).toBe(s2160.id);
+    expect(recommendStream([sUnknown, s2160], null)?.id).toBe(s2160.id);
+    expect(recommendStream([sUnknown], 2)?.id).toBe(sUnknown.id);
+    expect(recommendStream([sUnknown], null)?.id).toBe(sUnknown.id);
   });
 
   it('returns null for an empty list', () => {
@@ -212,6 +252,9 @@ describe('1440p tier', () => {
       expect(recommendStream(ranked, device)?.id).toBe(lowest.id);
       expect(startCandidates(ranked, device, 5).streams.map((item) => item.resolution)).toEqual([
         lowest.resolution,
+        '1080p',
+        '1440p',
+        '2160p',
         'unknown',
       ]);
     }
@@ -225,6 +268,20 @@ describe('1440p tier', () => {
 
   it('falls back to 1440p, not 2160p, when a 1080p device has nothing lower', () => {
     expect(recommendStream(rankStreams([s2160, s1440]), 3)?.id).toBe(s1440.id);
-    expect(startCandidates(rankStreams([s2160, s1440]), 3, 3).streams.map((item) => item.id)).toEqual([s1440.id]);
+    expect(startCandidates(rankStreams([s2160, s1440]), 3, 3).streams.map((item) => item.id)).toEqual([
+      s1440.id,
+      s2160.id,
+    ]);
+  });
+
+  it('picks 1440p, then 2160p, then unknown for cached [2160p, 1440p, unknown] on a 1080p device', () => {
+    const ranked = rankStreams([s2160, s1440, sUnknown]);
+    const device = deviceMaxRank({ maxWidth: 1920, maxHeight: 1080 });
+    expect(recommendStream(ranked, device)?.id).toBe(s1440.id);
+    expect(startCandidates(ranked, device, 3).streams.map((item) => item.id)).toEqual([
+      s1440.id,
+      s2160.id,
+      sUnknown.id,
+    ]);
   });
 });

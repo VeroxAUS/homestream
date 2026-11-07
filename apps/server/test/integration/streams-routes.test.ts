@@ -207,6 +207,74 @@ describe('recommendedId when nothing fits', () => {
   });
 });
 
+describe('recommendedId with an unknown-resolution stream', () => {
+  const FILES: Array<[string, boolean]> = [
+    ['A.2024.2160p.WEB-DL.x265-GRP.mkv', true],
+    ['A.2024.1440p.WEB-DL.x264-GRP.mkv', true],
+    ['A.2024.WEB-DL.x264-GRP.mkv', true],
+  ];
+
+  async function recommendedFor(name?: string): Promise<{ resolution: string; order: string[] }> {
+    const deviceId = name ? await registerDevice(name) : undefined;
+    const { body } = await getStreams(`/api/streams/movie/278${deviceId ? `?deviceId=${deviceId}` : ''}`);
+    const found = body.streams.find((s) => s.id === body.recommendedId);
+    return { resolution: found?.resolution ?? 'none', order: body.streams.map((s) => s.resolution) };
+  }
+
+  it('recommends the known 1440p stream, not the unknown one, on a 1080p device', async () => {
+    await boot(() => ({ body: { streams: streamsFor(FILES) } }));
+    expect(await recommendedFor('emulator')).toEqual({ resolution: '1440p', order: ['2160p', '1440p', 'unknown'] });
+  });
+
+  it('recommends a known stream for every device and for no device', async () => {
+    await boot(() => ({ body: { streams: streamsFor(FILES) } }));
+    expect((await recommendedFor('p720')).resolution).toBe('1440p');
+    expect((await recommendedFor('chromecast4k')).resolution).toBe('2160p');
+    expect((await recommendedFor()).resolution).toBe('2160p');
+  });
+
+  it('recommends the unknown stream only when it is the only one', async () => {
+    await boot(() => ({ body: { streams: streamsFor(FILES.slice(2)) } }));
+    expect((await recommendedFor('emulator')).resolution).toBe('unknown');
+  });
+});
+
+describe('recommendedId and the device dimensions', () => {
+  const FILES: Array<[string, boolean]> = [
+    ['A.2024.2160p.WEB-DL.x265-GRP.mkv', true],
+    ['A.2024.1440p.WEB-DL.x264-GRP.mkv', true],
+    ['A.2024.1080p.WEB-DL.x264-GRP.mkv', true],
+  ];
+
+  it.each([
+    ['sq1440', 1920, 1440, '1440p'],
+    ['wide1440', 3840, 1440, '2160p'],
+    ['phone', 1080, 2400, '1080p'],
+    ['qhd', 3200, 1440, '1440p'],
+  ])('%s (%ix%i) gets the %s stream', async (name, maxWidth, maxHeight, resolution) => {
+    await boot(() => ({ body: { streams: streamsFor(FILES) } }));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/devices',
+      payload: {
+        deviceId: `dev-${name}`,
+        deviceName: name,
+        kind: 'tv',
+        maxWidth,
+        maxHeight,
+        h264: true,
+        hevc: false,
+        hevcMain10: false,
+        hdr10: false,
+        maxAudioChannels: 2,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const { body } = await getStreams(`/api/streams/movie/278?deviceId=dev-${name}`);
+    expect(body.streams.find((s) => s.id === body.recommendedId)?.resolution).toBe(resolution);
+  });
+});
+
 describe('uncached-only and empty gateway results', () => {
   it('returns uncached streams flagged when nothing is cached', async () => {
     await boot(() => ({

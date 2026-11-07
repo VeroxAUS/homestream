@@ -41,21 +41,42 @@ export function rankStreams(options: StreamOption[]): StreamOption[] {
     .map(({ option }) => option);
 }
 
-/** Rank (5 down to 1) of the first threshold the size reaches; thresholds are the 2160p, 1440p, 1080p and 720p minimums. */
-function tier(size: number, thresholds: readonly number[]): number {
-  const index = thresholds.findIndex((minimum) => size >= minimum);
+/** Minimum [short side, long side] of the 2160p, 1440p, 1080p and 720p tiers; reaching either one qualifies. */
+const TIER_MINIMUMS: ReadonlyArray<readonly [number, number]> = [
+  [2160, 3840],
+  [1440, 2560],
+  [1080, 1920],
+  [720, 1280],
+];
+
+/**
+ * Highest resolution tier (5 down to 1) a device can show, from its reported maximum display size.
+ * The sides are compared as long and short, so a portrait profile gives the same tier as its landscape form.
+ */
+export function deviceMaxRank(profile: Pick<CapabilityProfile, 'maxWidth' | 'maxHeight'>): number {
+  const long = Math.max(profile.maxWidth, profile.maxHeight);
+  const short = Math.min(profile.maxWidth, profile.maxHeight);
+  const index = TIER_MINIMUMS.findIndex(([shortMinimum, longMinimum]) => short >= shortMinimum || long >= longMinimum);
   return index === -1 ? 1 : 5 - index;
 }
 
-/** Highest resolution tier a device can show, from its reported maximum display size. */
-export function deviceMaxRank(profile: Pick<CapabilityProfile, 'maxWidth' | 'maxHeight'>): number {
-  return Math.min(tier(profile.maxHeight, [2160, 1440, 1080, 720]), tier(profile.maxWidth, [3840, 2560, 1920, 1280]));
+/**
+ * Streams in the order a device should try them: known resolutions that fit (ranked order), then known resolutions
+ * above the device, lowest tier first (ranked order within a tier), then unknown resolution. Unknown never counts as fitting.
+ */
+function deviceOrder(ranked: StreamOption[], maxRank: number | null): StreamOption[] {
+  const rank = (option: StreamOption) => RESOLUTION_RANK[option.resolution];
+  const known = ranked.filter((option) => rank(option) > 0);
+  const unknown = ranked.filter((option) => rank(option) === 0);
+  if (maxRank === null) return [...known, ...unknown];
+  const fitting = known.filter((option) => rank(option) <= maxRank);
+  const above = known.filter((option) => rank(option) > maxRank).sort((a, b) => rank(a) - rank(b));
+  return [...fitting, ...above, ...unknown];
 }
 
 /**
- * Streams an automatic start may try, best first: the cached ones that fit the device (unknown resolution always fits).
- * When none fits, the first-ranked cached streams of the lowest resolution. When nothing is cached, only the recommended
- * stream (an uncached one is never retried).
+ * Streams an automatic start may try, best first (see `deviceOrder`), at most `limit`. Uncached streams are never
+ * candidates: when nothing is cached, only the recommended stream (an uncached one is never retried).
  */
 export function startCandidates(
   ranked: StreamOption[],
@@ -67,24 +88,10 @@ export function startCandidates(
     const first = recommendStream(ranked, maxRank);
     return { streams: first ? [first] : [], cached: false };
   }
-  const fitting = maxRank === null ? cached : cached.filter((option) => RESOLUTION_RANK[option.resolution] <= maxRank);
-  if (fitting.length > 0) return { streams: fitting.slice(0, limit), cached: true };
-  const lowest = Math.min(...cached.map((option) => RESOLUTION_RANK[option.resolution]));
-  return {
-    streams: cached.filter((option) => RESOLUTION_RANK[option.resolution] === lowest).slice(0, limit),
-    cached: true,
-  };
+  return { streams: deviceOrder(cached, maxRank).slice(0, limit), cached: true };
 }
 
-/**
- * First ranked stream that fits the device. Streams of unknown resolution always fit.
- * If none fits, the first-ranked stream with the lowest resolution.
- */
+/** First stream in the device order: unknown resolution is recommended only when no known resolution exists. */
 export function recommendStream(ranked: StreamOption[], maxRank: number | null): StreamOption | null {
-  if (ranked.length === 0) return null;
-  if (maxRank === null) return ranked[0] as StreamOption;
-  const fitting = ranked.find((option) => RESOLUTION_RANK[option.resolution] <= maxRank);
-  if (fitting) return fitting;
-  const lowest = Math.min(...ranked.map((option) => RESOLUTION_RANK[option.resolution]));
-  return ranked.find((option) => RESOLUTION_RANK[option.resolution] === lowest) ?? (ranked[0] as StreamOption);
+  return deviceOrder(ranked, maxRank)[0] ?? null;
 }
