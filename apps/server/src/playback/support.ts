@@ -69,6 +69,7 @@ const NOT_THE_STREAMS_FAULT = new Set([
   'invalid_subtitle_index',
   'subtitle_mode_unsupported',
   'shutting_down',
+  'encoder_not_stopped',
 ]);
 
 export function isStreamFault(error: unknown): boolean {

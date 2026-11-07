@@ -131,7 +131,12 @@ export class Recovery {
     // An opening session is stopped again by `SessionSlots.abandon`, which logs a stuck process itself.
     const stopProcess = rec.opening
       ? rec.process?.stop()
-      : stopAndReport(rec.process, { sessionId: rec.id, reason: 'memory', logger: options.logger });
+      : stopAndReport(rec.process, {
+          sessionId: rec.id,
+          reason: 'memory',
+          logger: options.logger,
+          event: (input) => this.ctx.event(input),
+        });
     void Promise.all([stopProcess, rec.subtitles?.stop()]).catch(() => undefined);
   }
 
@@ -181,6 +186,7 @@ export class Recovery {
       sessionId: rec.id,
       reason,
       logger: this.ctx.options.logger,
+      event: (input) => this.ctx.event(input),
       source: rec.source,
     });
   }

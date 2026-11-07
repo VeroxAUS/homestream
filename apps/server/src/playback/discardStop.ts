@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { AppError } from '../errors.js';
 import { DISCARD_GRACE_MS, type EncoderHandle } from './encoderProcess.js';
+import { recordStuckStop, type EventSink } from './stuckStop.js';
 
 export type DiscardReason = 'seek' | 'tracks' | 'abandon';
 
@@ -10,6 +11,7 @@ export interface DiscardTarget {
   sessionId: string;
   reason: DiscardReason;
   logger: Pick<FastifyBaseLogger, 'info' | 'error'>;
+  event: EventSink;
   /** The session's source handle: its encoder input is cut first so ffmpeg is not blocked on a read. */
   source: { cutEncoderInput(): void };
 }
@@ -21,10 +23,8 @@ export interface KeptStopTarget {
   sessionId: string;
   reason: KeptStopReason;
   logger: Pick<FastifyBaseLogger, 'info' | 'error'>;
+  event: EventSink;
 }
-
-/** A process is reported once per reason: the disk cap parks a stuck encoder again on every tick. */
-const reported = new WeakMap<EncoderHandle, Set<KeptStopReason>>();
 
 /**
  * Stops an encoder whose session stays (a memory-limit failure, a park for the disk cap). The slot needs no extra hold: a
@@ -36,16 +36,23 @@ export async function stopAndReport(proc: EncoderHandle | null | undefined, targ
   const startedAt = Date.now();
   await proc.stop();
   if (!proc.running) return;
-  const seen = reported.get(proc) ?? new Set<KeptStopReason>();
-  reported.set(proc, seen);
-  if (seen.has(target.reason)) return;
-  seen.add(target.reason);
   const { sessionId, reason, logger } = target;
+  const elapsedMs = Date.now() - startedAt;
+  if (!recordStuckStop(proc, target.event, { sessionId, reason, elapsedMs })) return;
   logger.error(
-    { sessionId, reason, elapsedMs: Date.now() - startedAt },
+    { sessionId, reason, elapsedMs },
     'Encoder is still running after the kill; its place stays taken until it exits',
   );
   void proc.exited.then(() => logger.info({ sessionId, reason }, 'Encoder that outlived its stop has exited'));
+}
+
+export function encoderNotStopped(): AppError {
+  return new AppError(
+    503,
+    ENCODER_NOT_STOPPED,
+    'The previous video encoder has not exited yet.',
+    'Try again in a few seconds. The server waits for the old encoder before it starts a new one.',
+  );
 }
 
 export function isEncoderNotStopped(error: unknown): boolean {
@@ -65,16 +72,12 @@ export async function stopDiscarded(proc: EncoderHandle | null, target: DiscardT
   await proc.stop({ graceMs: DISCARD_GRACE_MS, cutInput: () => target.source.cutEncoderInput() });
   const elapsedMs = Date.now() - startedAt;
   if (proc.running) {
+    recordStuckStop(proc, target.event, { sessionId: target.sessionId, reason: target.reason, elapsedMs });
     target.logger.error(
       { sessionId: target.sessionId, reason: target.reason, elapsedMs },
       'Discarded encoder is still running after the kill; its place stays taken until it exits',
     );
-    throw new AppError(
-      503,
-      ENCODER_NOT_STOPPED,
-      'The previous video encoder has not exited yet.',
-      'Try again in a few seconds. The server waits for the old encoder before it starts a new one.',
-    );
+    throw encoderNotStopped();
   }
   const exit = await proc.exited;
   const outcome = exit.killed ? 'killed' : 'clean';

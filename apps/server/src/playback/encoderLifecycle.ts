@@ -105,7 +105,12 @@ export class EncoderLifecycle {
     rec.restart = (async () => {
       rec.parked = true;
       rec.generation += 1;
-      await stopAndReport(rec.process, { sessionId: rec.id, reason: 'park', logger: this.ctx.options.logger });
+      await stopAndReport(rec.process, {
+        sessionId: rec.id,
+        reason: 'park',
+        logger: this.ctx.options.logger,
+        event: (input) => this.ctx.event(input),
+      });
     })().finally(() => {
       rec.restart = null;
     });

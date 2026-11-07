@@ -1,10 +1,11 @@
 import { finalizePlay, deletePlay } from '../db/plays.js';
 import { AppError } from '../errors.js';
 import type { LogEventInput } from '../events/record.js';
-import { isEncoderNotStopped, stopDiscarded } from './discardStop.js';
+import { encoderNotStopped, isEncoderNotStopped, stopDiscarded } from './discardStop.js';
 import type { EncoderHandle } from './encoderProcess.js';
 import type { FallingBehindWatch } from './fallingBehind.js';
 import { toActivitySession, type SessionRecord } from './session.js';
+import { recordStuckStop } from './stuckStop.js';
 import { endStats, notFound, scrub, subjectOf, type PlaybackManagerOptions, type StopReason } from './support.js';
 
 /** Two streams at a time keeps the GPU to at most two encoders (AGENTS.md GPU safety rule 1). */
@@ -32,7 +33,7 @@ export class SessionSlots {
 
   /** Takes a place for a start that is under way; pair it with `endReservation()`. */
   reserve(): void {
-    if (this.live().length + this.failedButRunning() + this.starting + this.draining >= this.maxSessions) {
+    if (this.taken() >= this.maxSessions) {
       throw new AppError(
         429,
         'too_many_sessions',
@@ -45,6 +46,18 @@ export class SessionSlots {
 
   endReservation(): void {
     this.starting -= 1;
+  }
+
+  /**
+   * Checked before every candidate launch of an automatic start, whose own reservation is already counted: an encoder that
+   * outlived its stop must never be joined by another one beyond the limit.
+   */
+  ensureRoom(): void {
+    if (this.taken() > this.maxSessions) throw encoderNotStopped();
+  }
+
+  private taken(): number {
+    return this.live().length + this.failedButRunning() + this.starting + this.draining;
   }
 
   add(rec: SessionRecord): void {
@@ -112,11 +125,12 @@ export class SessionSlots {
     this.host.fallingBehind.forget(rec.id);
     this.draining += 1;
     let outlived: Promise<void> | null;
+    const stopStartedAt = Date.now();
     try {
       await rec.restart?.catch(() => undefined);
       await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     } finally {
-      outlived = this.holdIfRunning(rec, reason);
+      outlived = this.holdIfRunning(rec, reason, Date.now() - stopStartedAt);
       this.draining -= 1;
     }
     rec.source.release();
@@ -134,9 +148,10 @@ export class SessionSlots {
   /**
    * Throws away a session that never reached its first segment: nothing of it may remain. A start that fails for good
    * (`failure`, an explicit stream gets no fallback) keeps an error play record and is logged and announced instead.
+   * Resolves to true when the encoder survived the kill: it keeps its place until it exits.
    */
-  async abandon(rec: SessionRecord, failure?: AppError): Promise<void> {
-    if (rec.stopping) return;
+  async abandon(rec: SessionRecord, failure?: AppError): Promise<boolean> {
+    if (rec.stopping) return false;
     rec.stopping = true;
     rec.stopController.abort();
     rec.state = 'stopped';
@@ -152,6 +167,7 @@ export class SessionSlots {
         sessionId: rec.id,
         reason: 'abandon',
         logger: this.host.options.logger,
+        event: (input) => this.host.event(input),
         source: rec.source,
       }).then(
         () => ({ outlived: null as Promise<void> | null }),
@@ -166,12 +182,14 @@ export class SessionSlots {
     await this.removeDirAfter(rec.dir, outlived);
     if (failure) this.recordStartFailure(rec, failure);
     else deletePlay(this.host.options.db, rec.id);
+    return outlived !== null;
   }
 
   /** The stop returned but the process is still running (the kill failed): the session is reported ended, the place stays taken. */
-  private holdIfRunning(rec: SessionRecord, reason: StopReason): Promise<void> | null {
+  private holdIfRunning(rec: SessionRecord, reason: StopReason, elapsedMs: number): Promise<void> | null {
     const { process: proc } = rec;
     if (!proc?.running) return null;
+    recordStuckStop(proc, (input) => this.host.event(input), { sessionId: rec.id, reason, elapsedMs });
     this.host.options.logger.error(
       { sessionId: rec.id, reason },
       'Encoder is still running after the kill; its place stays taken until it exits',

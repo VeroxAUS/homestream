@@ -19,6 +19,7 @@ import type { ResolvedStream } from '../streams/service.js';
 import type { PlaybackContext } from './context.js';
 import { chooseDefaultSubtitle } from './defaultSubtitle.js';
 import { decide } from './decision.js';
+import { encoderNotStopped } from './discardStop.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
 import { clipSizeImplausible, placeholderError } from './placeholder.js';
 import { SEGMENT_SECONDS, segmentCount, segmentFileName, segmentFormatFor } from './playlist.js';
@@ -118,6 +119,7 @@ export class SessionStarter {
     if (begun?.status === 'downloading') return begun;
     const attempts: StartAttempt[] = [];
     for (const [index, streamId] of plan.streamIds.entries()) {
+      this.ctx.slots.ensureRoom();
       try {
         const resolvedUrl = begun?.streamId === streamId ? begun.target : undefined;
         const lastCandidate = !plan.auto || !plan.cached || index === plan.streamIds.length - 1;
@@ -331,7 +333,9 @@ export class SessionStarter {
         error instanceof AppError &&
         error.code !== 'shutting_down' &&
         (body.streamId !== 'auto' || (context.lastCandidate && error.code === 'encoder_memory_limit'));
-      await slots.abandon(rec, final ? error : undefined);
+      const outlived = await slots.abandon(rec, final ? error : undefined);
+      // The abandoned encoder still runs and keeps its place: the next candidate would be a third encoder.
+      if (outlived && !context.lastCandidate && isStreamFault(error)) throw encoderNotStopped();
       throw error;
     }
     rec.opening = false;
