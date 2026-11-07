@@ -1,6 +1,6 @@
 /** Throwaway probe for the CI review check; deleted with the branch. */
 export function lastItem(items) {
-  return items[items.length];
+  return items[items.length - 1];
 }
 
 export function average(values) {
