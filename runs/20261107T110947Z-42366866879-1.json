@@ -1,0 +1,336 @@
+{
+ "schema": 1,
+ "run": {
+  "id": 42366866879,
+  "attempt": 1,
+  "url": "https://github.com/VeroxAUS/homestream/actions/runs/42366866879",
+  "sha": "635eab12d5999301e8cd24a5c1eb57d0139be426",
+  "branch": "main",
+  "event": "push",
+  "startedAt": "2026-11-07T11:07:55Z",
+  "completedAt": "2026-11-07T11:09:47Z",
+  "conclusion": "failure"
+ },
+ "totalSeconds": 112,
+ "jobs": [
+  {
+   "name": "Windows",
+   "conclusion": "success",
+   "seconds": 109,
+   "steps": [
+    {
+     "name": "Set up job",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 7
+    },
+    {
+     "name": "Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 25
+    },
+    {
+     "name": "Use a runner temp directory for test files",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+     "conclusion": "success",
+     "seconds": 19
+    },
+    {
+     "name": "Install dependencies",
+     "conclusion": "success",
+     "seconds": 8
+    },
+    {
+     "name": "Typecheck",
+     "conclusion": "success",
+     "seconds": 11
+    },
+    {
+     "name": "Server unit tests (config, redact, playlist, decision, ffmpegArgs, db)",
+     "conclusion": "success",
+     "seconds": 3
+    },
+    {
+     "name": "Build the app, server and web UI for the Electron smoke test",
+     "conclusion": "success",
+     "seconds": 20
+    },
+    {
+     "name": "Electron launch smoke test",
+     "conclusion": "success",
+     "seconds": 10
+    },
+    {
+     "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Post Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 2
+    },
+    {
+     "name": "Complete job",
+     "conclusion": "success",
+     "seconds": 0
+    }
+   ]
+  },
+  {
+   "name": "Web e2e",
+   "conclusion": "success",
+   "seconds": 90,
+   "steps": [
+    {
+     "name": "Set up job",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 2
+    },
+    {
+     "name": "Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 3
+    },
+    {
+     "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+     "conclusion": "success",
+     "seconds": 6
+    },
+    {
+     "name": "Install dependencies",
+     "conclusion": "success",
+     "seconds": 3
+    },
+    {
+     "name": "Build the server (the web UI is built by the test command)",
+     "conclusion": "success",
+     "seconds": 6
+    },
+    {
+     "name": "Restore the Chromium download",
+     "conclusion": "success",
+     "seconds": 3
+    },
+    {
+     "name": "Install Chromium and its system libraries",
+     "conclusion": "success",
+     "seconds": 14
+    },
+    {
+     "name": "End-to-end tests",
+     "conclusion": "success",
+     "seconds": 49
+    },
+    {
+     "name": "Post Restore the Chromium download",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Post Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Complete job",
+     "conclusion": "success",
+     "seconds": 0
+    }
+   ]
+  },
+  {
+   "name": "Linux",
+   "conclusion": "failure",
+   "seconds": 80,
+   "steps": [
+    {
+     "name": "Set up job",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 6
+    },
+    {
+     "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+     "conclusion": "success",
+     "seconds": 4
+    },
+    {
+     "name": "Use a runner temp directory for test files",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Restore the turbo cache",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Install ffmpeg (software only; the tests that run it need no GPU)",
+     "conclusion": "success",
+     "seconds": 15
+    },
+    {
+     "name": "Install gitleaks",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Install dependencies",
+     "conclusion": "success",
+     "seconds": 3
+    },
+    {
+     "name": "Format check",
+     "conclusion": "success",
+     "seconds": 10
+    },
+    {
+     "name": "Lint",
+     "conclusion": "success",
+     "seconds": 8
+    },
+    {
+     "name": "Typecheck",
+     "conclusion": "success",
+     "seconds": 6
+    },
+    {
+     "name": "Dead code (knip)",
+     "conclusion": "success",
+     "seconds": 2
+    },
+    {
+     "name": "Duplicate code (jscpd)",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Module boundaries (dependency-cruiser)",
+     "conclusion": "success",
+     "seconds": 2
+    },
+    {
+     "name": "Dependency version drift (syncpack)",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Large files",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Bundle budgets (size-limit for the web UI and the desktop main process)",
+     "conclusion": "success",
+     "seconds": 12
+    },
+    {
+     "name": "AGENTS.md, skills and runbooks name real commands",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Markdown links and anchors",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "OpenAPI export is current",
+     "conclusion": "success",
+     "seconds": 2
+    },
+    {
+     "name": "Database schema docs are current",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Feature flags",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Tech debt budget",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": ".env.example lists every known key",
+     "conclusion": "failure",
+     "seconds": 1
+    },
+    {
+     "name": "Merge test reports",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Job summary (coverage, flaky tests, slowest tests)",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Upload test reports",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Post Run pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115",
+     "conclusion": "success",
+     "seconds": 0
+    },
+    {
+     "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+     "conclusion": "success",
+     "seconds": 1
+    },
+    {
+     "name": "Complete job",
+     "conclusion": "success",
+     "seconds": 0
+    }
+   ]
+  }
+ ],
+ "tests": {
+  "apps/server/test/envExample.test.ts :: .env.example lists every environment variable the code reads": 32
+ }
+}
