@@ -148,21 +148,22 @@ export class SourceProxy {
 
   /**
    * Registers (or joins) the source behind a gateway link. Resolves once the size is known; the head and tail keep loading in
-   * the background. `owner` is a session id or `prefetch`.
+   * the background. `owner` is a session id or `prefetch`. `resolvedUrl` is where the link already led when the caller
+   * followed it; a new source starts from it instead of asking the gateway again (later refreshes still use `rawUrl`).
    */
-  async acquire(rawUrl: string, owner: string): Promise<SourceHandle> {
+  async acquire(rawUrl: string, owner: string, resolvedUrl?: string): Promise<SourceHandle> {
     if (this.closed) throw new AppError(503, 'shutting_down', 'The server is shutting down.', 'Try again in a moment.');
     const port = await this.listen();
     let entry = this.entries.get(rawUrl);
     if (!entry) {
       let pending = this.pending.get(rawUrl);
       if (!pending) {
-        pending = this.create(rawUrl, owner).finally(() => this.pending.delete(rawUrl));
+        pending = this.create(rawUrl, owner, resolvedUrl).finally(() => this.pending.delete(rawUrl));
         this.pending.set(rawUrl, pending);
       }
       entry = await pending;
     }
-    if (entry.closed) return this.acquire(rawUrl, owner);
+    if (entry.closed) return this.acquire(rawUrl, owner, resolvedUrl);
     entry.refs.add(owner);
     entry.touch();
     if (owner === PREFETCH_OWNER) this.trimPrefetches(entry);
@@ -210,8 +211,8 @@ export class SourceProxy {
     this.options.onEvent?.({ level: 'error', message });
   }
 
-  private async create(rawUrl: string, owner: string): Promise<SourceEntry> {
-    const resolved = await this.options.resolveUrl(rawUrl);
+  private async create(rawUrl: string, owner: string, resolvedUrl?: string): Promise<SourceEntry> {
+    const resolved = resolvedUrl ?? (await this.options.resolveUrl(rawUrl));
     const entry = new SourceEntry(
       rawUrl,
       resolved,

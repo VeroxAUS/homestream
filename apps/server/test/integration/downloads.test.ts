@@ -184,7 +184,7 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
     const { status, body } = await rig.play();
     expect(status).not.toBe(202);
     expect(body.status).toBeUndefined();
-    expect(rig.resolveCalls).toHaveLength(1);
+    expect(fakes.gateway.playbackCalls()).toHaveLength(1);
     expect((await rig.app.inject('/api/downloads')).json()).toEqual({ downloads: [] });
   });
 
@@ -675,17 +675,64 @@ describe('ready detection (VAL-DL-008)', () => {
     expect(rig.ofType('download.ready')).toHaveLength(1);
   });
 
-  it('marks the download ready after 10 minutes even if the gateway never shows a cached stream', async () => {
+  it('never announces ready while the gateway lists no cached stream, however long TorBox has been finished', async () => {
+    const fakes = makeFakes();
+    const stream = seedUncachedMovie(fakes);
+    const rig = await boot({ fakes });
+    const { download } = (await rig.play()).body;
+    fakes.torbox.items = [finishedItem()];
+    fakes.clock.advance(MIN);
+    await rig.tick();
+    for (let i = 0; i < 12; i += 1) {
+      fakes.clock.advance(2 * MIN + 1_000);
+      await rig.tick();
+    }
+    expect(rig.ofType('download.ready')).toEqual([]);
+    const listed = (await rig.app.inject('/api/downloads')).json() as { downloads: Download[] };
+    expect(listed.downloads[0]).toMatchObject({ id: download.id, status: 'pending' });
+    expect((await rig.play()).status).toBe(202);
+
+    stream.cached = true;
+    fakes.clock.advance(5 * MIN + 1_000);
+    await rig.tick();
+    expect(rig.ofType('download.ready')).toHaveLength(1);
+  });
+
+  it('never announces ready while every fresh lookup fails, and keeps checking afterwards', async () => {
+    const fakes = makeFakes();
+    const stream = seedUncachedMovie(fakes);
+    const rig = await boot({ fakes });
+    await rig.play();
+    fakes.torbox.items = [finishedItem()];
+    fakes.gateway.failLists = true;
+    fakes.clock.advance(MIN);
+    await rig.tick();
+    for (let i = 0; i < 12; i += 1) {
+      fakes.clock.advance(2 * MIN + 1_000);
+      await rig.tick();
+    }
+    expect(rig.ofType('download.ready')).toEqual([]);
+
+    fakes.gateway.failLists = false;
+    stream.cached = true;
+    fakes.clock.advance(5 * MIN + 1_000);
+    await rig.tick();
+    expect(rig.ofType('download.ready')).toHaveLength(1);
+  });
+
+  it('ends as failed (timeout) when TorBox finished but no cached stream ever shows up within 24 hours', async () => {
     const rig = await bootWithMovie();
     await rig.play();
     rig.fakes.torbox.items = [finishedItem()];
     rig.fakes.clock.advance(MIN);
     await rig.tick();
-    for (let i = 0; i < 6; i += 1) {
-      rig.fakes.clock.advance(2 * MIN + 1_000);
-      await rig.tick();
-    }
-    expect(rig.ofType('download.ready')).toHaveLength(1);
+    rig.fakes.clock.advance(25 * HOUR);
+    await rig.tick();
+    expect(rig.ofType('download.ready')).toEqual([]);
+    const failed = rig.ofType('download.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.data).toMatchObject({ reason: 'timeout' });
+    DownloadFailedEventSchema.parse(failed[0]?.data);
   });
 
   it('starts a normal session from Play once the download is ready, with no second add', async () => {

@@ -20,7 +20,7 @@ import type {
 } from '@homestream/shared';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
-import type { DownloadService } from '../downloads/service.js';
+import type { BeginResult, DownloadService } from '../downloads/service.js';
 import { upsertDevice } from '../db/devices.js';
 import {
   deletePlay,
@@ -291,26 +291,19 @@ export class PlaybackManager {
     clientIp: string | null,
     timeline: StartTimeline,
   ): Promise<SessionResponse | DownloadStartedResponse> {
-    const { db, tmdb, downloads } = this.options;
+    const { db, tmdb } = this.options;
 
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
     const device = upsertDevice(db, body.device, clientIp).capabilities;
 
     const plan = await this.planStart(body, details.imdbId, device);
-    if (downloads && plan.auto && !plan.cached && details.imdbId) {
-      // Nothing is cached: TorBox is asked to cache the best-ranked stream. A link that turns out to be playable falls through.
-      const started = await downloads.begin({
-        body,
-        title: details.title,
-        imdbId: details.imdbId,
-        streamId: plan.streamIds[0] as string,
-      });
-      if (started) return started;
-    }
+    const begun = await this.beginDownload(body, details, plan);
+    if (begun?.status === 'downloading') return begun;
     const attempts: StartAttempt[] = [];
     for (const streamId of plan.streamIds) {
       try {
-        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts, timeline });
+        const resolvedUrl = begun?.streamId === streamId ? begun.target : undefined;
+        return await this.attemptStart(body, clientIp, { streamId, device, details, attempts, timeline, resolvedUrl });
       } catch (error) {
         // An explicit stream id gets one try, and a refused request or a shutdown is not the stream's fault.
         if (!plan.auto || !isStreamFault(error)) throw error;
@@ -327,6 +320,25 @@ export class PlaybackManager {
       }
     }
     throw new AllStreamsFailedError(attempts);
+  }
+
+  /**
+   * Nothing is cached: TorBox is asked to cache the best-ranked stream. A link that turns out to be playable comes back
+   * with the target the probe followed, so the start continues from it.
+   */
+  private async beginDownload(
+    body: SessionStartRequest,
+    details: { title: string; imdbId: string | null },
+    plan: { streamIds: string[]; auto: boolean; cached: boolean },
+  ): Promise<BeginResult> {
+    const { downloads } = this.options;
+    if (!downloads || !plan.auto || plan.cached || !details.imdbId) return null;
+    return downloads.begin({
+      body,
+      title: details.title,
+      imdbId: details.imdbId,
+      streamId: plan.streamIds[0] as string,
+    });
   }
 
   /** The stream ids an automatic start tries in order (the best-ranked cached streams that fit the device), or the one explicit id. */
@@ -365,6 +377,8 @@ export class PlaybackManager {
       details: TitleDetails;
       attempts: StartAttempt[];
       timeline: StartTimeline;
+      /** Where the stream's link already led, when the downloads probe followed it (spares a second gateway request). */
+      resolvedUrl?: string;
     },
   ): Promise<SessionResponse> {
     const { streams } = this.options;
@@ -383,7 +397,7 @@ export class PlaybackManager {
     const t1 = Date.now();
     timeline.mark('stream picked', id);
     // A prefetch of the same stream has already resolved the link, warmed the proxy and run ffprobe.
-    const source = await this.proxy.acquire(stream.url, id);
+    const source = await this.proxy.acquire(stream.url, id, context.resolvedUrl);
     timeline.mark('source acquired', id);
     void source.headReady.then(() => timeline.mark('head fill done', id));
     try {

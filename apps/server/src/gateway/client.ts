@@ -19,10 +19,12 @@ export type GatewayFetch = (
 /**
  * What one request to a stream's playback link showed, read from the first response only (the redirect is never followed).
  * `placeholder` carries the clip name: `downloading`, `store_limit_exceeded`, `429`, ...
+ * `available` carries `target`, where the link leads (the redirect target, or the link itself when the gateway served the
+ * bytes). It is a secret-bearing URL: callers may hand it to the source proxy but never log or return it.
  */
 export type PlaybackProbe =
   | { kind: 'placeholder'; name: string }
-  | { kind: 'available' }
+  | { kind: 'available'; target: string }
   | { kind: 'timeout' }
   | { kind: 'rate_limited' }
   | { kind: 'failed'; status: number | null };
@@ -206,13 +208,14 @@ export class GatewayClient {
         const location = response.headers.get('location');
         if (!location) return { kind: 'failed', status: response.status };
         try {
-          const name = placeholderName(new URL(location, rawUrl), gatewayHost);
-          return name ? { kind: 'placeholder', name } : { kind: 'available' };
+          const next = new URL(location, rawUrl);
+          const name = placeholderName(next, gatewayHost);
+          return name ? { kind: 'placeholder', name } : { kind: 'available', target: next.toString() };
         } catch {
           return { kind: 'failed', status: response.status };
         }
       }
-      if (response.status === 200 || response.status === 206) return { kind: 'available' };
+      if (response.status === 200 || response.status === 206) return { kind: 'available', target: rawUrl };
       if (response.status === 429) return { kind: 'rate_limited' };
       return { kind: 'failed', status: response.status };
     });

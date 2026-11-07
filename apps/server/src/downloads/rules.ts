@@ -17,7 +17,7 @@ export interface DownloadLimits {
   maxBackoffMs: number;
   /** Gap between "is a cached stream listed yet?" checks after TorBox finished the item. */
   confirmRetryMs: number;
-  /** After this long without a cached stream the download is marked ready anyway; the playback link itself works. */
+  /** After this long without a cached stream the gateway is checked less often; the download is never marked ready without one. */
   confirmWindowMs: number;
   /** Least time between two `download.progress` events of one download. */
   progressEventMs: number;

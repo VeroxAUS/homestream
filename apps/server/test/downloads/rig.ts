@@ -53,6 +53,8 @@ interface FakeGateway {
   /** Streams per imdb id (or `imdb:s:e`). */
   lists: Map<string, FakeStream[]>;
   calls: GatewayCall[];
+  /** When set, stream list requests answer HTTP 500. */
+  failLists: boolean;
   playbackCalls(): GatewayCall[];
   listCalls(): GatewayCall[];
 }
@@ -105,6 +107,7 @@ function makeFakeGateway(): FakeGateway {
           });
       }
     }
+    if (gateway.failLists) return new Response('boom', { status: 500 });
     const match = /\/stream\/(?:movie|series)\/([^/]+)\.json$/.exec(target.pathname);
     const key = decodeURIComponent(match?.[1] ?? '');
     const streams = lists.get(key) ?? [];
@@ -126,13 +129,15 @@ function makeFakeGateway(): FakeGateway {
     );
   };
 
-  return {
+  const gateway: FakeGateway = {
     fetch,
     lists,
     calls,
+    failLists: false,
     playbackCalls: () => calls.filter((call) => call.kind === 'playback'),
     listCalls: () => calls.filter((call) => call.kind === 'list'),
   };
+  return gateway;
 }
 
 interface FakeTorboxItem {

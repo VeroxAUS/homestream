@@ -60,6 +60,18 @@ export interface BeginRequest {
   streamId: string;
 }
 
+/**
+ * The uncached stream's link turned out to be playable. `target` is where the probe already followed it; handing it to the
+ * source proxy spares the gateway a second playback request. It carries secrets: never log or return it.
+ */
+interface PlayableLink {
+  status: 'playable';
+  streamId: string;
+  target: string;
+}
+
+export type BeginResult = DownloadStartedResponse | PlayableLink | null;
+
 function toDownload(row: DownloadRow): Download {
   const download: Download = {
     id: row.id,
@@ -92,7 +104,7 @@ function eventBase(row: DownloadRow) {
 const FAILURE_MESSAGES: Record<DownloadFailureReason, string> = {
   torbox_error: 'TorBox reported an error for this download.',
   stalled: 'The download has had no seeds and no progress for 6 hours.',
-  timeout: 'The download did not finish within 24 hours.',
+  timeout: 'The download did not finish, or did not show up as cached, within 24 hours.',
 };
 
 function placeholderError(name: string): AppError {
@@ -126,7 +138,7 @@ export class DownloadService {
   private readonly limits: DownloadLimits;
   private readonly now: () => number;
   private readonly torbox: TorboxClient | null;
-  private readonly starting = new Map<string, Promise<DownloadStartedResponse | null>>();
+  private readonly starting = new Map<string, Promise<BeginResult>>();
   private readonly lastGatewayCheck = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
@@ -215,9 +227,10 @@ export class DownloadService {
 
   /**
    * Plays a title that has no cached stream: asks the gateway for the playback link of the best uncached stream once,
-   * without following the redirect. Returns null when the link is already playable (the caller starts a normal session).
+   * without following the redirect. Returns the playable link when it is already usable (the caller starts a normal session
+   * from it), or null when there is nothing to probe.
    */
-  begin(request: BeginRequest): Promise<DownloadStartedResponse | null> {
+  begin(request: BeginRequest): Promise<BeginResult> {
     const { body } = request;
     const key = mediaKeyFor(body.mediaType, body.tmdbId, body.season, body.episode);
     const running = this.starting.get(key);
@@ -227,7 +240,7 @@ export class DownloadService {
     return promise;
   }
 
-  private async beginOnce(mediaKey: string, request: BeginRequest): Promise<DownloadStartedResponse | null> {
+  private async beginOnce(mediaKey: string, request: BeginRequest): Promise<BeginResult> {
     const { body, title, imdbId } = request;
     const reused = this.existing(body);
     if (reused) return reused;
@@ -236,8 +249,11 @@ export class DownloadService {
     if (!stream) return null;
 
     const probe = await this.options.gateway.probePlayback(stream.url);
+    if (probe.kind === 'available') {
+      this.event({ level: 'info', message: `The link for "${title}" is already playable; no download needed.` });
+      return { status: 'playable', streamId: request.streamId, target: probe.target };
+    }
     const outcome = this.interpret(probe, title);
-    if (outcome === 'available') return null;
 
     const query: StreamQuery =
       body.mediaType === 'movie'
@@ -271,11 +287,8 @@ export class DownloadService {
     return { status: 'downloading', download: toDownload(row) };
   }
 
-  private interpret(probe: PlaybackProbe, title: string): 'accepted' | 'timeout' | 'available' {
+  private interpret(probe: Exclude<PlaybackProbe, { kind: 'available' }>, title: string): 'accepted' | 'timeout' {
     switch (probe.kind) {
-      case 'available':
-        this.event({ level: 'info', message: `The link for "${title}" is already playable; no download needed.` });
-        return 'available';
       case 'timeout':
         return 'timeout';
       case 'rate_limited':
@@ -398,12 +411,12 @@ export class DownloadService {
     const age = now - row.createdAt;
     const interval = pollIntervalMs(age, this.limits);
 
-    if (row.readySince !== null) {
-      await this.confirm(row);
-      return;
-    }
     if (age >= this.limits.giveUpMs) {
       this.fail(row, 'timeout');
+      return;
+    }
+    if (row.readySince !== null) {
+      await this.confirm(row);
       return;
     }
 
@@ -478,7 +491,10 @@ export class DownloadService {
     if (await this.hasCachedStream(row)) this.markReady(row, 'The gateway lists a cached stream.');
   }
 
-  /** TorBox finished the item; wait for the gateway to show a cached stream, but not forever. */
+  /**
+   * TorBox finished the item; ready only once the gateway lists a cached stream, because Play picks from that list. Past
+   * the confirm window the checks slow down to the gateway cadence, and the 24 h give-up ends the wait.
+   */
   private async confirm(row: DownloadRow): Promise<void> {
     const now = this.now();
     if (await this.hasCachedStream(row)) {
@@ -486,14 +502,8 @@ export class DownloadService {
       return;
     }
     const waited = now - (row.readySince ?? now);
-    if (waited >= this.limits.confirmWindowMs) {
-      this.markReady(
-        row,
-        'The gateway still lists it as not cached, but TorBox has finished; Play opens the link directly.',
-      );
-      return;
-    }
-    this.store.update(row.id, { nextPollAt: now + this.limits.confirmRetryMs }, now);
+    const retryMs = waited >= this.limits.confirmWindowMs ? GATEWAY_CHECK_MS : this.limits.confirmRetryMs;
+    this.store.update(row.id, { nextPollAt: this.now() + retryMs }, this.now());
   }
 
   private async hasCachedStream(row: DownloadRow): Promise<boolean> {
