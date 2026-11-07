@@ -69,12 +69,12 @@ async function startPlayableGateway(cdn: StubCdn): Promise<StubGateway> {
           {
             name: UNCACHED_NAME,
             url: `${origin}/api/v1/playback/tokenA/Movie.1994.1080p.BluRay.x264.mkv`,
-            behaviorHints: { filename: 'Movie.1994.1080p.BluRay.x264.mkv', videoSize: 2_000_000_000 },
+            behaviorHints: { filename: 'Movie.1994.1080p.BluRay.x264.mkv', videoSize: cdn.size },
             streamData: {
               type: 'debrid',
               service: { id: 'torbox', cached: false },
               torrent: { infoHash: 'a'.repeat(40), fileIdx: 0 },
-              size: 2_000_000_000,
+              size: cdn.size,
             },
           },
         ],

@@ -136,7 +136,7 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
     {
       summary: 'Start a playback session',
       description:
-        'Clients send `streamId: "auto"`. Answers 201 with the session, or 202 when the title had no cached stream and TorBox was asked to cache it.',
+        'Clients send `streamId: "auto"`. Answers 201 with the session, or 202 when the title had no cached stream (or the explicit `streamId` is not cached) and TorBox was asked to cache it. A stream the gateway answers with its "downloading" clip is never played.',
       tag: 'sessions',
       body: SessionStartRequestSchema,
       errors: [400, 404, 409, 429, 502, 503, 504],

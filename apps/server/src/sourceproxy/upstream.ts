@@ -1,5 +1,6 @@
 import http, { type IncomingMessage } from 'node:http';
 import https from 'node:https';
+import { placeholderName } from '../playback/placeholder.js';
 
 const MAX_REDIRECTS = 3;
 const SOCKET_IDLE_TIMEOUT_MS = 30_000;
@@ -15,6 +16,14 @@ export class UpstreamNetworkError extends Error {
   constructor(readonly code: string) {
     super(`upstream connection failed (${code})`);
     this.name = 'UpstreamNetworkError';
+  }
+}
+
+/** A redirect led to one of the gateway's placeholder clips (`/static/<name>.mp4`); the clip was not requested. */
+export class UpstreamPlaceholderError extends Error {
+  constructor(readonly clip: string) {
+    super('upstream redirected to a placeholder clip');
+    this.name = 'UpstreamPlaceholderError';
   }
 }
 
@@ -45,7 +54,10 @@ export class UpstreamClient {
       const status = response.statusCode ?? 0;
       if (status >= 300 && status < 400 && response.headers.location) {
         response.resume();
-        target = new URL(response.headers.location, target).toString();
+        const next = new URL(response.headers.location, target);
+        const clip = placeholderName(next);
+        if (clip) throw new UpstreamPlaceholderError(clip);
+        target = next.toString();
         continue;
       }
       if (status === 200 || status === 206) return response;

@@ -90,13 +90,35 @@ describe('createUrlResolver', () => {
       expect(urls).toHaveLength(2);
     });
 
-    it('leaves a static mp4 on another host (a CDN file) alone', async () => {
-      const resolve = createUrlResolver(async (url) =>
-        onGateway(url) ? response(307, { location: 'https://cdn.example.test/static/downloading.mp4' }) : response(206),
-      );
-      await expect(resolve('https://gw.example.test/a')).resolves.toBe(
+    it('detects the clip on any host, as a relative location and with a query string, and never requests it', async () => {
+      const locations = [
         'https://cdn.example.test/static/downloading.mp4',
-      );
+        '/static/downloading.mp4?v=2&sig=abc',
+        'https://other.example.test/static/downloading.mp4?sig=abc',
+      ];
+      for (const location of locations) {
+        const urls: string[] = [];
+        const resolve = createUrlResolver(async (url) => {
+          urls.push(url);
+          return response(307, { location });
+        });
+        await expect(resolve('https://gw.example.test/a')).rejects.toMatchObject({ code: 'stream_not_cached' });
+        expect(urls).toEqual(['https://gw.example.test/a']);
+      }
+    });
+
+    it('detects the clip two hops away (gateway, intermediate host, clip)', async () => {
+      const urls: string[] = [];
+      const hops = [
+        response(307, { location: 'https://mid.example.test/redirect/abc?sig=1' }),
+        response(302, { location: '/static/downloading.mp4' }),
+      ];
+      const resolve = createUrlResolver(async (url) => {
+        urls.push(url);
+        return hops.shift() as Response;
+      });
+      await expect(resolve('https://gw.example.test/a')).rejects.toMatchObject({ code: 'stream_not_cached' });
+      expect(urls).toEqual(['https://gw.example.test/a', 'https://mid.example.test/redirect/abc?sig=1']);
     });
 
     it('stops at the placeholder over real HTTP: the clip is never requested, a control path resolves to the file', async () => {

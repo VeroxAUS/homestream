@@ -248,7 +248,7 @@ export class DownloadService {
     const stream = await this.options.streams.getStreamById(request.streamId);
     if (!stream) return null;
 
-    const probe = await this.options.gateway.probePlayback(stream.url);
+    const probe = await this.options.gateway.probePlayback(stream.url, { listedBytes: stream.stream.sizeBytes });
     if (probe.kind === 'available') {
       this.event({ level: 'info', message: `The link for "${title}" is already playable; no download needed.` });
       return { status: 'playable', streamId: request.streamId, target: probe.target };

@@ -55,6 +55,7 @@ import {
 } from './memoryWatchdog.js';
 import { SessionMonitor } from './monitor.js';
 import type { PlaybackObserver, SessionSubject } from './observer.js';
+import { clipSizeImplausible, placeholderError } from './placeholder.js';
 import { cleanupOrphans, PID_FILE_NAME, PidRegistry } from './pidRegistry.js';
 import {
   SEGMENT_SECONDS,
@@ -323,8 +324,9 @@ export class PlaybackManager {
   }
 
   /**
-   * Nothing is cached: TorBox is asked to cache the best-ranked stream. A link that turns out to be playable comes back
-   * with the target the probe followed, so the start continues from it.
+   * The chosen stream is not cached (the best-ranked one of an automatic start, or the explicit id the client sent):
+   * TorBox is asked to cache it instead of playing whatever the gateway answers. A link that turns out to be playable
+   * comes back with the target the probe followed, so the start continues from it.
    */
   private async beginDownload(
     body: SessionStartRequest,
@@ -332,7 +334,12 @@ export class PlaybackManager {
     plan: { streamIds: string[]; auto: boolean; cached: boolean },
   ): Promise<BeginResult> {
     const { downloads } = this.options;
-    if (!downloads || !plan.auto || plan.cached || !details.imdbId) return null;
+    if (plan.cached) return null;
+    if (!downloads || !details.imdbId) {
+      // An explicit uncached id has no other way to be handled, and playing it would play the gateway's clip.
+      if (!plan.auto) throw placeholderError('downloading');
+      return null;
+    }
     return downloads.begin({
       body,
       title: details.title,
@@ -347,7 +354,11 @@ export class PlaybackManager {
     imdbId: string | null,
     device: CapabilityProfile,
   ): Promise<{ streamIds: string[]; auto: boolean; cached: boolean }> {
-    if (body.streamId !== 'auto') return { streamIds: [body.streamId], auto: false, cached: true };
+    if (body.streamId !== 'auto') {
+      // An unknown id is reported by the attempt itself.
+      const chosen = await this.options.streams.getStreamById(body.streamId);
+      return { streamIds: [body.streamId], auto: false, cached: chosen?.stream.cached ?? true };
+    }
     if (!imdbId)
       throw new AppError(404, 'no_streams', 'No streams are available for this title.', 'Try another title.');
     const query =
@@ -401,6 +412,10 @@ export class PlaybackManager {
     timeline.mark('source acquired', id);
     void source.headReady.then(() => timeline.mark('head fill done', id));
     try {
+      // The gateway can serve its "downloading" clip as a plain file; against the listed size it stands out.
+      if (!stream.stream.cached && clipSizeImplausible(stream.stream.sizeBytes, source.sizeBytes)) {
+        throw placeholderError('downloading');
+      }
       return await this.startWithSource(body, clientIp, {
         ...context,
         id,

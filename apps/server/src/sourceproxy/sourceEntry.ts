@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { existsSync, statSync } from 'node:fs';
 import { AppError } from '../errors.js';
 import type { ProbeResult } from '../playback/probe.js';
+import { placeholderError } from '../playback/placeholder.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
 import {
   RANK_ENCODER,
@@ -14,7 +15,15 @@ import { RateMeter } from '../network/rateMeter.js';
 import { ReadAheadWindow, type ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
 import type { UpstreamClient } from './upstream.js';
-import { isAbort, needsNewLink, rangeInfo, readInto, UpstreamNetworkError, UpstreamStatusError } from './upstream.js';
+import {
+  isAbort,
+  needsNewLink,
+  rangeInfo,
+  readInto,
+  UpstreamNetworkError,
+  UpstreamPlaceholderError,
+  UpstreamStatusError,
+} from './upstream.js';
 
 /** Owner id of the prefetch holder of a source; sessions use their session id. */
 export const PREFETCH_OWNER = 'prefetch';
@@ -359,21 +368,22 @@ export class SourceEntry implements BlockOwner {
       );
     });
 
+    let clip: string | null = null;
+    const noteClip = (error: unknown): undefined => {
+      if (error instanceof UpstreamPlaceholderError) clip ??= error.clip;
+      return undefined;
+    };
     // Bytes that arrived before a failure stay servable, the rest is read on demand.
-    this.headReady = head
-      .catch(() => undefined)
-      .then(() => {
-        this.headSettled = true;
-        this.notifyFill();
-      });
-    this.tailReady = tail
-      .catch(() => undefined)
-      .then(() => {
-        this.tailSettled = true;
-        this.notifyFill();
-      });
+    this.headReady = head.catch(noteClip).then(() => {
+      this.headSettled = true;
+      this.notifyFill();
+    });
+    this.tailReady = tail.catch(noteClip).then(() => {
+      this.tailSettled = true;
+      this.notifyFill();
+    });
     void Promise.allSettled([head, tail]).then(() => {
-      if (this.size === 0) sizeFailed(unavailable());
+      if (this.size === 0) sizeFailed(clip ? placeholderError(clip) : unavailable());
     });
     return this.ready;
   }

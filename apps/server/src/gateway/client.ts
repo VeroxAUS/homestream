@@ -4,30 +4,19 @@ import type { Db } from '../db/index.js';
 import { AppError } from '../errors.js';
 import { GatewayCache } from './cache.js';
 import { RateLimiter } from './rateLimiter.js';
-import { placeholderName } from '../playback/resolveUrl.js';
+import {
+  probePlaybackLink,
+  type GatewayFetch,
+  type PlaybackProbe,
+  type PlaybackProbeOptions,
+} from './playbackProbe.js';
 import { GATEWAY_USER_AGENT, gatewayPath, queryKey, streamId, type GatewayStream, type StreamQuery } from './types.js';
+
+export type { GatewayFetch, PlaybackProbe, PlaybackProbeOptions };
 
 const GATEWAY_TIMEOUT_MS = 30_000;
 /** An uncached link can block while AIOStreams adds the item to TorBox. */
 const PLAYBACK_TIMEOUT_MS = 60_000;
-
-export type GatewayFetch = (
-  url: string,
-  init: { headers: Record<string, string>; signal: AbortSignal; method?: string; redirect?: 'manual' | 'follow' },
-) => Promise<Response>;
-
-/**
- * What one request to a stream's playback link showed, read from the first response only (the redirect is never followed).
- * `placeholder` carries the clip name: `downloading`, `store_limit_exceeded`, `429`, ...
- * `available` carries `target`, where the link leads (the redirect target, or the link itself when the gateway served the
- * bytes). It is a secret-bearing URL: callers may hand it to the source proxy but never log or return it.
- */
-export type PlaybackProbe =
-  | { kind: 'placeholder'; name: string }
-  | { kind: 'available'; target: string }
-  | { kind: 'timeout' }
-  | { kind: 'rate_limited' }
-  | { kind: 'failed'; status: number | null };
 
 export interface LookupOptions {
   /** Skips the 60 min stream-list cache and stores the fresh answer in it. */
@@ -178,47 +167,19 @@ export class GatewayClient {
   }
 
   /**
-   * Asks the gateway for one stream's playback link once and reports what the first response was. AIOStreams answers an
-   * uncached link by adding the item to TorBox and redirecting to its `downloading.mp4` clip; the redirect target is never requested.
-   * Goes through the shared rate limiter. The link itself is never logged or returned.
+   * Asks the gateway for one stream's playback link once and reports what it led to. AIOStreams answers an uncached link by
+   * adding the item to TorBox and sending its `downloading.mp4` clip (a redirect, on any host and after any hop, or a short
+   * file); a clip is never requested. Goes through the shared rate limiter. The link itself is never logged or returned.
    */
-  async probePlayback(rawUrl: string): Promise<PlaybackProbe> {
+  async probePlayback(rawUrl: string, options: PlaybackProbeOptions = {}): Promise<PlaybackProbe> {
     this.requireBase();
-    let gatewayHost: string;
-    try {
-      gatewayHost = new URL(rawUrl).host;
-    } catch {
-      return { kind: 'failed', status: null };
-    }
-    return this.limiter.schedule(async (): Promise<PlaybackProbe> => {
-      let response: Response;
-      try {
-        response = await this.fetchImpl(rawUrl, {
-          method: 'GET',
-          redirect: 'manual',
-          headers: { Range: 'bytes=0-0', 'User-Agent': GATEWAY_USER_AGENT },
-          signal: AbortSignal.timeout(this.playbackTimeoutMs),
-        });
-      } catch (error) {
-        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-        return timedOut ? { kind: 'timeout' } : { kind: 'failed', status: null };
-      }
-      await response.body?.cancel().catch(() => undefined);
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        if (!location) return { kind: 'failed', status: response.status };
-        try {
-          const next = new URL(location, rawUrl);
-          const name = placeholderName(next, gatewayHost);
-          return name ? { kind: 'placeholder', name } : { kind: 'available', target: next.toString() };
-        } catch {
-          return { kind: 'failed', status: response.status };
-        }
-      }
-      if (response.status === 200 || response.status === 206) return { kind: 'available', target: rawUrl };
-      if (response.status === 429) return { kind: 'rate_limited' };
-      return { kind: 'failed', status: response.status };
-    });
+    if (!URL.canParse(rawUrl)) return { kind: 'failed', status: null };
+    const { probe, hops } = await this.limiter.schedule(() =>
+      probePlaybackLink(this.fetchImpl, rawUrl, this.playbackTimeoutMs, options),
+    );
+    // Shape only (status, host class, path pattern): the next real run shows what the real gateway sends without a URL in the log.
+    this.options.logger.debug({ hops, result: probe.kind }, 'Gateway playback link answered');
+    return probe;
   }
 
   private requireBase(): string {

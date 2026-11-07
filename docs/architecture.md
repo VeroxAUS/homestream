@@ -115,7 +115,7 @@ sequenceDiagram
   M->>F: stop encoder, remove segments
 ```
 
-When the title has no cached stream the start request answers `202` with a download status instead of a session; the client polls [`GET /api/downloads`](runbooks/torbox-expired.md) until the title is ready and starts again. A seek inside the window already encoded is served from disk. A seek more than five segments ahead of the encoder (or behind what was already deleted) stops the encoder and restarts it at the requested segment, which is why the first segment after a long seek takes a moment.
+When the title has no cached stream (or the explicit `streamId` names an uncached one) the start request answers `202` with a download status instead of a session; the gateway's "downloading" clip is recognised on any host, behind any redirect, and as a short file far below the listed size, and is never played; the client polls [`GET /api/downloads`](runbooks/torbox-expired.md) until the title is ready and starts again. A seek inside the window already encoded is served from disk. A seek more than five segments ahead of the encoder (or behind what was already deleted) stops the encoder and restarts it at the requested segment, which is why the first segment after a long seek takes a moment.
 
 ## Source proxy and prefetch
 
