@@ -50,6 +50,7 @@ jobs:
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
           github_token: ${{ github.token }}
+          use_sticky_comment: true
           automatic_review: true
           automatic_security_review: false
           review_depth: deep
