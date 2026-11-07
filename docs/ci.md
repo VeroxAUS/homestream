@@ -25,7 +25,7 @@ The job `CI timing` in `ci.yml` waits for `Linux`, `Web e2e` and `Windows` (`if:
 3. It writes the comparison to the job summary: total wall time, jobs and steps more than 20% slower than the median (and at least 2 seconds slower), and the top regressed tests (more than 20% and at least 20 ms).
 4. On a run on main (a push or a manual dispatch) it commits the record to the branch `ci-metrics`. On a pull request it creates or updates the one sticky comment.
 
-Runs on main are never cancelled by a newer push: `ci.yml` cancels superseded runs only for other refs, and each main run has its own concurrency group (a pending run in a shared group would be replaced by the next one). So every `ci.yml` run on main leaves exactly one record.
+Runs on main are never cancelled by a newer push: `ci.yml` cancels superseded runs only for other refs, and each main run has its own concurrency group (a pending run in a shared group would be replaced by the next one). So every `ci.yml` run on main leaves exactly one record. Because main runs can now finish out of order, `scripts/next-version.mjs` makes no release for a commit that a newer release tag already contains.
 
 ### The `ci-metrics` branch
 

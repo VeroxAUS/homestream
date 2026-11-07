@@ -157,6 +157,24 @@ describe('next-version.mjs --dry-run', () => {
     expect(readFileSync(output, 'utf8')).toBe('release=true\nversion=0.2.0\ntag=v0.2.0\nprevious=v0.1.0\n');
   });
 
+  it('makes no release for a commit that a later release tag already covers (CI runs on main finish out of order)', () => {
+    const repo = makeTempRepo('nextversion-late');
+    roots.push(repo);
+    commitFile(repo, 'chore: init');
+    execFileSync('git', ['tag', 'v0.1.0'], { cwd: repo, windowsHide: true });
+    commitFile(repo, 'fix: first');
+    const older = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, windowsHide: true, encoding: 'utf8' }).trim();
+    commitFile(repo, 'fix: second');
+    execFileSync('git', ['tag', 'v0.1.1'], { cwd: repo, windowsHide: true });
+
+    const late = runScript(repo, 'next-version.mjs', ['--dry-run', '--json', '--sha', older]);
+    expect(JSON.parse(late.stdout)).toMatchObject({ release: false });
+    const output = path.join(makeTempDir('nextversion-late-out'), 'github-output');
+    roots.push(path.dirname(output));
+    runScript(repo, 'next-version.mjs', ['--sha', older], { GITHUB_OUTPUT: output });
+    expect(readFileSync(output, 'utf8')).toContain('release=false\n');
+  });
+
   it('rejects unknown arguments', () => {
     const repo = makeTempRepo('nextversion-args');
     roots.push(repo);

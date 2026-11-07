@@ -97,6 +97,11 @@ export function lastReleaseTag(sha, cwd) {
   return tags[0] ?? null;
 }
 
+/** True when a release tag already contains the commit: runs on main may finish out of order, a newer one released first. */
+function coveredByRelease(sha, cwd) {
+  return git(['tag', '--list', 'v[0-9]*', '--contains', sha], { cwd }).trim() !== '';
+}
+
 export function commitsSince(lastTag, sha, cwd) {
   const range = lastTag ? `${lastTag}..${sha}` : sha;
   const raw = git(['log', '--format=%H%x1f%s%x1f%b%x1e', range], { cwd });
@@ -131,6 +136,7 @@ export function main(argv, cwd = repoRoot(), env = process.env) {
   }
   const lastTag = lastReleaseTag(options.sha, cwd);
   const plan = planRelease(lastTag, commitsSince(lastTag, options.sha, cwd));
+  if (coveredByRelease(options.sha, cwd)) plan.release = false;
   const tag = `v${plan.version}`;
   if (options.notesFile) writeFileSync(options.notesFile, formatCommitNotes(plan));
   if (options.json) {
