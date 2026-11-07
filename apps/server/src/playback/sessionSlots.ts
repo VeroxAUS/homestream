@@ -1,7 +1,8 @@
 import { finalizePlay, deletePlay } from '../db/plays.js';
 import { AppError } from '../errors.js';
 import type { LogEventInput } from '../events/record.js';
-import { stopDiscarded } from './discardStop.js';
+import { isEncoderNotStopped, stopDiscarded } from './discardStop.js';
+import type { EncoderHandle } from './encoderProcess.js';
 import type { FallingBehindWatch } from './fallingBehind.js';
 import { toActivitySession, type SessionRecord } from './session.js';
 import { endStats, notFound, scrub, subjectOf, type PlaybackManagerOptions, type StopReason } from './support.js';
@@ -110,14 +111,16 @@ export class SessionSlots {
     this.sessions.delete(rec.id);
     this.host.fallingBehind.forget(rec.id);
     this.draining += 1;
+    let outlived: Promise<void> | null;
     try {
       await rec.restart?.catch(() => undefined);
       await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     } finally {
+      outlived = this.holdIfRunning(rec, reason);
       this.draining -= 1;
     }
     rec.source.release();
-    await this.host.removeDir(rec.dir);
+    await this.removeDirAfter(rec.dir, outlived);
     if (!wasError) finalizePlay(options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...endStats(rec) });
     options.logger.info({ sessionId: rec.id, reason }, 'Playback session stopped');
     options.observer?.ended(subjectOf(rec), {
@@ -142,19 +145,56 @@ export class SessionSlots {
     this.sessions.delete(rec.id);
     this.host.fallingBehind.forget(rec.id);
     await rec.restart?.catch(() => undefined);
-    await Promise.all([
-      stopDiscarded(rec.process, {
+    const { process: proc } = rec;
+    // Boxed: a bare promise here would be awaited by Promise.all, i.e. until the stuck process exits.
+    const [{ outlived }] = await Promise.all([
+      stopDiscarded(proc, {
         sessionId: rec.id,
         reason: 'abandon',
         logger: this.host.options.logger,
         source: rec.source,
-      }),
+      }).then(
+        () => ({ outlived: null as Promise<void> | null }),
+        (error: unknown) => {
+          if (!proc || !isEncoderNotStopped(error)) throw error;
+          return { outlived: this.holdUntilExit(rec.id, proc) };
+        },
+      ),
       rec.subtitles?.stop(),
     ]);
     rec.source.release();
-    await this.host.removeDir(rec.dir);
+    await this.removeDirAfter(rec.dir, outlived);
     if (failure) this.recordStartFailure(rec, failure);
     else deletePlay(this.host.options.db, rec.id);
+  }
+
+  /** The stop returned but the process is still running (the kill failed): the session is reported ended, the place stays taken. */
+  private holdIfRunning(rec: SessionRecord, reason: StopReason): Promise<void> | null {
+    const { process: proc } = rec;
+    if (!proc?.running) return null;
+    this.host.options.logger.error(
+      { sessionId: rec.id, reason },
+      'Encoder is still running after the kill; its place stays taken until it exits',
+    );
+    return this.holdUntilExit(rec.id, proc);
+  }
+
+  /** An encoder that outlived its stop still runs on the GPU: its place is freed by its exit and never earlier. */
+  private holdUntilExit(sessionId: string, proc: EncoderHandle): Promise<void> {
+    this.draining += 1;
+    return proc.exited.then(() => {
+      this.draining -= 1;
+      this.host.options.logger.info({ sessionId }, 'Encoder that outlived its stop has exited; its place is free');
+    });
+  }
+
+  /** The files of an encoder that is still running cannot be removed; they go once it exited. */
+  private async removeDirAfter(dir: string, outlived: Promise<void> | null): Promise<void> {
+    if (!outlived) {
+      await this.host.removeDir(dir);
+      return;
+    }
+    void outlived.then(() => this.host.removeDir(dir));
   }
 
   private recordStartFailure(rec: SessionRecord, failure: AppError): void {

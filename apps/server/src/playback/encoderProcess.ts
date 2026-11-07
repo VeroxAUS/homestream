@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { killUntilExited } from './killUntilExited.js';
 import { WATCHDOG_STOP_GRACE_MS, type MemoryLimitHit, type MemoryWatchdog } from './memoryWatchdog.js';
 import { lowerPriority } from './priority.js';
 import { ProgressParser, type RawProgress } from './progress.js';
@@ -47,7 +48,10 @@ export interface EncoderHandle {
   readonly pid: number | undefined;
   readonly exited: Promise<EncoderExit>;
   readonly running: boolean;
-  /** Resolves once the process has exited (or could not be killed within a few seconds). */
+  /**
+   * Resolves once the process has exited, or after the kill was retried a few times without effect. A caller that needs
+   * the process gone must check `running` afterwards: a process that is still running holds its GPU place.
+   */
   stop(options?: StopOptions): Promise<void>;
 }
 
@@ -150,7 +154,11 @@ export class EncoderProcess implements EncoderHandle {
     }
     if (this.done) return;
     this.killed = true;
-    if (this.pid !== undefined) await killTree(this.pid);
-    await Promise.race([this.exited, new Promise((resolve) => setTimeout(resolve, 5000).unref())]);
+    const { pid } = this;
+    await killUntilExited({
+      kill: () => (pid === undefined ? Promise.resolve() : killTree(pid)),
+      exited: this.exited,
+      isDone: () => this.done,
+    });
   }
 }

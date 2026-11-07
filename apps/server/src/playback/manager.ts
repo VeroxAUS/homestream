@@ -183,6 +183,12 @@ export class PlaybackManager {
 
     const plan = planPatch(rec.probe, { audioIndex: rec.selectedAudioIndex, subtitle: rec.selectedSubtitle }, body);
     rec.lastActivity = Date.now();
+    const before = {
+      audio: rec.selectedAudioIndex,
+      subtitle: rec.selectedSubtitle,
+      subtitleDefault: rec.subtitleDefault,
+      decision: rec.decision,
+    };
     rec.selectedSubtitle = plan.subtitle;
     if (body.subtitle !== undefined) rec.subtitleDefault = null;
     if (!plan.restart) return toSessionResponse(rec);
@@ -205,7 +211,17 @@ export class PlaybackManager {
     rec.restart = this.recovery.reconfigure(rec, segment).finally(() => {
       rec.restart = null;
     });
-    await rec.restart;
+    try {
+      await rec.restart;
+    } catch (error) {
+      // The old encoder would not exit, so nothing was restarted: the choice must not look applied, or a retry would be a no-op.
+      rec.selectedAudioIndex = before.audio;
+      rec.selectedSubtitle = before.subtitle;
+      rec.subtitleDefault = before.subtitleDefault;
+      rec.decision = before.decision;
+      updatePlayDecision(this.options.db, rec.id, rec.decision);
+      throw error;
+    }
     return toSessionResponse(rec);
   }
 

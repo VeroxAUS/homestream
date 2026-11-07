@@ -49,10 +49,21 @@ export class FakeEncoder implements EncoderHandle {
   /** Real time the encoder was allowed before a kill, per stop that ended in one. */
   readonly killedAfterMs: number[] = [];
   private ignoresQ = false;
+  private survivesKill = false;
 
   /** Like an ffmpeg that is stuck: it only dies to the kill that follows the grace. */
   ignoreQ(): void {
     this.ignoresQ = true;
+  }
+
+  /** A process the kill cannot remove (a failed `taskkill`): `stop()` resolves after the kill, `running` stays true until `exitNow()`. */
+  surviveKill(): void {
+    this.survivesKill = true;
+  }
+
+  /** The late exit of a process that survived the kill. */
+  exitNow(): void {
+    this.end(1, true);
   }
 
   async stop(options?: StopOptions): Promise<void> {
@@ -65,11 +76,11 @@ export class FakeEncoder implements EncoderHandle {
     const grace = options?.graceMs ?? DEFAULT_STOP_GRACE_MS;
     if (grace > 0) this.order.push('q');
     if (this.gate) await this.gate;
-    if (this.ignoresQ) {
+    if (this.ignoresQ || this.survivesKill) {
       await new Promise((resolve) => setTimeout(resolve, grace));
       this.order.push('kill');
       this.killedAfterMs.push(grace);
-      this.end(1, true);
+      if (!this.survivesKill) this.end(1, true);
       return;
     }
     this.end(0);

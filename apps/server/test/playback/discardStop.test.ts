@@ -9,14 +9,16 @@ afterEach(() => {
 
 function target() {
   const info = vi.fn();
+  const error = vi.fn();
   const cutEncoderInput = vi.fn();
   return {
     info,
+    error,
     cutEncoderInput,
     discard: {
       sessionId: 'session-1',
       reason: 'seek' as const,
-      logger: { info },
+      logger: { info, error },
       source: { cutEncoderInput },
     },
   };
@@ -62,6 +64,26 @@ describe('stopDiscarded', () => {
     expect(proc.order).toEqual(['cut', 'q', 'kill']);
     expect(info).toHaveBeenCalledWith(
       { sessionId: 'session-1', reason: 'seek', outcome: 'killed', elapsedMs: DISCARD_GRACE_MS },
+      expect.any(String),
+    );
+  });
+
+  it('never reports a process that survived the kill as stopped: it logs an error and throws', async () => {
+    vi.useFakeTimers();
+    const { info, error, discard } = target();
+    const proc = encoder();
+    proc.surviveKill();
+
+    const stopping = stopDiscarded(proc, discard);
+    const rejected = expect(stopping).rejects.toMatchObject({ statusCode: 503, code: 'encoder_not_stopped' });
+    await vi.advanceTimersByTimeAsync(DISCARD_GRACE_MS);
+    await rejected;
+
+    expect(proc.running).toBe(true);
+    expect(info).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      { sessionId: 'session-1', reason: 'seek', elapsedMs: DISCARD_GRACE_MS },
       expect.any(String),
     );
   });

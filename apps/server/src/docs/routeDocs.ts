@@ -157,11 +157,12 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
   'PATCH /api/sessions/:id': doc(
     {
       summary: 'Change audio or subtitle track',
-      description: 'Restarts the encoder at the current position when the change needs it.',
+      description:
+        'Restarts the encoder at the current position when the change needs it. Answers 503 `encoder_not_stopped` (nothing is changed) when the old encoder has not exited yet; retry after a few seconds.',
       tag: 'sessions',
       params: SESSION_ID,
       body: SessionPatchRequestSchema,
-      errors: [400, 404, 409, 502, 504],
+      errors: [400, 404, 409, 502, 503, 504],
     },
     ok(SessionResponseSchema),
   ),
@@ -300,10 +301,10 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
     {
       summary: 'HLS playlist, init segment or media segment',
       description:
-        'One of `index.m3u8`, `video.m3u8`, `init.mp4` or `seg-N`. Waits for a segment that is still encoding.',
+        'One of `index.m3u8`, `video.m3u8`, `init.mp4` or `seg-N`. Waits for a segment that is still encoding. A seek answers 503 `encoder_not_stopped` when the previous encoder has not exited yet; retry after a few seconds.',
       tag: 'hls',
       params: { ...HLS_ID, file: 'File name inside the session.' },
-      errors: [404, 502, 504],
+      errors: [404, 502, 503, 504],
     },
     {
       200: {

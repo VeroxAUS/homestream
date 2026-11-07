@@ -3436,7 +3436,7 @@
         "tags": [
           "sessions"
         ],
-        "description": "Restarts the encoder at the current position when the change needs it.",
+        "description": "Restarts the encoder at the current position when the change needs it. Answers 503 `encoder_not_stopped` (nothing is changed) when the old encoder has not exited yet; retry after a few seconds.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3901,6 +3901,16 @@
               }
             }
           },
+          "503": {
+            "description": "The server or an upstream service is not available right now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "504": {
             "description": "An upstream service or the encoder timed out.",
             "content": {
@@ -4125,7 +4135,7 @@
         "tags": [
           "hls"
         ],
-        "description": "One of `index.m3u8`, `video.m3u8`, `init.mp4` or `seg-N`. Waits for a segment that is still encoding.",
+        "description": "One of `index.m3u8`, `video.m3u8`, `init.mp4` or `seg-N`. Waits for a segment that is still encoding. A seek answers 503 `encoder_not_stopped` when the previous encoder has not exited yet; retry after a few seconds.",
         "parameters": [
           {
             "schema": {
@@ -4179,6 +4189,16 @@
           },
           "502": {
             "description": "An upstream service (TMDB, gateway, TorBox or ffmpeg) failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The server or an upstream service is not available right now.",
             "content": {
               "application/json": {
                 "schema": {
