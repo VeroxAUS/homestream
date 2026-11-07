@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
 import { desktopBridge } from './bridge';
@@ -33,6 +33,14 @@ function useCheckAgain() {
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState('');
+  // Home replaces this screen as soon as the keys are in, which can happen while a check is still finishing.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const check = async (): Promise<void> => {
     const bridge = desktopBridge();
     if (!bridge) return;
@@ -40,7 +48,7 @@ function useCheckAgain() {
     setMessage('');
     try {
       const result = await bridge.restartServer();
-      if (!result.ok) setMessage(result.message ?? '');
+      if (!result.ok && mounted.current) setMessage(result.message ?? '');
       for (let attempt = 0; attempt < CHECK_ATTEMPTS; attempt += 1) {
         await queryClient.refetchQueries({ queryKey: ['health'] });
         const keys = configKeys(queryClient.getQueryData(healthQuery().queryKey));
@@ -52,7 +60,7 @@ function useCheckAgain() {
         await wait(CHECK_WAIT_MS);
       }
     } finally {
-      setChecking(false);
+      if (mounted.current) setChecking(false);
     }
   };
   return { checking, message, check };
