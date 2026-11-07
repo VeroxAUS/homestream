@@ -1,0 +1,43 @@
+{
+  "files": {
+    "apps/server/src/app.ts": {
+      "functionLines": 172
+    },
+    "apps/server/src/downloads/service.ts": {
+      "lines": 491
+    },
+    "apps/server/src/health/checks/ffmpeg.ts": {
+      "functionLines": 86
+    },
+    "apps/server/src/health/checks/torbox.ts": {
+      "functionLines": 83
+    },
+    "apps/server/src/sourceproxy/serve.ts": {
+      "functionLines": 87
+    },
+    "apps/server/src/sourceproxy/sourceEntry.ts": {
+      "functionLines": 82
+    },
+    "apps/server/test/health/checks.test.ts": {
+      "lines": 476
+    },
+    "apps/server/test/integration/downloads.test.ts": {
+      "lines": 785
+    },
+    "apps/server/test/integration/progress-routes.test.ts": {
+      "lines": 825
+    },
+    "apps/server/test/playback/ffmpegArgs.test.ts": {
+      "lines": 405
+    },
+    "apps/server/test/playback/harness.ts": {
+      "lines": 412
+    },
+    "apps/server/test/sourceproxy/proxy.test.ts": {
+      "lines": 410
+    },
+    "apps/web/src/components/Banner.tsx": {
+      "functionLines": 121
+    }
+  }
+}

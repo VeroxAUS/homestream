@@ -10,7 +10,7 @@
     "build:summary": "turbo run build --summarize",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && pnpm lint:root",
-    "lint:root": "eslint scripts eslint.config.mjs vitest.shared.ts",
+    "lint:root": "eslint scripts eslint.config.mjs vitest.shared.ts && node scripts/code-limits.mjs",
     "test": "turbo run test",
     "test:unit": "pnpm --filter @homestream/server test:unit",
     "test:integration": "pnpm --filter @homestream/server test:integration",

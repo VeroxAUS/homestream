@@ -1,7 +1,10 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import js from '@eslint/js';
 import globals from 'globals';
 import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
+import { limitConfigBlocks, readBaseline } from './scripts/lib/code-limits.mjs';
 
 const COMPLEXITY_CEILING = 20;
 const COGNITIVE_COMPLEXITY_CEILING = 20;
@@ -51,7 +54,6 @@ export default tseslint.config(
     { file: 'apps/server/src/config.ts', cyclomatic: 29 },
     { file: 'apps/server/src/health/checks/torbox.ts', cyclomatic: 27, cognitive: 22 },
     { file: 'apps/server/src/playback/diskCap.ts', cyclomatic: 24, cognitive: 43 },
-    { file: 'apps/server/src/playback/manager.ts', cyclomatic: 24, cognitive: 23 },
     { file: 'apps/server/src/playback/probe.ts', cyclomatic: 31, cognitive: 22 },
     // Hot path of the source proxy: streaming loop with explicit back-pressure and retry handling.
     { file: 'apps/server/src/sourceproxy/serve.ts', cyclomatic: 34, cognitive: 61, depth: 5 },
@@ -72,4 +74,6 @@ export default tseslint.config(
       globals: { ...globals.browser },
     },
   },
+  // Line limits for apps/* and packages/*; code-limits.baseline.json holds the ceilings of files that predate them.
+  ...limitConfigBlocks(readBaseline(path.dirname(fileURLToPath(import.meta.url)))),
 );

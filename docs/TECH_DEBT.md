@@ -16,17 +16,28 @@ How we track debt that is knowingly left in the code, and the list of debt that 
 
 `eslint.config.mjs` holds a per-file list of functions that are over the shared ceiling (`complexity` 20, `sonarjs/cognitive-complexity` 20, `max-depth` 4). Each entry is the measured value, so these files cannot get worse. Split the function and delete the entry.
 
-| File                                           | Function                            | Cyclomatic | Cognitive | Note                                               |
-| ---------------------------------------------- | ----------------------------------- | ---------- | --------- | -------------------------------------------------- |
-| `apps/server/src/config.ts`                    | `loadConfig`                        | 29         |           | One long list of env keys and their defaults       |
-| `apps/server/src/health/checks/torbox.ts`      | `checkTorbox`                       | 27         | 22        | Many TorBox account states                         |
-| `apps/server/src/playback/diskCap.ts`          | `planDiskCap`                       | 24         | 43        | Park and resume decisions for the transcode cap    |
-| `apps/server/src/playback/manager.ts`          | session start and `startWithSource` | 24         | 23        | Start, fallback and seek paths                     |
-| `apps/server/src/playback/probe.ts`            | `parseProbeOutput`                  | 31         | 22        | ffprobe JSON field handling                        |
-| `apps/server/src/sourceproxy/serve.ts`         | `pumpRemote`                        | 34         | 61        | Streaming hot path; refactor only with a benchmark |
-| `apps/server/src/sourceproxy/sourceEntry.ts`   | one method                          |            | 22        |                                                    |
-| `apps/server/test/playback/subtitleSources.ts` | test helper                         |            | 36        | Generates the subtitle test sources                |
-| `scripts/gpu-health.mjs`                       | one function                        |            | 23        |                                                    |
+| File                                           | Function           | Cyclomatic | Cognitive | Note                                               |
+| ---------------------------------------------- | ------------------ | ---------- | --------- | -------------------------------------------------- |
+| `apps/server/src/config.ts`                    | `loadConfig`       | 29         |           | One long list of env keys and their defaults       |
+| `apps/server/src/health/checks/torbox.ts`      | `checkTorbox`      | 27         | 22        | Many TorBox account states                         |
+| `apps/server/src/playback/diskCap.ts`          | `planDiskCap`      | 24         | 43        | Park and resume decisions for the transcode cap    |
+| `apps/server/src/playback/probe.ts`            | `parseProbeOutput` | 31         | 22        | ffprobe JSON field handling                        |
+| `apps/server/src/sourceproxy/serve.ts`         | `pumpRemote`       | 34         | 61        | Streaming hot path; refactor only with a benchmark |
+| `apps/server/src/sourceproxy/sourceEntry.ts`   | one method         |            | 22        |                                                    |
+| `apps/server/test/playback/subtitleSources.ts` | test helper        |            | 36        | Generates the subtitle test sources                |
+| `scripts/gpu-health.mjs`                       | one function       |            | 23        |                                                    |
+
+### Line limits
+
+ESLint fails a TypeScript or TSX file in `apps/*` and `packages/*` that has more than 400 lines (`max-lines`) or a function with more than 80 lines (`max-lines-per-function`). Blank lines and comments do not count. Test files (`test/`, `*.test.ts(x)`, `e2e/`) are exempt from the function limit only, because a `describe` block is one long function.
+
+`code-limits.baseline.json` lists the files and functions that were over a limit when the rule was added. Each entry is the measured size (`lines`, `functionLines`) and becomes a per-file override in `eslint.config.mjs`. `scripts/code-limits.mjs` runs as part of `pnpm lint` (`lint:root`) and enforces the baseline:
+
+- A ceiling must equal the measured size. Shrinking a file without lowering its ceiling fails, so the ceiling follows the file down. A file that is back within the limit must lose its entry.
+- An entry may not be added or raised compared with the previous main commit (`git merge-base HEAD origin/main`, else `HEAD^`; no network). Split the file or function instead.
+- Lower ceilings with `node scripts/code-limits.mjs --write`. It never raises one. `--init` regenerates the whole file and is only for the first baseline.
+
+The playback manager was split into the modules under `apps/server/src/playback/` (`manager.ts` is the facade). The files left in the baseline are listed in `code-limits.baseline.json`; paying one off means deleting its entry.
 
 ### Coverage
 
