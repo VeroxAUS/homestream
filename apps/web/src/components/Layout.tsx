@@ -1,5 +1,7 @@
 import { Suspense, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router';
+import { DownloadNotices } from '../notices/DownloadNotices';
+import { ToastHost } from '../notices/ToastHost';
 import { usePageView } from '../telemetry/usePageView';
 import { Nav } from './Nav';
 import styles from './Layout.module.css';
@@ -19,12 +21,16 @@ export function Layout() {
   const { pathname } = useLocation();
   usePageView(pathname);
   useScrollToTop(pathname);
+  // The player owns the whole window; it has its own top bar.
+  const inPlayer = pathname === '/play' || pathname.startsWith('/play/');
   return (
     <>
-      <Nav />
-      <Suspense fallback={<div className={styles.fallback} aria-busy="true" />}>
+      {inPlayer ? null : <Nav />}
+      <Suspense fallback={<div className={inPlayer ? styles.playerFallback : styles.fallback} aria-busy="true" />}>
         <Outlet />
       </Suspense>
+      <DownloadNotices />
+      <ToastHost />
     </>
   );
 }

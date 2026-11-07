@@ -1,0 +1,146 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  max-width: 460px;
+  padding: 0 24px;
+}
+
+.errorBox {
+  padding: 30px 34px;
+  background: var(--glass);
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  border-radius: 18px;
+}
+
+.warning {
+  color: var(--err);
+}
+
+.errorTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.errorMessage {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--warn-bg);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.primary {
+  background: var(--accent);
+  border: 0;
+  color: var(--on-accent);
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+}
+
+.secondary:hover {
+  background: var(--hover);
+}
+
+.spinner {
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-hi);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+.busyTitle {
+  font-size: 17px;
+}
+
+.busyDetail {
+  color: var(--mut);
+  font-size: 13px;
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.bigPlay {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: #fff;
+  pointer-events: auto;
+  transition:
+    transform var(--t-base),
+    background var(--t-base);
+}
+
+.bigPlay:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.08);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}

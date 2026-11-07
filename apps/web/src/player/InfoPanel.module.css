@@ -1,0 +1,67 @@
+.panel {
+  position: absolute;
+  top: 84px;
+  right: 32px;
+  z-index: 5;
+  width: 380px;
+  max-width: calc(100% - 64px);
+  padding: 18px 20px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  font-size: 13.5px;
+}
+
+.heading {
+  margin: 0 0 12px;
+  color: var(--mut);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.flow {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.label {
+  margin-bottom: 3px;
+  color: var(--mut);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--mut);
+}
+
+.arrow {
+  color: var(--accent-hi);
+  font-weight: 700;
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: rgba(var(--accent-rgb), 0.2);
+  border-radius: var(--r-pill);
+  color: var(--accent-hi);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kv span {
+  color: var(--mut);
+}

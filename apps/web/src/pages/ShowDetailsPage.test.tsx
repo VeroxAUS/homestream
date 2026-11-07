@@ -1,7 +1,8 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { clearDownloadProgress, setDownloadProgress } from '../events/downloadProgress';
+import { resetPrefetchMemory } from '../player/sessionApi';
 import { download, episode, health, season, showDetails } from '../test/fixtures';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
 
@@ -256,5 +257,33 @@ describe('ShowDetailsPage', () => {
     const alert = await screen.findByRole('alert');
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeInTheDocument();
+  });
+});
+
+describe('ShowDetailsPage prefetch', () => {
+  beforeEach(() => resetPrefetchMemory());
+  afterEach(() => vi.unstubAllGlobals());
+
+  const prefetches = (calls: Array<{ method: string; path: string; body?: unknown }>) =>
+    calls.filter((call) => call.method === 'POST' && call.path === '/api/prefetch');
+
+  it('sends one prefetch per selected episode, none for a season change, and none for an immediate repeat', async () => {
+    const { calls } = open({ 'POST /api/prefetch': () => Response.json({}, { status: 202 }) });
+    const first = await screen.findByRole('button', { name: /Episode title 1/ });
+    expect(prefetches(calls)).toHaveLength(0);
+
+    fireEvent.click(first);
+    fireEvent.click(first);
+    expect(prefetches(calls)).toHaveLength(1);
+    expect(prefetches(calls)[0]?.body).toMatchObject({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1 });
+    expect(prefetches(calls)[0]?.body).toHaveProperty('device');
+
+    fireEvent.click(row(/Episode title 2/));
+    expect(prefetches(calls)).toHaveLength(2);
+    expect(prefetches(calls)[1]?.body).toMatchObject({ season: 1, episode: 2 });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
+    await screen.findByRole('button', { name: /Episode title 1/ });
+    expect(prefetches(calls)).toHaveLength(2);
   });
 });

@@ -1,0 +1,72 @@
+.bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  padding: 0 32px 24px;
+}
+
+.buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.round,
+.skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  border-radius: 22px;
+  color: #fff;
+  transition: background var(--t-fast);
+}
+
+.round {
+  width: 44px;
+}
+
+.skip {
+  gap: 6px;
+  padding: 0 14px 0 10px;
+}
+
+.skipText {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.round:hover,
+.skip:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.on {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.volume {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.range {
+  width: 86px;
+  accent-color: var(--accent);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.menuRoot {
+  position: relative;
+}

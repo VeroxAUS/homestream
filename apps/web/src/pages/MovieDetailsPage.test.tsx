@@ -1,7 +1,8 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { clearDownloadProgress, setDownloadProgress } from '../events/downloadProgress';
+import { resetPrefetchMemory } from '../player/sessionApi';
 import { download, health, home, movieDetails, progress } from '../test/fixtures';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
 
@@ -100,8 +101,7 @@ describe('MovieDetailsPage', () => {
       'GET /api/movie/278': movieDetails({ download: download() }),
       'GET /api/progress/movie:278': NO_PROGRESS,
     });
-    const badge = await screen.findByRole('status', { name: '' });
-    expect(badge).toHaveTextContent('Downloading 42%');
+    const badge = (await screen.findByText('Downloading 42%')).closest('[role="status"]');
     expect(badge).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByRole('link', { name: 'Play' })).not.toBeInTheDocument();
 
@@ -176,5 +176,35 @@ describe('MovieDetailsPage', () => {
     open({ 'GET /api/movie/278': movieDetails(), 'GET /api/progress/movie:278': NO_PROGRESS, 'GET /api/home': home() });
     fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('heading', { name: 'Trending Movies' })).toBeInTheDocument();
+  });
+});
+
+describe('MovieDetailsPage prefetch', () => {
+  beforeEach(() => resetPrefetchMemory());
+  afterEach(() => vi.unstubAllGlobals());
+
+  const prefetches = (calls: Array<{ method: string; path: string; body?: unknown }>) =>
+    calls.filter((call) => call.method === 'POST' && call.path === '/api/prefetch');
+
+  it('sends exactly one prefetch with the title and a device profile when the page opens', async () => {
+    const { calls } = open({
+      'GET /api/movie/278': movieDetails(),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+      'POST /api/prefetch': () => Response.json({}, { status: 202 }),
+    });
+    await screen.findByRole('heading', { level: 1, name: 'The Shawshank Redemption' });
+    expect(prefetches(calls)).toHaveLength(1);
+    expect(prefetches(calls)[0]?.body).toMatchObject({ mediaType: 'movie', tmdbId: 278 });
+    expect(prefetches(calls)[0]?.body).toHaveProperty('device');
+  });
+
+  it('shows no error and keeps Play when the prefetch fails', async () => {
+    open({
+      'GET /api/movie/278': movieDetails(),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+      'POST /api/prefetch': apiError(500, 'internal_error', 'Broken'),
+    });
+    expect(await screen.findByRole('link', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

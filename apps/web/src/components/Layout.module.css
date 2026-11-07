@@ -1,3 +1,8 @@
 .fallback {
   min-height: calc(100vh - var(--nav-h));
 }
+
+.playerFallback {
+  min-height: 100vh;
+  background: #000;
+}

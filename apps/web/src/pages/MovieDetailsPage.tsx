@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { movieProgressQuery, movieQuery } from '../api/queries';
 import { DetailsError } from '../components/DetailsError';
 import { DetailsHero, GenreChips, MetaLine } from '../components/DetailsHero';
@@ -10,6 +11,7 @@ import { usePendingDownload } from '../events/usePendingDownload';
 import { formatRuntime } from '../lib/format';
 import { useContentShown } from '../lib/useContentShown';
 import { useTmdbId } from '../lib/useTmdbId';
+import { prefetchTitle } from '../player/sessionApi';
 import styles from './Details.module.css';
 
 function MovieDetails({ tmdbId }: { tmdbId: number }) {
@@ -17,6 +19,7 @@ function MovieDetails({ tmdbId }: { tmdbId: number }) {
   const progress = useQuery(movieProgressQuery(tmdbId));
   const download = usePendingDownload(downloadKey('movie', tmdbId), movie.data?.download);
   useContentShown(!movie.isPending);
+  useEffect(() => prefetchTitle({ mediaType: 'movie', tmdbId }), [tmdbId]);
 
   if (movie.isPending) return <DetailsSkeleton />;
   if (movie.isError) return <DetailsError error={movie.error} noun="Movie" onRetry={() => void movie.refetch()} />;

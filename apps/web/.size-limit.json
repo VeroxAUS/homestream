@@ -13,9 +13,15 @@
   },
   {
     "name": "Route chunks together (gzip)",
-    "path": "dist/assets/*Page-*.js",
+    "path": ["dist/assets/*Page-*.js", "!dist/assets/PlayerPage-*.js"],
     "gzip": true,
     "limit": "40 kB"
+  },
+  {
+    "name": "Player chunk with hls.js (gzip)",
+    "path": "dist/assets/PlayerPage-*.js",
+    "gzip": true,
+    "limit": "210 kB"
   },
   {
     "name": "Inter font",

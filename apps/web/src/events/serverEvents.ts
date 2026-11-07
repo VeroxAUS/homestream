@@ -39,9 +39,21 @@ function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T 
   }
 }
 
-function finishDownload(queryClient: QueryClient, event: DownloadEvent): void {
+export type DownloadOutcome = { type: 'ready'; event: DownloadEvent } | { type: 'failed'; event: DownloadEvent };
+
+const outcomeListeners = new Set<(outcome: DownloadOutcome) => void>();
+
+/** Called when a download turns ready or fails; the notices use it. Returns the unsubscribe function. */
+export function onDownloadOutcome(listener: (outcome: DownloadOutcome) => void): () => void {
+  outcomeListeners.add(listener);
+  return () => outcomeListeners.delete(listener);
+}
+
+function finishDownload(queryClient: QueryClient, outcome: DownloadOutcome): void {
+  const { event } = outcome;
   clearDownloadProgress(downloadKey(event.mediaType, event.tmdbId, event.season, event.episode));
   void queryClient.invalidateQueries({ queryKey: [event.mediaType === 'movie' ? 'movie' : 'show', event.tmdbId] });
+  for (const listener of outcomeListeners) listener(outcome);
 }
 
 /**
@@ -63,12 +75,14 @@ export function startServerEvents(queryClient: QueryClient): void {
     if (event)
       setDownloadProgress(downloadKey(event.mediaType, event.tmdbId, event.season, event.episode), event.progress);
   });
-  for (const type of ['download.ready', 'download.failed']) {
-    stream.addEventListener(type, (raw) => {
-      const event = parse(DownloadEventSchema, raw);
-      if (event) finishDownload(queryClient, event);
-    });
-  }
+  stream.addEventListener('download.ready', (raw) => {
+    const event = parse(DownloadEventSchema, raw);
+    if (event) finishDownload(queryClient, { type: 'ready', event });
+  });
+  stream.addEventListener('download.failed', (raw) => {
+    const event = parse(DownloadEventSchema, raw);
+    if (event) finishDownload(queryClient, { type: 'failed', event });
+  });
   stream.onerror = () => {
     failed = true;
     if (!live) return;

@@ -63,9 +63,16 @@ describe('App routes', () => {
     expect(screen.getByRole('navigation', { name: 'Dashboard sections' })).toBeInTheDocument();
   });
 
-  it('keeps the player route until the player exists', async () => {
+  it('opens the player on its own full-window route, without the main navigation', async () => {
     renderWithProviders(<App />, '/play/movie/278');
-    expect(await screen.findByText('Player not available yet')).toBeInTheDocument();
+    expect(await screen.findByTestId('player-stage')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
+  });
+
+  it('shows a not-found page for a player address that is not a title', async () => {
+    renderWithProviders(<App />, '/play/movie/abc');
+    expect(await screen.findByText('Nothing to play here')).toBeInTheDocument();
   });
 
   it('shows a not-found page with a way home for any other path', async () => {

@@ -1,4 +1,4 @@
-import type { EpisodeProgress, Season, ShowDetailsWithDownloads } from '@homestream/shared';
+import type { EpisodeProgress, Season, ShowDetailsWithDownloads, ShowProgressResponse } from '@homestream/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -13,6 +13,7 @@ import { NotFound } from '../components/NotFound';
 import { orderSeasons, pickSeason, seasonLabel } from '../lib/seasons';
 import { useContentShown } from '../lib/useContentShown';
 import { useTmdbId } from '../lib/useTmdbId';
+import { prefetchTitle } from '../player/sessionApi';
 import styles from './Details.module.css';
 
 /** Seasons with hundreds of episodes show them in pages, so the page never holds more than a few hundred nodes. */
@@ -76,6 +77,14 @@ function SeasonBody({ tmdbId, show, season, progress, selectedEpisode, onSelect 
   );
 }
 
+function useProgressLookup(progress: { data?: ShowProgressResponse; isError: boolean }): ProgressLookup {
+  return useMemo<ProgressLookup>(() => {
+    if (progress.isError) return new Map();
+    if (!progress.data) return undefined;
+    return new Map(progress.data.items.map((item) => [`${item.season}:${item.episode}`, item]));
+  }, [progress.data, progress.isError]);
+}
+
 function ShowDetails({ tmdbId }: { tmdbId: number }) {
   const show = useQuery(showQuery(tmdbId));
   const progress = useQuery(showProgressQuery(tmdbId));
@@ -85,19 +94,18 @@ function ShowDetails({ tmdbId }: { tmdbId: number }) {
   const season = useQuery({ ...seasonQuery(tmdbId, seasonNumber ?? 0), enabled: seasonNumber !== null });
   useContentShown(!show.isPending);
 
-  const lookup = useMemo<ProgressLookup>(() => {
-    if (progress.isError) return new Map();
-    if (!progress.data) return undefined;
-    return new Map(progress.data.items.map((item) => [`${item.season}:${item.episode}`, item]));
-  }, [progress.data, progress.isError]);
+  const lookup = useProgressLookup(progress);
 
   const chooseSeason = useCallback(
     (next: number) => setParams({ season: String(next) }, { replace: true }),
     [setParams],
   );
   const chooseEpisode = useCallback(
-    (episode: number) => setParams({ season: String(seasonNumber), episode: String(episode) }, { replace: true }),
-    [setParams, seasonNumber],
+    (episode: number) => {
+      setParams({ season: String(seasonNumber), episode: String(episode) }, { replace: true });
+      if (seasonNumber !== null) prefetchTitle({ mediaType: 'tv', tmdbId, season: seasonNumber, episode });
+    },
+    [setParams, seasonNumber, tmdbId],
   );
 
   if (show.isPending) return <DetailsSkeleton />;

@@ -11,6 +11,7 @@ import type {
   ProgressResponse,
   Season,
   ServerInfo,
+  SessionResponse,
   ShowDetailsWithDownloads,
 } from '@homestream/shared';
 
@@ -194,3 +195,59 @@ export const INFO: ServerInfo = {
   port: 8600,
   lanAddresses: ['192.168.1.50'],
 };
+
+export function session(overrides: Partial<SessionResponse> = {}): SessionResponse {
+  return {
+    sessionId: 's1',
+    playlistUrl: '/hls/s1/index.m3u8',
+    mediaPlaylistUrl: '/hls/s1/video.m3u8',
+    durationSec: 8520,
+    startPositionSec: 0,
+    state: 'ready',
+    decision: {
+      videoCodec: 'h264',
+      width: 3840,
+      height: 1600,
+      dynamicRange: 'sdr',
+      toneMapped: true,
+      audioCodec: 'aac',
+      audioChannels: 2,
+      subtitleBurnIn: false,
+      sourceVideo: { codec: 'hevc', width: 3840, height: 1600, hdr: 'dv' },
+      sourceAudio: { codec: 'truehd', channels: 8 },
+    },
+    audioTracks: [
+      { index: 0, codec: 'truehd', channels: 8, language: 'eng', title: '', default: true },
+      { index: 1, codec: 'eac3', channels: 6, language: 'fra', title: '', default: false },
+    ],
+    subtitleTracks: [
+      {
+        index: 0,
+        language: 'eng',
+        title: '',
+        kind: 'text',
+        forced: false,
+        default: true,
+        url: '/hls/s1/subs/0/index.m3u8',
+      },
+      {
+        index: 1,
+        language: 'spa',
+        title: '',
+        kind: 'text',
+        forced: false,
+        default: false,
+        url: '/hls/s1/subs/1/index.m3u8',
+      },
+      { index: 2, language: 'eng', title: 'PGS', kind: 'bitmap', forced: false, default: false, url: null },
+    ],
+    selectedAudioIndex: 0,
+    selectedSubtitle: { index: 0, mode: 'sidecar' },
+    subtitleDefault: 'english',
+    streamId: 'stream-1',
+    attempts: [],
+    encoder: { fps: 125, speed: 5.2, bitrateKbps: 14600, outTimeSec: 30, headSegment: 5 },
+    error: null,
+    ...overrides,
+  };
+}
