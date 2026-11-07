@@ -10,7 +10,7 @@ import type { ProbeResult, ProbeRunner } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
 import { BlockCache, GLOBAL_CAP_BYTES, PER_SOURCE_CAP_BYTES, type BlockCacheStats } from './blockCache.js';
 import { newCounters, serveSource, type ProxyCounters } from './serve.js';
-import { PREFETCH_OWNER, SourceEntry, type Consumer } from './sourceEntry.js';
+import { PREFETCH_OWNER, SourceEntry, type Consumer, type ReaderRef } from './sourceEntry.js';
 import { UpstreamClient } from './upstream.js';
 
 export { PREFETCH_OWNER };
@@ -20,6 +20,9 @@ const PREFETCH_TTL_MS = 10 * 60 * 1000;
 const MAX_PREFETCH_ENTRIES = 3;
 const SWEEP_INTERVAL_MS = 30_000;
 const KEY_PATTERN = /^\/src\/([A-Za-z0-9_-]{8,64})$/;
+/** Query parameter naming the session (or prefetch) behind a loopback URL, so each gets its own read-ahead window. */
+const OWNER_PARAM = 'o';
+const OWNER_QUERY = /(?:^|&)o=([A-Za-z0-9_-]{8,64})(?:&|$)/;
 
 export interface SourceProxyOptions {
   resolveUrl: UrlResolver;
@@ -170,6 +173,12 @@ export class SourceProxy {
     return this.handleFor(entry, owner, port);
   }
 
+  /** True while the source behind a gateway link is registered (held by a prefetch or a session) and not yet dropped. */
+  isLive(rawUrl: string): boolean {
+    const entry = this.entries.get(rawUrl);
+    return entry !== undefined && !entry.closed;
+  }
+
   stats(): SourceProxyStats {
     return { ...this.counters, sources: this.entries.size, cache: this.cache.stats() };
   }
@@ -228,6 +237,7 @@ export class SourceProxy {
         gate: this.gate,
         readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
         resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
+        newToken: newKey,
       },
     );
     entry.firstOwner = owner;
@@ -246,15 +256,22 @@ export class SourceProxy {
   private handleFor(entry: SourceEntry, owner: string, port: number): SourceHandle {
     const base = `http://${LOOPBACK_HOST}:${port}/src/`;
     let released = false;
+    const token = entry.readerToken(owner);
     return {
-      url: `${base}${entry.keys.main}`,
+      url: `${base}${entry.keys.main}?${OWNER_PARAM}=${token}`,
       extractorUrl: `${base}${entry.keys.extractor}`,
-      extractorRunUrl: (runId) => `${base}${entry.keys.extractor}?run=${runId}`,
-      setExtractorHold: (runId, held) => entry.setExtractorHold(runId, held),
-      setLead: (leadSec) => entry.setLead(owner, leadSec),
-      resetReadAhead: () => entry.resetReadAhead(owner),
+      extractorRunUrl: (runId) => `${base}${entry.keys.extractor}?${OWNER_PARAM}=${token}&run=${runId}`,
+      setExtractorHold: (runId, held) => {
+        if (!released) entry.setExtractorHold(owner, runId, held);
+      },
+      setLead: (leadSec) => {
+        if (!released) entry.setLead(owner, leadSec);
+      },
+      resetReadAhead: () => {
+        if (!released) entry.resetReadAhead(owner);
+      },
       get readAhead() {
-        return entry.readAhead;
+        return entry.readAheadOf(owner);
       },
       get headReady() {
         return entry.headReady;
@@ -284,7 +301,7 @@ export class SourceProxy {
         if (released) return;
         released = true;
         entry.refs.delete(owner);
-        entry.forgetLead(owner);
+        entry.forgetOwner(owner);
         if (entry.refs.size === 0) this.drop(entry);
       },
     };
@@ -332,16 +349,14 @@ export class SourceProxy {
     const target = match ? this.byKey.get(match[1] as string) : undefined;
     if (!target) return fail(404);
     const run = /(?:^|&)run=(\d{1,9})(?:&|$)/.exec(query);
+    const token = OWNER_QUERY.exec(query)?.[1];
+    const reader: ReaderRef = {
+      consumer: target.consumer,
+      owner: token ? target.entry.ownerOf(token) : null,
+      runId: run ? Number(run[1]) : null,
+    };
     try {
-      await serveSource(
-        req,
-        res,
-        target.entry,
-        target.consumer,
-        run ? Number(run[1]) : null,
-        this.cache,
-        this.counters,
-      );
+      await serveSource(req, res, target.entry, reader, this.cache, this.counters);
     } catch {
       if (!res.headersSent) fail(502);
       else res.destroy();

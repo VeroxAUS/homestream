@@ -53,21 +53,35 @@ describe('resolveDownloadLimits', () => {
     },
   );
 
-  it.each(['fast', '0', '-5'])('rejects READ_AHEAD_SEC=%j and falls back to 180', (value) => {
+  it.each(['fast', '0', '-5'])('rejects READ_AHEAD_SEC=%j and restores the pair 180/120', (value) => {
     const { limits, warnings } = resolve({ READ_AHEAD_SEC: value });
     expect(limits.readAheadSec).toBe(180);
     expect(limits.readAheadResumeSec).toBe(120);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('READ_AHEAD_SEC');
-    expect(warnings[0]).toContain('default 180');
+    expect(warnings[0]).toContain('defaults 180 and 120');
   });
 
-  it.each(['-1', '0', 'soon'])('rejects READ_AHEAD_RESUME_SEC=%j and falls back to 120', (value) => {
+  it.each(['-1', '0', 'soon'])('rejects READ_AHEAD_RESUME_SEC=%j and restores the pair 180/120', (value) => {
     const { limits, warnings } = resolve({ READ_AHEAD_RESUME_SEC: value });
+    expect(limits.readAheadSec).toBe(180);
     expect(limits.readAheadResumeSec).toBe(120);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('READ_AHEAD_RESUME_SEC');
-    expect(warnings[0]).toContain('default 120');
+    expect(warnings[0]).toContain('defaults 180 and 120');
+  });
+
+  it.each([
+    [{ READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: '-1' }, 'READ_AHEAD_RESUME_SEC'],
+    [{ READ_AHEAD_SEC: '240', READ_AHEAD_RESUME_SEC: 'soon' }, 'READ_AHEAD_RESUME_SEC'],
+    [{ READ_AHEAD_SEC: 'fast', READ_AHEAD_RESUME_SEC: '150' }, 'READ_AHEAD_SEC'],
+    [{ READ_AHEAD_SEC: '0', READ_AHEAD_RESUME_SEC: '60' }, 'READ_AHEAD_SEC'],
+  ])('restores 180/120 when one of the pair %j is invalid, even if the other is valid', (raw, key) => {
+    const { limits, warnings } = resolve(raw);
+    expect(limits).toMatchObject({ readAheadSec: 180, readAheadResumeSec: 120 });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(key);
+    expect(warnings[0]).toContain('defaults 180 and 120');
   });
 
   it('puts both window values back to their defaults when the resume point is not below the window', () => {
@@ -101,6 +115,7 @@ describe('resolveDownloadLimits', () => {
     });
     expect(limits).toEqual({ maxDownloadMbps: 150, readAheadSec: 180, readAheadResumeSec: 120 });
     expect(warnings).toHaveLength(3);
+    expect(warnings.filter((warning) => warning.includes('READ_AHEAD'))).toHaveLength(2);
   });
 });
 

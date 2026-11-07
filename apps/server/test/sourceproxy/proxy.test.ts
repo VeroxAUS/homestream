@@ -119,7 +119,7 @@ describe('range responses', () => {
   it('serves exact 206 ranges across head, middle and tail, and 200 without Range', async () => {
     const { proxy } = rig();
     const handle = await proxy.acquire('gw://a', 'session-1');
-    expect(handle.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/src\/[A-Za-z0-9_-]+$/);
+    expect(handle.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/src\/[A-Za-z0-9_-]+\?o=[A-Za-z0-9_-]+$/);
     expect(handle.url).not.toContain('gen=');
 
     const cases: Array<[string, number, number]> = [
@@ -382,12 +382,13 @@ describe('lifetime', () => {
       proxy.acquire('gw://shared', 'prefetch'),
       proxy.acquire('gw://shared', 'session-1'),
     ]);
-    expect(a.url).toBe(b.url);
-    expect(resolves).toHaveLength(1);
+    // Each owner has its own reader id in the query so its read-ahead window is its own; the path is shared.
+    const [path] = a.url.split('?');
+    expect([b.url.split('?')[0], a.url === b.url, resolves.length]).toEqual([path, false, 1]);
 
     await Promise.all([a.probe(), b.probe()]);
     await b.probe();
-    expect(probes).toEqual([a.url]);
+    expect(probes).toEqual([path]);
 
     b.release();
     expect((await read(a.url, 'bytes=0-9')).status).toBe(206);

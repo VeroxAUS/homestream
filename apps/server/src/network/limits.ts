@@ -23,8 +23,8 @@ function parse(raw: string | undefined): number | null {
 
 /**
  * Reads the download-limit settings. An invalid value never stops the server and is never clamped: it adds a warning that
- * names the key and the default now in use. A resume point at or above the window is a contradiction between two keys, so
- * both go back to their defaults.
+ * names the key and the default now in use. An invalid window or resume value, or a resume point at or above the window, puts the
+ * pair back to the defaults together: the two keys only make sense as a pair.
  */
 export function resolveDownloadLimits(raw: RawDownloadLimits, warnings: string[]): DownloadLimits {
   let maxDownloadMbps = DEFAULT_MAX_DOWNLOAD_MBPS;
@@ -40,37 +40,34 @@ export function resolveDownloadLimits(raw: RawDownloadLimits, warnings: string[]
   }
 
   let readAheadSec = DEFAULT_READ_AHEAD_SEC;
-  const window = parse(raw.READ_AHEAD_SEC);
-  if (window !== null) {
-    if (Number.isNaN(window) || window <= 0) {
-      warnings.push(
-        `READ_AHEAD_SEC="${raw.READ_AHEAD_SEC}" is invalid (a number of seconds above 0 is needed); using the default ${DEFAULT_READ_AHEAD_SEC}.`,
-      );
-    } else {
-      readAheadSec = window;
-    }
-  }
-
   let readAheadResumeSec = DEFAULT_READ_AHEAD_RESUME_SEC;
+  const pairNote = `using the defaults ${DEFAULT_READ_AHEAD_SEC} and ${DEFAULT_READ_AHEAD_RESUME_SEC} for READ_AHEAD_SEC and READ_AHEAD_RESUME_SEC`;
+  const window = parse(raw.READ_AHEAD_SEC);
   const resume = parse(raw.READ_AHEAD_RESUME_SEC);
-  if (resume !== null) {
-    if (Number.isNaN(resume) || resume <= 0) {
+  const badWindow = window !== null && (Number.isNaN(window) || window <= 0);
+  const badResume = resume !== null && (Number.isNaN(resume) || resume <= 0);
+  if (badWindow) {
+    warnings.push(
+      `READ_AHEAD_SEC="${raw.READ_AHEAD_SEC}" is invalid (a number of seconds above 0 is needed); ${pairNote}.`,
+    );
+  }
+  if (badResume) {
+    warnings.push(
+      `READ_AHEAD_RESUME_SEC="${raw.READ_AHEAD_RESUME_SEC}" is invalid (a number of seconds above 0 is needed); ${pairNote}.`,
+    );
+  }
+  if (!badWindow && !badResume) {
+    const wantedWindow = window ?? DEFAULT_READ_AHEAD_SEC;
+    const wantedResume = resume ?? DEFAULT_READ_AHEAD_RESUME_SEC;
+    if (wantedResume >= wantedWindow) {
       warnings.push(
-        `READ_AHEAD_RESUME_SEC="${raw.READ_AHEAD_RESUME_SEC}" is invalid (a number of seconds above 0 is needed); using the default ${DEFAULT_READ_AHEAD_RESUME_SEC}.`,
+        `READ_AHEAD_RESUME_SEC=${wantedResume} is invalid (it must be below READ_AHEAD_SEC=${wantedWindow}); ${pairNote}.`,
       );
     } else {
-      readAheadResumeSec = resume;
+      readAheadSec = wantedWindow;
+      readAheadResumeSec = wantedResume;
     }
   }
-
-  if (readAheadResumeSec >= readAheadSec) {
-    warnings.push(
-      `READ_AHEAD_RESUME_SEC=${readAheadResumeSec} is invalid (it must be below READ_AHEAD_SEC=${readAheadSec}); using the defaults ${DEFAULT_READ_AHEAD_SEC} and ${DEFAULT_READ_AHEAD_RESUME_SEC}.`,
-    );
-    readAheadSec = DEFAULT_READ_AHEAD_SEC;
-    readAheadResumeSec = DEFAULT_READ_AHEAD_RESUME_SEC;
-  }
-
   return { maxDownloadMbps, readAheadSec, readAheadResumeSec };
 }
 

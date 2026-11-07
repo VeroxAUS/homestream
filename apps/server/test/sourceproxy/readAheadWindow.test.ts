@@ -66,19 +66,60 @@ describe('read-ahead window', () => {
     expect(proxy.network().rateMbps).toBeLessThan(2);
   }, 30_000);
 
-  it('uses the smallest lead when two sessions play the same stream', async () => {
+  it('keeps each session on its own window when two sessions play the same stream', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const first = await proxy.acquire('gw://shared', 'session-1');
     const second = await proxy.acquire('gw://shared', 'session-2');
     first.setLead(180);
     expect(first.readAhead).toBe('waiting');
     second.setLead(5);
-    expect(first.readAhead).toBe('filling');
+    expect(first.readAhead).toBe('waiting');
+    expect(second.readAhead).toBe('filling');
+    expect(first.leadSec).toBe(180);
+    expect(second.leadSec).toBe(5);
+    second.resetReadAhead();
+    expect(first.readAhead).toBe('waiting');
     second.setLead(177);
     expect(second.readAhead).toBe('waiting');
     second.release();
+    expect(first.readAhead).toBe('waiting');
     first.setLead(100);
     expect(first.readAhead).toBe('filling');
+  }, 30_000);
+
+  it('stops the paused session reader while another session on the same stream keeps downloading', async () => {
+    const proxy = rig({ maxDownloadMbps: 400 });
+    const paused = await acquireSettled(proxy, 'gw://two', 'session-1');
+    const playing = await proxy.acquire('gw://two', 'session-2');
+    expect(paused.url).not.toBe(playing.url);
+
+    paused.setLead(180);
+    playing.setLead(5);
+    const pausedReader = new Reader(paused.url, 100 * MB, 250 * MB - 1);
+    const playingReader = new Reader(playing.url, 260 * MB, 300 * MB - 1);
+    await expect.poll(() => playingReader.ended, { timeout: 15_000 }).toBe(true);
+    expect(pausedReader.received).toBe(0);
+    expect(pausedReader.closed).toBe(false);
+    expect(paused.readAhead).toBe('waiting');
+    expect(playing.readAhead).toBe('filling');
+
+    playing.resetReadAhead();
+    await sleep(300);
+    expect(pausedReader.received).toBe(0);
+
+    paused.setLead(100);
+    await expect.poll(() => pausedReader.ended, { timeout: 15_000 }).toBe(true);
+    expect(pausedReader.received).toBe(150 * MB);
+  }, 40_000);
+
+  it('does not let a session that never reported a lead be held by another session', async () => {
+    const proxy = rig({ maxDownloadMbps: 400 });
+    const first = await acquireSettled(proxy, 'gw://third', 'session-1');
+    const second = await proxy.acquire('gw://third', 'session-2');
+    first.setLead(180);
+    const reader = new Reader(second.url, 100 * MB, 110 * MB - 1);
+    await expect.poll(() => reader.ended, { timeout: 15_000 }).toBe(true);
+    expect(reader.received).toBe(10 * MB);
   }, 30_000);
 
   it('holds only the extractor run that was told to wait', async () => {
@@ -96,5 +137,31 @@ describe('read-ahead window', () => {
     handle.setExtractorHold(1, false);
     await expect.poll(() => held.ended, { timeout: 15_000 }).toBe(true);
     expect(held.received).toBe(50 * MB);
+  }, 40_000);
+
+  it('keeps extractor run ids of two sessions on the same source apart', async () => {
+    const proxy = rig({ maxDownloadMbps: 400 });
+    const first = await acquireSettled(proxy, 'gw://run-ids', 'session-1');
+    const second = await proxy.acquire('gw://run-ids', 'session-2');
+    expect(first.extractorRunUrl(1)).not.toBe(second.extractorRunUrl(1));
+
+    first.setExtractorHold(1, true);
+    const heldFirst = new Reader(first.extractorRunUrl(1), 100 * MB, 120 * MB - 1);
+    const freeSecond = new Reader(second.extractorRunUrl(1), 200 * MB, 210 * MB - 1);
+    await expect.poll(() => freeSecond.ended, { timeout: 15_000 }).toBe(true);
+    expect(heldFirst.received).toBe(0);
+
+    second.setExtractorHold(1, true);
+    second.setExtractorHold(1, false);
+    await sleep(300);
+    expect(heldFirst.received).toBe(0);
+
+    second.release();
+    await sleep(300);
+    expect(heldFirst.received).toBe(0);
+
+    first.setExtractorHold(1, false);
+    await expect.poll(() => heldFirst.ended, { timeout: 15_000 }).toBe(true);
+    expect(heldFirst.received).toBe(20 * MB);
   }, 40_000);
 });

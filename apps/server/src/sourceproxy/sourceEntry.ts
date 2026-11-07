@@ -12,8 +12,9 @@ import {
   type Priority,
 } from '../network/downloadGate.js';
 import { RateMeter } from '../network/rateMeter.js';
-import { ReadAheadWindow, type ReadAheadState } from '../network/readAhead.js';
+import type { ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
+import { ReaderHolds } from './readerHolds.js';
 import type { UpstreamClient } from './upstream.js';
 import {
   isAbort,
@@ -42,6 +43,13 @@ const SHARE_AHEAD_BYTES = 8 * 1024 * 1024;
 /** `extractor` reads are paced to the entry's `extractorLimit`. */
 export type Consumer = 'main' | 'extractor';
 
+/** Who a loopback request belongs to: the consumer kind, the session (or prefetch) behind its URL token, and the extractor run. */
+export interface ReaderRef {
+  consumer: Consumer;
+  owner: string | null;
+  runId: number | null;
+}
+
 export interface SourceEntryDeps {
   upstream: UpstreamClient;
   resolve: UrlResolver;
@@ -52,6 +60,8 @@ export interface SourceEntryDeps {
   gate: DownloadGate;
   readAheadSec: number;
   resumeSec: number;
+  /** Makes the opaque reader ids in loopback URLs. */
+  newToken: () => string;
 }
 
 /**
@@ -67,6 +77,9 @@ export interface Front {
   /** Last byte it was asked for. */
   end: number;
 }
+
+/** Head and tail warm-up reads happen before any owner is registered. */
+const WARM_READER: ReaderRef = { consumer: 'main', owner: null, runId: null };
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,8 +106,6 @@ export class SourceEntry implements BlockOwner {
   extractorLimit: number | null = null;
   /** This source's own upstream download rate. */
   readonly meter = new RateMeter();
-  /** Seconds of video the encoder has buffered ahead of the player; the smaller, the earlier it gets bandwidth when the cap binds. */
-  lead = 0;
   /** Streams currently reading from upstream for a consumer. */
   readonly fronts = new Set<Front>();
   /** Who asked for this source first; its warm-up downloads happen before that owner is registered. */
@@ -126,10 +137,7 @@ export class SourceEntry implements BlockOwner {
   private refreshing: Promise<void> | null = null;
   private cdnUrl: string;
   private readonly local: boolean;
-  private readonly window: ReadAheadWindow;
-  /** Extractor runs (by id) whose reads are held at the end of their window. */
-  private readonly extractorHolds = new Set<number>();
-  private readonly leads = new Map<string, number>();
+  private readonly holds: ReaderHolds;
   private readonly holdWaiters = new Set<() => void>();
 
   constructor(
@@ -141,7 +149,17 @@ export class SourceEntry implements BlockOwner {
     this.cdnUrl = resolvedUrl;
     this.keys = keys;
     this.local = !/^https?:\/\//i.test(resolvedUrl);
-    this.window = new ReadAheadWindow(Math.max(1, deps.readAheadSec - ENCODER_PIPELINE_SEC), deps.resumeSec);
+    this.holds = new ReaderHolds(
+      Math.max(1, deps.readAheadSec - ENCODER_PIPELINE_SEC),
+      deps.resumeSec,
+      deps.newToken,
+      () => this.wakeHolds(),
+    );
+  }
+
+  /** The smallest encoder lead of any owner: the one closest to running dry decides the bandwidth priority of shared reads. */
+  get lead(): number {
+    return this.holds.minLead();
   }
 
   get isLocal(): boolean {
@@ -157,53 +175,48 @@ export class SourceEntry implements BlockOwner {
     this.lastUsed = Date.now();
   }
 
-  get readAhead(): ReadAheadState {
-    return this.window.state;
+  /** Opaque id for the loopback URLs of one owner; its reads are gated by that owner's own read-ahead window. */
+  readerToken(owner: string): string {
+    return this.holds.tokenFor(owner);
+  }
+
+  ownerOf(token: string): string | null {
+    return this.holds.ownerOf(token);
+  }
+
+  readAheadOf(owner: string): ReadAheadState {
+    return this.holds.stateOf(owner);
   }
 
   /**
-   * Records one owner's encoder lead over its player. Sessions playing the same stream share the encoder URL, so the
-   * smallest lead decides: reading stops only when every one of them is a full window ahead.
+   * Records one owner's encoder lead over its player. The byte cache is shared between the sessions playing a stream, but
+   * each session's reader waits at its own window.
    */
   setLead(owner: string, leadSec: number): void {
-    this.leads.set(owner, leadSec);
-    this.applyLeads();
+    this.holds.setLead(owner, leadSec);
   }
 
   /** A start, seek or encoder restart: measured from here, so the next stretch downloads freely again. */
   resetReadAhead(owner: string): void {
-    this.leads.set(owner, 0);
-    this.window.reset();
-    this.applyLeads();
-    this.wakeHolds();
+    this.holds.reset(owner);
   }
 
   leadOf(owner: string): number {
-    return this.leads.get(owner) ?? 0;
+    return this.holds.leadOf(owner);
   }
 
-  forgetLead(owner: string): void {
-    if (this.leads.delete(owner)) this.applyLeads();
+  forgetOwner(owner: string): void {
+    this.holds.forget(owner);
   }
 
-  private applyLeads(): void {
-    this.lead = this.leads.size === 0 ? 0 : Math.min(...this.leads.values());
-    if (this.window.update(this.lead)) this.wakeHolds();
+  setExtractorHold(owner: string, runId: number, held: boolean): void {
+    this.holds.setExtractorHold(owner, runId, held);
   }
 
-  setExtractorHold(runId: number, held: boolean): void {
-    if (held === this.extractorHolds.has(runId)) return;
-    if (held) this.extractorHolds.add(runId);
-    else {
-      this.extractorHolds.delete(runId);
-      this.wakeHolds();
-    }
-  }
-
-  /** True when reads for this consumer must wait: they would fetch past the end of the read-ahead window. Plain files never wait. */
-  isHeld(consumer: Consumer, runId: number | null): boolean {
+  /** True when this reader must wait: it would fetch past the end of its owner's read-ahead window. Plain files never wait. */
+  isHeld(reader: ReaderRef): boolean {
     if (this.local || this.closed) return false;
-    return consumer === 'main' ? this.window.waiting : runId !== null && this.extractorHolds.has(runId);
+    return this.holds.isHeld(reader.consumer, reader.owner, reader.runId);
   }
 
   /** Resolves when `isHeld` may have changed, or `signal` aborts. */
@@ -241,18 +254,19 @@ export class SourceEntry implements BlockOwner {
   }
 
   /** Counts downloaded bytes against the cap; resolves when they may be passed on. */
-  async download(bytes: number, consumer: Consumer, signal?: AbortSignal): Promise<void> {
-    await this.deps.gate.acquire(bytes, () => this.priority(consumer), signal);
+  async download(bytes: number, reader: ReaderRef, signal?: AbortSignal): Promise<void> {
+    await this.deps.gate.acquire(bytes, () => this.priority(reader), signal);
     this.meter.add(bytes, Date.now());
   }
 
-  private priority(consumer: Consumer): Priority {
-    if (consumer === 'extractor') return { rank: RANK_EXTRACTOR, lead: this.lead };
+  private priority(reader: ReaderRef): Priority {
+    if (reader.consumer === 'extractor') return { rank: RANK_EXTRACTOR, lead: this.lead };
     const prefetchOnly =
       this.refs.size > 0
         ? [...this.refs].every((owner) => owner === PREFETCH_OWNER)
         : this.firstOwner === PREFETCH_OWNER;
-    return { rank: prefetchOnly ? RANK_PREFETCH : RANK_ENCODER, lead: this.lead };
+    const lead = reader.owner === null ? this.lead : this.leadOf(reader.owner);
+    return { rank: prefetchOnly ? RANK_PREFETCH : RANK_ENCODER, lead };
   }
 
   private readonly fillWaiters: Array<{ done: () => boolean; resolve: () => void }> = [];
@@ -342,7 +356,7 @@ export class SourceEntry implements BlockOwner {
           this.headFilled = filled;
           this.notifyFill();
         },
-        (bytes) => this.download(bytes, 'main'),
+        (bytes) => this.download(bytes, WARM_READER),
       );
     });
     const tail = this.open(`bytes=-${TAIL_BYTES}`).then(async (response) => {
@@ -364,7 +378,7 @@ export class SourceEntry implements BlockOwner {
           this.tailFilled = filled;
           this.notifyFill();
         },
-        (bytes) => this.download(bytes, 'main'),
+        (bytes) => this.download(bytes, WARM_READER),
       );
     });
 

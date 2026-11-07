@@ -35,6 +35,8 @@ interface Run {
   done: Promise<void>;
   finishedAt: number | null;
   succeeded: boolean;
+  /** The gateway link registered with the source proxy, once there is one. */
+  sourceUrl: string | null;
 }
 
 function describe(error: unknown): string {
@@ -73,7 +75,13 @@ export class PrefetchService {
 
     const now = Date.now();
     let run = this.runs.get(key);
-    if (run?.finishedAt && (now - run.finishedAt > MERGE_WINDOW_MS || !run.succeeded)) {
+    // A warm-up whose source the proxy has since dropped (it keeps only the newest few) warmed nothing any more.
+    if (
+      run?.finishedAt &&
+      (now - run.finishedAt > MERGE_WINDOW_MS ||
+        !run.succeeded ||
+        (run.sourceUrl !== null && !this.options.proxy.isLive(run.sourceUrl)))
+    ) {
       this.runs.delete(key);
       run = undefined;
     }
@@ -111,12 +119,20 @@ export class PrefetchService {
   }
 
   private start(key: string, body: PrefetchRequest, device: CapabilityProfile, mediaKey: string): Run {
-    const run: Run = { streamId: Promise.resolve(null), done: Promise.resolve(), finishedAt: null, succeeded: false };
+    const run: Run = {
+      streamId: Promise.resolve(null),
+      done: Promise.resolve(),
+      finishedAt: null,
+      succeeded: false,
+      sourceUrl: null,
+    };
     let announce: (id: string | null) => void = () => undefined;
     run.streamId = new Promise<string | null>((resolve) => {
       announce = resolve;
     });
-    run.done = this.warm(body, device, mediaKey, announce)
+    run.done = this.warm(body, device, mediaKey, announce, (url) => {
+      run.sourceUrl = url;
+    })
       .then((succeeded) => {
         run.succeeded = succeeded;
       })
@@ -141,6 +157,7 @@ export class PrefetchService {
     device: CapabilityProfile,
     mediaKey: string,
     announce: (streamId: string | null) => void,
+    registered: (sourceUrl: string) => void,
   ): Promise<boolean> {
     const { tmdb, streams, proxy } = this.options;
     const details = body.mediaType === 'movie' ? await tmdb.movie(body.tmdbId) : await tmdb.show(body.tmdbId);
@@ -172,6 +189,7 @@ export class PrefetchService {
     }
     const started = Date.now();
     const source = await proxy.acquire(resolved.url, PREFETCH_OWNER);
+    registered(resolved.url);
     try {
       await source.probe();
     } catch (error) {

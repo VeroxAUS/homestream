@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BLOCK_SIZE, type BlockCache } from './blockCache.js';
 import { RatePacer } from './pacer.js';
-import { TAIL_BYTES, type Consumer, type Front, type SourceEntry } from './sourceEntry.js';
+import { TAIL_BYTES, type Front, type ReaderRef, type SourceEntry } from './sourceEntry.js';
 import { isAbort, rangeInfo } from './upstream.js';
 
 /** An upstream read stops before the next cached block; looking this far ahead keeps one request per long streak. */
@@ -186,8 +186,7 @@ async function waitForSharedBytes(
 
 async function pumpRemote(
   entry: SourceEntry,
-  consumer: Consumer,
-  runId: number | null,
+  reader: ReaderRef,
   cache: BlockCache,
   range: ByteRange,
   sink: Sink,
@@ -195,7 +194,7 @@ async function pumpRemote(
 ): Promise<void> {
   let pos = range.start;
   let stalls = 0;
-  const pacer = consumer === 'extractor' ? new RatePacer() : null;
+  const pacer = reader.consumer === 'extractor' ? new RatePacer() : null;
   const tailRegion = Math.max(entry.headTarget, entry.size - TAIL_BYTES);
   const lifetime = new AbortController();
   sink.onClose(() => lifetime.abort());
@@ -203,7 +202,7 @@ async function pumpRemote(
   while (pos <= range.end && !sink.closed) {
     entry.touch();
     // The reader stays connected and simply gets no more bytes until the window opens again.
-    if (entry.isHeld(consumer, runId)) {
+    if (entry.isHeld(reader)) {
       await entry.waitForRelease(lifetime.signal);
       continue;
     }
@@ -241,7 +240,7 @@ async function pumpRemote(
     }
 
     const before = pos;
-    const front: Front = { consumer, begin: pos, pos, end: bound };
+    const front: Front = { consumer: reader.consumer, begin: pos, pos, end: bound };
     entry.fronts.add(front);
     let failure: unknown = null;
     try {
@@ -252,7 +251,7 @@ async function pumpRemote(
           const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
           if (wait > 0) await sleep(wait);
         }
-        await entry.download(part.length, consumer, lifetime.signal);
+        await entry.download(part.length, reader, lifetime.signal);
         if (sink.closed) break;
         counters.upstreamBytes += part.length;
         counters.servedBytes += part.length;
@@ -260,7 +259,7 @@ async function pumpRemote(
         await sink.write(part);
         pos += part.length;
         front.pos = pos;
-        if (pos > bound || entry.isHeld(consumer, runId)) break;
+        if (pos > bound || entry.isHeld(reader)) break;
       }
     } catch (error) {
       if (sink.closed || isAbort(error)) return;
@@ -284,8 +283,7 @@ export async function serveSource(
   req: IncomingMessage,
   res: ServerResponse,
   entry: SourceEntry,
-  consumer: Consumer,
-  runId: number | null,
+  reader: ReaderRef,
   cache: BlockCache,
   counters: ProxyCounters,
 ): Promise<void> {
@@ -311,7 +309,7 @@ export async function serveSource(
   const sink = sinkFor(res);
   try {
     if (entry.isLocal) await pumpFile(entry, range, sink, counters);
-    else await pumpRemote(entry, consumer, runId, cache, range, sink, counters);
+    else await pumpRemote(entry, reader, cache, range, sink, counters);
     res.end();
   } catch {
     // The status line is already out; a torn connection is how the reader finds out. Details stay in the counters.
