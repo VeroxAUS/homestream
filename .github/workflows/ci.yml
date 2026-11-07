@@ -228,6 +228,43 @@ jobs:
             apps/web/reports/e2e-results
           if-no-files-found: warn
           retention-days: 14
+
+  # Timing record and feedback, after the other jobs of this run have finished. It is not a required check and it cannot
+  # fail the run: continue-on-error keeps the run green when the API, the ci-metrics branch or the comment is unavailable,
+  # and no job depends on it. On main it commits one JSON file per run to the orphan branch ci-metrics (never to main);
+  # on pull requests it keeps one sticky comment up to date. Details: docs/ci.md.
+  timing:
+    name: CI timing
+    needs: [linux, e2e, windows]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download the test reports of the Linux job
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: test-reports
+          path: ci-artifacts
+
+      - name: Record the timings and compare them with main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ci-timing.mjs --exclude-job "CI timing" --reports ci-artifacts/reports
+
   windows:
     name: Windows
     runs-on: windows-latest

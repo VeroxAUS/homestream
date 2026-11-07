@@ -1,0 +1,99 @@
+name: Droid review
+
+# Automated review by Factory's Droid, advisory only (never a required check):
+# - pull requests to main: Factory's official action posts inline review comments and one summary on the pull request;
+# - pushes to main: scripts/droid-push-review.mjs runs `droid exec` and posts the findings as commit comments on the
+#   pushed commit (inline comments where the commit changed the line, one summary comment per push).
+# FACTORY_API_KEY is the only secret. Pull requests from forks and Dependabot pull requests get no secrets, so they skip
+# with a notice instead of failing. The wiki pull request is reviewed like any other; a push that only merges the
+# generated wiki changes no code and is skipped (same rule as ci.yml).
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    paths-ignore: ['droid-wiki/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: droid-review-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pr-review:
+    name: Droid PR review
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # A review that cannot run (quota, outage) must not turn the pull request red.
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # The workflow token posts the comments, so the Factory Droid GitHub App is not needed.
+      - uses: Factory-AI/droid-action@260eac443df653198ed70e9ea9d32980cfabde23 # v13
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          github_token: ${{ github.token }}
+          automatic_review: true
+          automatic_security_review: false
+          review_depth: deep
+
+  skip-notice:
+    name: Droid review skipped
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Explain why there is no review
+        run: >-
+          echo "::notice title=Droid review skipped::This pull request comes from a fork or from Dependabot,
+          so the FACTORY_API_KEY secret is not available to the workflow. A maintainer can review it by hand."
+
+  push-review:
+    name: Droid push review
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The review needs the commits of the whole push, not only the tip.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install Factory Droid
+        run: |
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://app.factory.ai/cli | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Review the pushed commits and comment on the tip
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/droid-push-review.mjs

@@ -282,4 +282,4 @@ flowchart LR
   Switch -.->|disables| PostHog
 ```
 
-Everything sent to Sentry passes through the scrubber (`redact()` and a beforeSend filter) and everything sent to PostHog is a typed event whose properties are allow-listed. Both are no-ops when their key is missing. The event catalog and exactly what each event contains are in [PRIVACY.md](PRIVACY.md). The quality gates are listed in [AGENTS.md](../AGENTS.md#ci-checks), failure handling in [sentry-triage](runbooks/sentry-triage.md) and [flaky-tests](runbooks/flaky-tests.md).
+Everything sent to Sentry passes through the scrubber (`redact()` and a beforeSend filter) and everything sent to PostHog is a typed event whose properties are allow-listed. Both are no-ops when their key is missing. The event catalog and exactly what each event contains are in [PRIVACY.md](PRIVACY.md). The quality gates are listed in [AGENTS.md](../AGENTS.md#ci-checks), the advisory Droid review, the timing history on the `ci-metrics` branch and the daily code-health issue in [ci.md](ci.md), failure handling in [sentry-triage](runbooks/sentry-triage.md) and [flaky-tests](runbooks/flaky-tests.md).

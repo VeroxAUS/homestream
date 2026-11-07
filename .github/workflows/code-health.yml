@@ -1,0 +1,57 @@
+name: Code health
+
+# Once a day (and on demand) Droid reviews the changes on main since the last reviewed commit against the code-health
+# rules (line limits, complexity, duplication, dead code, test gaps) and rewrites the one open issue titled "Code health".
+# The last reviewed SHA is a hidden marker in that issue's body. A day without new commits skips cleanly and changes
+# nothing. The workflow pushes no code, opens no pull request and no other workflow depends on it.
+on:
+  schedule:
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-health
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Code health review
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Look for commits that were not reviewed yet
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/code-health.mjs plan
+
+      - name: Install Factory Droid
+        if: steps.plan.outputs.should_run == 'true'
+        run: |
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://app.factory.ai/cli | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Review the changes and update the Code health issue
+        if: steps.plan.outputs.should_run == 'true'
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          CODE_HEALTH_BASE: ${{ steps.plan.outputs.base }}
+          CODE_HEALTH_HEAD: ${{ steps.plan.outputs.head }}
+        run: node scripts/code-health.mjs review

@@ -95,6 +95,7 @@ Before you commit, run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm
 - [Experimentation](docs/experimentation.md): feature flags and experiments.
 - [Technical debt register](docs/TECH_DEBT.md).
 - [Repository wiki](docs/wiki.md): the generated code wiki and how it is refreshed.
+- [CI automations](docs/ci.md): Droid review, CI timing history and the daily code-health issue.
 - [AGENTS.md](AGENTS.md): conventions and commands for AI coding agents and contributors.
 
 ## Privacy

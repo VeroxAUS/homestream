@@ -240,6 +240,12 @@ gh api repos/VeroxAUS/homestream/branches/main/protection --jq '.required_status
 
 CI also runs the job `Web e2e` (Playwright, Chromium installed only there) in parallel; it is not a required check.
 
+Three advisory automations ([docs/ci.md](docs/ci.md)) are never required checks and never fail `Linux` or `Windows`:
+
+- **Droid review** (`.github/workflows/droid-review.yml`, secret `FACTORY_API_KEY`): every pull request to main gets review comments and one summary; every push to main gets commit comments on the pushed commit. Fork and Dependabot pull requests skip with a notice.
+- **CI timing** (job `CI timing` in `ci.yml`, `node scripts/ci-timing.mjs`): every main run adds one JSON record to the orphan branch `ci-metrics` (never written to main, kept forever) and its job summary compares job, step and test durations with the median of the last 10 main runs; a pull request gets one sticky comment with the same comparison, edited in place.
+- **Code health** (`.github/workflows/code-health.yml`, daily and `gh workflow run code-health.yml`): skips when main has no new commit since the SHA stored in the one open issue titled `Code health`, otherwise rewrites that issue with the findings. It pushes no code and opens no pull request.
+
 Branch protection on `main` requires the jobs `Linux` and `Windows`; force pushes and deletions are blocked, the owner may push directly. A push to `main` triggers CI, then `release.yml` (tag, GitHub release, Sentry release) when the commits since the last tag include `feat`, `fix` or `perf`.
 
 GPU and live tests never run in CI. Pre-commit hooks (lefthook, installed by `pnpm install`) run prettier, ESLint, the secret scan and the large-file check on staged files, `pnpm agents:check` when this file changes, and `pnpm docs:check` when markdown changes.

@@ -16,6 +16,10 @@ interface Job {
   name?: string;
   'runs-on'?: string;
   'timeout-minutes'?: number;
+  'continue-on-error'?: boolean;
+  needs?: string | string[];
+  if?: string;
+  permissions?: Record<string, string>;
   steps?: Step[];
 }
 interface Workflow {
@@ -42,6 +46,8 @@ describe('workflow hygiene', () => {
       'docs.yml',
       'devcontainer.yml',
       'droid-wiki-refresh.yml',
+      'droid-review.yml',
+      'code-health.yml',
     ]) {
       expect(files).toContain(name);
     }
@@ -134,6 +140,8 @@ describe('workflow hygiene', () => {
       'release.yml': ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG'],
       'sentry-issues.yml': ['SENTRY_API_TOKEN', 'SENTRY_ORG'],
       'droid-wiki-refresh.yml': ['FACTORY_API_KEY', 'FACTORY_WIKI_PR_TOKEN'],
+      'droid-review.yml': ['FACTORY_API_KEY'],
+      'code-health.yml': ['FACTORY_API_KEY'],
     };
     for (const [name, text] of texts) {
       const used = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((match) => match[1]));
@@ -154,7 +162,7 @@ describe('workflow hygiene', () => {
   });
 
   it('scheduled workflows have a manual trigger too', () => {
-    for (const name of ['sentry-issues.yml', 'devcontainer.yml', 'codeql.yml', 'gitleaks.yml']) {
+    for (const name of ['sentry-issues.yml', 'devcontainer.yml', 'codeql.yml', 'gitleaks.yml', 'code-health.yml']) {
       expect(Object.keys(workflows.get(name)?.on ?? {}), name).toEqual(
         expect.arrayContaining(['schedule', 'workflow_dispatch']),
       );
@@ -171,5 +179,49 @@ describe('workflow hygiene', () => {
     >;
     expect(jobs['wiki-refresh']?.permissions).toEqual({ contents: 'read' });
     expect(jobs['wiki-publish']?.permissions).toMatchObject({ contents: 'write', 'pull-requests': 'write' });
+  });
+
+  it('the CI timing job runs after the required jobs, can never fail the run and is not a required check', () => {
+    const jobs = Object.fromEntries(jobsOf('ci.yml'));
+    const timing = jobs.timing;
+    expect(timing?.needs).toEqual(expect.arrayContaining(['linux', 'windows']));
+    expect(timing?.if).toContain('!cancelled()');
+    expect(timing?.['continue-on-error']).toBe(true);
+    expect(['Linux', 'Windows']).not.toContain(timing?.name);
+    expect(jobs.linux?.needs).toBeUndefined();
+    expect(jobs.windows?.needs).toBeUndefined();
+    const run = (timing?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(run).toContain('scripts/ci-timing.mjs');
+    expect(texts.get('ci.yml')).not.toContain('secrets.');
+  });
+
+  it('the Droid review is advisory: same-repo pull requests only, forks and Dependabot skip with a notice, pushes use droid exec', () => {
+    const workflow = workflows.get('droid-review.yml');
+    expect(workflow?.on).toHaveProperty('pull_request');
+    expect(workflow?.on).toHaveProperty('push');
+    const jobs = Object.fromEntries(jobsOf('droid-review.yml'));
+    expect(jobs['pr-review']?.['continue-on-error']).toBe(true);
+    expect(jobs['pr-review']?.if).toContain('head.repo.full_name == github.repository');
+    expect(jobs['pr-review']?.if).toContain('dependabot[bot]');
+    expect(jobs['pr-review']?.steps?.some((step) => step.uses?.startsWith('Factory-AI/droid-action@'))).toBe(true);
+    const skip = (jobs['skip-notice']?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(skip).toContain('::notice');
+    expect(jobs['push-review']?.['continue-on-error']).toBe(true);
+    expect(jobs['push-review']?.if).toBe("github.event_name == 'push'");
+    const push = (jobs['push-review']?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(push).toContain('scripts/droid-push-review.mjs');
+  });
+
+  it('the daily code-health review only comments on the issue: no code pushes, no pull requests, one run at a time', () => {
+    const text = texts.get('code-health.yml') ?? '';
+    expect(text).not.toMatch(/git push|git commit|gh pr create|pull-requests:\s*write|contents:\s*write/);
+    const workflow = workflows.get('code-health.yml');
+    expect(workflow?.concurrency).toEqual({ group: 'code-health', 'cancel-in-progress': false });
+    const job = workflow?.jobs.review;
+    expect(job?.permissions).toEqual({ contents: 'read', issues: 'write' });
+    const steps = job?.steps ?? [];
+    const review = steps.find((step) => step.run?.includes('code-health.mjs review'));
+    expect(review?.if).toBe("steps.plan.outputs.should_run == 'true'");
+    expect(steps.some((step) => step.run?.includes('code-health.mjs plan'))).toBe(true);
   });
 });
