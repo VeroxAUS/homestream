@@ -4,30 +4,37 @@ Active contributors: VeroxAUS
 
 ## Purpose
 
-The repository has one internal workspace package, [shared](shared.md). It defines transport contracts and browser-safe privacy/telemetry primitives; network clients, persistence and encoders remain in the [server](../apps/server.md).
+The repository has one internal package, [shared](shared.md), consumed by the [server](../apps/server.md), [web UI](../apps/web/index.md) and working [desktop shell](../apps/desktop/index.md). It holds cross-runtime contracts and pure policy, not application services.
 
-## Package boundary
+## Layout and boundary
 
-`packages/shared/src/index.ts` exports runtime Zod schemas, inferred TypeScript types, constants, sanitizers, analytics definitions and feature-flag helpers. `packages/shared/package.json` exposes ESM JavaScript and declarations from the build output. It depends on Zod and has no application dependency.
+| Path | Responsibility |
+| --- | --- |
+| `packages/shared/src/index.ts` | Public barrel for schemas, inferred types, desktop bridge and pure helpers |
+| `packages/shared/src/` | Fourteen implementation modules plus the barrel |
+| `packages/shared/test/` | Offline contract, privacy and policy tests |
+| `packages/shared/package.json` | ESM runtime/declaration exports and Zod dependency |
 
-The [server](../apps/server.md), implemented [web UI](../apps/web/index.md) and [desktop support modules](../apps/desktop.md) import `@homestream/shared`. Vite uses a source alias during development; the library's package export targets compiled JavaScript and declarations (`apps/server/package.json`, `apps/web/package.json`, `apps/web/vite.config.ts`, `apps/desktop/package.json`). These are four workspaces total, but only one resides under `packages/` (`pnpm-workspace.yaml`).
+`@homestream/shared` imports resolve to compiled JavaScript and declarations through `packages/shared/package.json`. Source aliases in Vite/Vitest allow development and tests against source; aliases do not replace the library's published export boundary. There are four application/package workspaces in `pnpm-workspace.yaml`, but only shared lives under `packages/`.
 
-For schema families, analytics/device identity distinctions, sanitizers, active flags and contract tests, read [Shared](shared.md). The package has no HTTP client, database connection or telemetry SDK; consumers supply those runtime effects.
+The package has no HTTP client, SQLite connection, Electron runtime or telemetry SDK. Types describe transport shapes; consumers still choose where runtime validation occurs. Typed event/flag definitions are not telemetry initialization: see [telemetry](../systems/telemetry.md).
 
-## Modification entry points
+## How to modify
 
-Put cross-runtime shapes and pure shared policy in `packages/shared/src/`, then export them through `packages/shared/src/index.ts`. Keep filesystem, Node-only process code and upstream credentials out of this package. Schema changes must remain aligned with consumers and the [API](../api/index.md).
+Add cross-runtime schemas or pure rules in `packages/shared/src/`, export additions through `packages/shared/src/index.ts`, and extend tests and affected consumers together. Desktop IPC types live here, but privileged implementation remains in the desktop app. Keep filesystem/process operations, upstream secrets and runtime SDKs out.
+
+HTTP contract changes also require route documentation and generated OpenAPI updates; see [API](../api/index.md). Full module families, semantic distinctions and testing entry points are in [Shared contracts](shared.md).
 
 ## Key source files
 
-| File                                  | Purpose                                   |
-| ------------------------------------- | ----------------------------------------- |
-| `pnpm-workspace.yaml`                 | Workspace membership                      |
-| `packages/shared/package.json`        | ESM/declaration export and build boundary |
-| `packages/shared/src/index.ts`        | Public export surface                     |
-| `packages/shared/tsconfig.build.json` | Library compilation                       |
-| `packages/shared/vitest.config.ts`    | Shared-package tests and coverage         |
+| File | Purpose |
+| --- | --- |
+| `pnpm-workspace.yaml` | Workspace membership |
+| `packages/shared/package.json` | Root ESM/declaration export |
+| `packages/shared/src/index.ts` | Public import surface |
+| `packages/shared/tsconfig.build.json` | Compilation boundary |
+| `packages/shared/vitest.config.ts` | Offline tests and coverage settings |
 
 ## Measured scope
 
-All `packages/` implementation belongs to `packages/shared`: **14 tracked production TypeScript source files**, **9 tracked test files**, **0.64 test-to-code file ratio** (test files divided by source files). Counts use `packages/shared/src/**/*.ts` and `packages/shared/test/**/*.test.ts`, include the export barrel, and exclude configs and outputs. Default-branch history has **1 unique human committer**, VeroxAUS, excluding bots.
+At `5eefa37`, `git ls-tree -r --name-only origin/main` yields **15 production `.ts` files** under `packages/shared/src/` and **10 `.test.ts` files** under `packages/shared/test/`, including the barrel and excluding configs/outputs. Test/source file ratio: **0.67**. Scoped `git log origin/main --format='%an' -- packages/shared` has **1 unique human author**, VeroxAUS, matching CODEOWNERS. Counts are not coverage or execution results.

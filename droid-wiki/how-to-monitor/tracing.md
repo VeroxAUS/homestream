@@ -1,45 +1,48 @@
 # Tracing
 
-HomeStream currently provides request-ID correlation and manually reported Sentry errors/breadcrumbs, not a complete distributed tracing pipeline. A configured sampler is not evidence that requests produce traces (`apps/server/src/requestContext.ts`, `apps/server/src/telemetry/sentry.ts`).
+HomeStream implements request-ID correlation and restricted Sentry error/breadcrumb reporting, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).
 
-## Follow a request
+## Follow a failure
 
-1. Read the response's `X-Request-ID`, or supply a safe ID on the request.
-2. Find `reqId` in local process logs to join the completion line with service/error logs in the same async chain.
-3. For an unexpected HTTP error, search optional Sentry reports by `request_id`.
-4. Inspect domain logs and the session/activity snapshot separately for playback lifecycle state.
+1. Read response `X-Request-ID`, or supply a valid short ID.
+2. Search `reqId` in `DATA_DIR/server.log` to join request completion with service/error logs in that async chain.
+3. If an unexpected HTTP failure was reported to enabled Sentry, search its `request_id` tag.
+4. Inspect domain events and session/activity snapshots separately for playback state.
 
-`apps/server/src/requestContext.ts` validates IDs and uses AsyncLocalStorage. `apps/server/src/logger.ts` adds the current ID to the base logger without duplicating a bound child ID. `apps/server/src/http/observability.ts` returns the header on responses; `apps/server/src/app.ts` exposes it through CORS and supplies it to unexpected-error reporting.
+`resolveRequestId` in `apps/server/src/requestContext.ts` accepts 1–64 letters, digits, dots, underscores or hyphens and otherwise generates a UUID. AsyncLocalStorage carries it through the request's asynchronous work. `createLogger` in `apps/server/src/logger.ts` adds the ID unless the child logger already binds it.
 
-Request IDs do not automatically become session event IDs. Background work may have no current request scope, and FFmpeg/CDN/service requests are not a distributed request trace. See [logging](logging.md).
+`registerRequestObservability` in `apps/server/src/http/observability.ts` sets the response header. `apps/server/src/app.ts` exposes it through CORS and attaches unexpected-error context. Background work may have no request ID; a playback session ID and request ID are not interchangeable.
 
-The browser's `apiFetch` generates the request ID and includes it in API breadcrumbs and `ApiError.requestId` for non-2xx responses (`apps/web/src/api/client.ts`). Use that ID or the response header to correlate the server failure. Desktop's `withRequestId` is a tested helper, not proof that a working shell is already making requests (`apps/desktop/src/requestId.ts`).
+Browser `apiFetch` in `apps/web/src/api/client.ts` adds request IDs and includes them in breadcrumbs/`ApiError.requestId`. Desktop `createServerClient` in `apps/desktop/src/serverHttp.ts` uses `withRequestId` from `apps/desktop/src/requestId.ts` for main-process server requests. This is working shell wiring, not an unused request helper. See [desktop supervision](../apps/desktop/supervisor.md).
 
-## Sentry configuration and limits
+## What Sentry actually does
 
-`apps/server/src/telemetry/sentry.ts` sets a **0.05** trace sample rate and a path-aware sampler. Sampling is **0** for `/hls/*`, `/metrics`, `/healthz`, `/readyz` and `/api/events`; query strings are stripped when identifying those paths.
+`initSentry` and `tracesSampler` in `apps/server/src/telemetry/sentry.ts` configure a **5%** sample rate for eligible tracing contexts, with **zero** for HLS, metrics, liveness/readiness and SSE. The path matcher strips queries.
 
-However, the SDK integration allowlist excludes HTTP, Fastify and database auto-instrumentation, and no server source call site currently creates spans with `startSpan`. There is no automatic request transaction tree, cross-service propagation, OpenTelemetry exporter, span-name catalog or guaranteed browser-to-server continuation. CORS permits `sentry-trace` and `baggage` headers for compatibility; permitting headers alone does not consume them into a trace.
+However, retained integrations are error-oriented: HTTP, Fastify and database automatic instrumentation are excluded. There are no current server `startSpan` call sites, automatic request transaction trees, OpenTelemetry exporter or guaranteed browser-to-server trace continuation. CORS permits `sentry-trace` and `baggage`; permitting them does not consume them into spans.
 
-The implemented manual breadcrumbs describe playback start/end/failure/restart under category `playback` (`apps/server/src/telemetry/playbackObserver.ts`). Reports use release `homestream@<version>`, environment and optional request/device/media tags. SDK error integrations also handle uncaught exceptions/unhandled rejections. Error capture and all payload hooks are explained under [telemetry](../systems/telemetry.md).
+`apps/server/src/telemetry/playbackObserver.ts` explicitly adds playback lifecycle breadcrumbs and reports failures. Reports use release/environment and optional request/device/media context. Uncaught exception/rejection integrations remain available. Browser Sentry and Electron main both use trace sampling **zero** (`apps/web/src/telemetry/sentry.ts`, `apps/desktop/src/telemetry/sentry.ts`).
 
-Browser Sentry and the desktop option builder set trace sampling to **zero** (`apps/web/src/telemetry/sentry.ts`, `apps/desktop/src/telemetry/sentry.ts`). A Sentry issue, a release deploy marker or a permitted trace header does not imply that end-to-end spans exist.
+A Sentry issue, browser breadcrumb, release deploy marker or permitted header is not evidence of an end-to-end trace. See [telemetry](../systems/telemetry.md) for enablement, inference controls and payload sanitization.
 
-## Instrumentation changes
+## Adding real instrumentation
 
-Start at `apps/server/src/telemetry/sentry.ts` if introducing real spans, and explicitly decide safe names, sampling and lifecycle ownership. Route templates and fixed operation names are appropriate; media titles, IDs, paths and source URLs are not. Keep HLS, probes and SSE outside per-request tracing, run transaction payloads through `packages/shared/src/sanitize.ts`, and add a stub-collector payload test.
+Start with an explicit instrumentation plan rather than enabling all default integrations. Choose safe route-template/fixed-operation names, bounded sampling and clear span lifetime/ownership. Do not put titles, session/device/media IDs, file paths or source URLs in span names/attributes.
 
-Do not enable broad default integrations merely to make traces appear. That would change both privacy and playback-path work. Update `docs/PRIVACY.md` and `docs/observability.md` when actual outbound behavior changes.
+Preserve media/probe/SSE exclusions and scrub transactions through `sanitizeSentryEvent` in `packages/shared/src/sanitize.ts`. Add stub-collector payload tests and update `docs/PRIVACY.md`/`docs/observability.md` when actual outbound behavior changes. Measure playback/Home overhead before and after hot-path changes.
+
+This page is based on source inspection, not a live trace capture or benchmark.
 
 ## Key source files
 
-| File                                                 | Purpose                                        |
-| ---------------------------------------------------- | ---------------------------------------------- |
-| `apps/server/src/requestContext.ts`                  | Correlation ID validation and async scope      |
-| `apps/server/src/http/observability.ts`              | Response header and accepted trace headers     |
-| `apps/server/src/app.ts`                             | CORS exposure and unexpected HTTP errors       |
-| `apps/server/src/telemetry/sentry.ts`                | Sampler, restricted integrations and reporting |
-| `apps/server/src/telemetry/playbackObserver.ts`      | Manual playback breadcrumbs                    |
-| `packages/shared/src/sanitize.ts`                    | Error and transaction payload filtering        |
-| `apps/server/test/telemetry/telemetryUnits.test.ts`  | Sampling and request-context tests             |
-| `apps/server/test/integration/observability.test.ts` | HTTP request-ID/CORS integration               |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/requestContext.ts` | ID validation and async scope |
+| `apps/server/src/http/observability.ts` | Correlation header and completion instrumentation |
+| `apps/server/src/telemetry/sentry.ts` | Restricted integrations and sampling |
+| `apps/server/src/telemetry/playbackObserver.ts` | Manual lifecycle breadcrumbs/reports |
+| `apps/web/src/api/client.ts` | Renderer request correlation |
+| `apps/desktop/src/serverHttp.ts` | Main-process client correlation |
+| `packages/shared/src/sanitize.ts` | Error/transaction filtering |
+| `apps/server/test/telemetry/telemetryUnits.test.ts` | Sampling/context cases |
+| `apps/server/test/integration/observability.test.ts` | HTTP/CORS/request-ID integration |

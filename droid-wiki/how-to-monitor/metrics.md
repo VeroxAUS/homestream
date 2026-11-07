@@ -1,6 +1,6 @@
 # Metrics
 
-`GET /metrics` exposes a per-server Prometheus registry plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/metrics/serverMetrics.ts`, `apps/server/src/routes/ops.ts`).
+`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes a per-server Prometheus registry through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/metrics/serverMetrics.ts`, `apps/server/src/routes/ops.ts`).
 
 ## Collection model
 
@@ -66,6 +66,8 @@ The checked-in thresholds use 5xx share and p95 latency as useful signals, not a
 For a latency chart, the checked-in alert uses `histogram_quantile(0.95, sum by (le) (rate(homestream_http_request_duration_seconds_bucket[5m])))`. This aggregates all instrumented routes. For a specific operation, retain/filter its route label rather than interpreting an aggregate p95 as every route's latency (`monitoring/prometheus/alerts.yml`). No checked-in Grafana dashboard or target percentage defines a service-level objective.
 
 To add a metric, declare it in `apps/server/src/metrics/serverMetrics.ts`, attach a service source in `apps/server/src/app.ts` or a lifecycle observation, and extend `apps/server/test/integration/observability.test.ts`. Preserve scrape-time reads instead of adding work per media segment.
+
+This refresh inspected the registry and rule sources; it did not scrape a running server, run tests or benchmark collectors.
 
 ## Key source files
 

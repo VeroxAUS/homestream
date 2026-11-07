@@ -2,92 +2,68 @@
 
 Active contributors: VeroxAUS
 
-HomeStream probes actual media, chooses a device-compatible output and always re-encodes video with NVENC. Decode fallback and tone-map fallback do not provide a software video encoder (`apps/server/src/playback/probe.ts`, `apps/server/src/playback/decision.ts`, `apps/server/src/playback/ffmpegArgs.ts`).
+## Purpose
 
-## Layout and key abstractions
+HomeStream always re-encodes video with NVENC. `decide` in `apps/server/src/playback/decision.ts` chooses device output; `buildFfmpegArgs` in `apps/server/src/playback/ffmpegArgs.ts` constructs decoding, color conversion, audio and HLS arguments.
 
-`ProbeResult` in `apps/server/src/playback/probe.ts` describes duration, the first real video stream, audio and supported subtitle tracks. Pure `decide()` in `apps/server/src/playback/decision.ts` produces a shared `Decision`; `EncodeJob` in `apps/server/src/playback/ffmpegArgs.ts` adds input/output locations, stream indexes, start segment, tone mapper, burn target and thread caps. `buildFfmpegArgs()` builds the command; `EncoderProcess` in `apps/server/src/playback/encoderProcess.ts` owns its child lifetime.
+## Probe and output policy
 
-Probe skips attached pictures/image codecs, reads case-insensitive language/title tags and requires a positive duration. Valid frame rates are 5–121 fps; otherwise it uses 24. Both probe and encoder bound input analysis with `-probesize 8M -analyzeduration 3M`; ffprobe's default timeout is **60 seconds** (`apps/server/src/playback/probe.ts`).
+`ProbeResult` in `apps/server/src/playback/probe.ts` supplies actual video/audio/subtitle metadata, skipping image/attached-picture video streams. Filename hints from discovery do not replace probing.
 
-## Output policy
+| Concern | Policy |
+| --- | --- |
+| Codec | HEVC when advertised by device, otherwise H.264 |
+| Dimensions | Preserve aspect ratio, even dimensions, fit device limits, never upscale |
+| HDR | Keep HDR10, HLG or non-profile-5 Dolby Vision as HDR10 only with HEVC/Main10/HDR10 capability |
+| SDR conversion | Tone-map other non-SDR inputs |
+| Audio | AAC; TV up to source/device limit and 6 channels, other clients at most stereo |
+| Default audio | Valid requested track; otherwise default English, English, default, first |
 
-| Concern        | Rule in `apps/server/src/playback/decision.ts`                                                      |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| Video codec    | HEVC if the device advertises HEVC; otherwise H.264, independent of source codec                    |
-| Dimensions     | Fit inside device width/height; preserve aspect ratio, even dimensions, never upscale               |
-| Retain HDR     | Source HDR10, or Dolby Vision with profile other than 5, plus device HEVC, HDR10 and Main10 support |
-| Tone map       | Every non-SDR source that cannot retain HDR, including HLG and DV profile 5, becomes SDR            |
-| Audio          | AAC at 48 kHz; TV capped by source/device and 6 channels, other device kinds at most stereo         |
-| No audio track | Disable audio output                                                                                |
-| Audio default  | Requested valid index; otherwise default English, first English, default track, first track         |
+The policy and bitrate tables live in `apps/server/src/playback/decision.ts`. A source without audio disables audio output. Retained Dolby Vision is HDR10 output, not Dolby Vision passthrough.
 
-PQ transfer identifies HDR10/DV; HLG transfer and Dolby Vision side data are read from the stream. DV profile 5 is recognized even without a specified transfer. Retained output is **HDR10**, not Dolby Vision passthrough; the profile rule is not a full HDR base-layer validator (`apps/server/src/playback/probe.ts`, `apps/server/src/playback/decision.ts`).
+## Real HLG-to-PQ conversion
 
-[Automatic subtitle defaults](subtitles.md) use the chosen audio and TMDB original language. Burn-in affects filters and restart requirements, not the fundamental codec choice.
+`needsHlgToPq` in `apps/server/src/playback/decision.ts` distinguishes retained HLG from ordinary HDR10. `apps/server/src/playback/ffmpegArgs.ts` converts pixels to PQ/BT.2020 with libplacebo before tagging HDR10. It does not merely relabel the HLG transfer.
 
-## Decode and filter paths
+If the libplacebo start fails before its first segment, recovery switches to the alternate filter path and remembers that choice for later sessions (`apps/server/src/playback/recovery.ts`, `apps/server/src/playback/context.ts`). HLG's alternate path uses software-decoded **zscale**, HLG input to SMPTE 2084 output with nominal peak **1000 nits**, yielding p010. The alternate HDR-to-SDR path instead uses OpenCL/Hable. Both still encode through NVENC; neither is a software video-encoder fallback.
 
-| Workload                          | Decode/filter behavior in `apps/server/src/playback/ffmpegArgs.ts`                                                         |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Ordinary compatible input         | CUDA/NVDEC decode, `scale_cuda`, NVENC                                                                                     |
-| Unsupported hardware-decode input | Software decode/CPU scale, still NVENC                                                                                     |
-| Default HDR-to-SDR                | Vulkan `libplacebo`, BT.2390 to BT.709, with transfers between CUDA/system/Vulkan memory as needed                         |
-| Tone-map recovery                 | OpenCL `tonemap_opencl`, Hable, download and CPU scaling, still NVENC                                                      |
-| Bitmap burn-in                    | Software-accessible frames and overlay after scale/tone mapping; retained-HDR output width ≥3840 uses NVDEC when supported |
+## Decode, filters and burn-in
 
-Hardware-decode codec allowlist: H.264, HEVC, VP9, AV1, MPEG-2 video, MPEG-4, VC-1 and VP8. Pixel formats are allowlisted too; H.264/MPEG-2/MPEG-4 10/12-bit and unsupported chroma formats use software decode. These checks do not probe every installed GPU capability.
+`apps/server/src/playback/ffmpegArgs.ts` allowlists hardware-decode codecs and pixel formats. Unsupported inputs use software decode. Ordinary supported jobs use CUDA decode/scale; libplacebo uses Vulkan transfers as needed.
 
-Video is always `hevc_nvenc` or `h264_nvenc`. HEVC HDR uses Main10/p010, SDR HEVC uses Main, H.264 uses High, and HEVC carries `hvc1`. Bitstream filters write retained BT.2020/PQ or tone-mapped BT.709 stream metadata because NVENC color flags alone are not relied upon (`apps/server/src/playback/ffmpegArgs.ts`).
+Bitmap subtitles overlay after output scaling/color conversion. Their input canvases are resampled to video frame rate before scaling to avoid redundant overlay frames. Retained HDR burn-in uses 10-bit YUV and reference-white scaling. The special high-resolution retained-HDR GPU burn path excludes HLG conversion. See [subtitles](subtitles.md).
 
-A libplacebo run that fails before its first segment switches once to OpenCL, and subsequent sessions on that manager start with OpenCL. Both paths still need the matching FFmpeg/device support; there is no universal hardware negotiation or CPU encode escape hatch. See [recovery](lifecycle.md).
+## HLS timing and rate control
 
-## Rate control
+Video uses NVENC preset p4, HQ tuning, VBR, no B-frames and a buffer twice maximum bitrate (`apps/server/src/playback/ffmpegArgs.ts`). Rate targets from `apps/server/src/playback/decision.ts` are policies, not measured throughput:
 
-Both encoders use preset `p4`, tune `hq`, VBR, no B-frames, a buffer twice maximum bitrate, and CQ 24 for HEVC or 23 for H.264 (`apps/server/src/playback/ffmpegArgs.ts`).
+| Output height | HEVC target/max kbps | H.264 target/max kbps |
+| --- | ---: | ---: |
+| ≥1800 | 20000/30000 | 28000/40000 |
+| ≥900 | 8000/12000 | 10000/15000 |
+| ≥600 | 5000/8000 | 5000/8000 |
+| Lower | 2500/4000 | 2500/4000 |
 
-| Output-height threshold | HEVC target / max kbps | H.264 target / max kbps |
-| ----------------------- | ---------------------: | ----------------------: |
-| ≥1800                   |        20,000 / 30,000 |         28,000 / 40,000 |
-| ≥900                    |         8,000 / 12,000 |         10,000 / 15,000 |
-| ≥600                    |          5,000 / 8,000 |           5,000 / 8,000 |
-| Below 600               |          2,500 / 4,000 |           2,500 / 4,000 |
+AAC is 48 kHz, 192 kbps through stereo or 64 kbps per channel above stereo.
 
-AAC uses 192 kbps through stereo or 64 kbps per channel above stereo, with asynchronous resampling. These are policy targets, not observed network rates (`apps/server/src/playback/decision.ts`, `apps/server/src/playback/ffmpegArgs.ts`). The [global download cap](../network.md) applies to source bytes, which can have a much higher bitrate.
+`apps/server/src/playback/playlist.ts` defines the **four-second** segment grid. FFmpeg uses matching forced keyframes, temporary-file publication and independent segments. HEVC/fMP4 uses absolute offsets and fragment discontinuity flags; MPEG-TS disables mux delay/preload. Restarts at segment N seek to N×4 and preserve absolute media time. Bitmap burn-in seeks up to ten seconds earlier and trims output to preserve already-active cues.
 
-## HLS grid and seeks
+Thread settings select GPU-oriented versus CPU-filter/decode limits; these are concurrency hints, not CPU quotas (`apps/server/src/playback/ffmpegArgs.ts`, `apps/server/src/config.ts`). RSS protection and priority lowering are separate [lifecycle](lifecycle.md) controls.
 
-Segments use a **4-second** grid. GOP/minimum key interval is `ceil(fps × 4)` with forced IDR/keyframes at each four-second boundary. FFmpeg publishes through temporary files with independent-segment flags (`apps/server/src/playback/ffmpegArgs.ts`, `apps/server/src/playback/playlist.ts`).
+## Modification entry points
 
-Restart at segment N input-seeks to N×4, numbers output from N and applies the absolute timestamp offset. MPEG-TS disables mux delay/preload to avoid a 1.4-second offset. HEVC/fMP4 uses `movflags=+frag_discont` so fragments from separate runs have absolute times and can reuse one complete init. [Lifecycle](lifecycle.md) explains safe init publication.
-
-Bitmap burn-in input-seeks up to **10 seconds earlier**, then trims that lead-in at output. This preserves a cue already active at the seek point within the bounded preroll. Subtitle canvases are frame-rate-limited before scaling to avoid high-packet-rate audio flooding FFmpeg's overlay queue; retained HDR overlays stay in 10-bit YUV. Details are in [subtitles](subtitles.md).
-
-## CPU and memory safety
-
-Default thread caps are **4** for GPU-oriented jobs and **8** for burn-in, software decode or the OpenCL/CPU-filter path. The chosen cap is applied to `-threads`, `-filter_threads` and `-filter_complex_threads` before input. Subtitle extraction uses its own two-thread setting (`apps/server/src/config.ts`, `apps/server/src/playback/ffmpegArgs.ts`, `apps/server/src/playback/subtitleRun.ts`).
-
-Thread flags are concurrency hints to FFmpeg, not a CPU-percentage quota. Source-height/bitrate classification also limits subtitle-worker concurrency and read rates, independently of output resolution or these thread settings. The [extractor warm-up and burst clock](subtitles.md#heavy-source-warm-up-and-the-burst-clock) must remain separate from NVENC rate control.
-
-Video, extraction and probing lower process priority best-effort. Every managed encoder/extractor is watched for RSS; **4096 MiB per FFmpeg process** is the default, not a combined server budget. [Lifecycle protections](lifecycle.md) cover enforcement and limitations (`apps/server/src/playback/priority.ts`, `apps/server/src/playback/memoryWatchdog.ts`).
-
-## Change and test pointers
-
-Change compatibility/rates in `apps/server/src/playback/decision.ts`, metadata parsing in `apps/server/src/playback/probe.ts`, and graphs/timing in `apps/server/src/playback/ffmpegArgs.ts`. Keep absolute timestamps, ready-init compatibility and the loopback source input intact. Binary/thread settings are listed in [configuration](../../reference/configuration.md).
-
-Playback-wide footprint at `7eb94ba`: **27 source `.ts` files** in `apps/server/src/playback`, **24 `*.test.ts` files** in `apps/server/test/playback` plus `apps/server/test/encode`, and **4 non-test TypeScript helpers** there. Test/code file ratio is **24/27 = 0.89**; scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. These overlapping counts are not an encoding-only allocation or coverage measurement.
-
-Unit tests assert decision matrices, filters, subtitle frame-rate limiting, thread caps and seek flags. Real GPU tests inspect codec, dimensions, tags and timelines. Tests were inspected, not executed; test names cannot override the actual filter implementation.
+Change compatibility/rates in `apps/server/src/playback/decision.ts`, probe interpretation in `apps/server/src/playback/probe.ts`, and actual graphs/timestamps in `apps/server/src/playback/ffmpegArgs.ts`. Update offline argument/decision tests before opt-in encoded-output tests. Preserve the loopback input, four-second grid and complete-init serving contract.
 
 ## Key source files
 
-| Repository-root path                           | Role                                         |
-| ---------------------------------------------- | -------------------------------------------- |
-| `apps/server/src/playback/probe.ts`            | Bounded probing and actual stream metadata   |
-| `apps/server/src/playback/decision.ts`         | Device output and bitrate policy             |
-| `apps/server/src/playback/ffmpegArgs.ts`       | Decode/filter/NVENC/HLS command construction |
-| `apps/server/src/playback/encoderProcess.ts`   | Managed child process                        |
-| `apps/server/src/playback/playlist.ts`         | Codec/container and timeline rules           |
-| `apps/server/test/playback/decision.test.ts`   | Compatibility policy regressions             |
-| `apps/server/test/playback/ffmpegArgs.test.ts` | Filter, threading and timestamp expectations |
-| `apps/server/test/encode/hls-encode.test.ts`   | Encoded output validation                    |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/playback/decision.ts` | Output policy and HLG detection |
+| `apps/server/src/playback/probe.ts` | Actual media metadata |
+| `apps/server/src/playback/ffmpegArgs.ts` | Filters, NVENC and muxing |
+| `apps/server/src/playback/playlist.ts` | Manifest/container rules |
+| `apps/server/src/playback/recovery.ts` | Filter fallback |
+
+## Measured scope
+
+At `5eefa37`, committed playback source has **42 `.ts` files**; matching playback/encode test directories have **35 `*.test.ts` files**, ratio **0.83**. Method: scoped `git ls-files`, excluding helpers and integration elsewhere; this is playback-wide, not encoding-only. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. Tests were inspected, not executed.

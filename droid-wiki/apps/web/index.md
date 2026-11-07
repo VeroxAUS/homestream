@@ -1,82 +1,66 @@
-# Web
+# Web app
 
 Active contributors: VeroxAUS
 
-## Purpose
+HomeStream's React 19/Vite client implements catalog browsing, saved-progress actions, HLS playback, notifications and the Electron renderer. Only the five dashboard tabs remain placeholders. The server chooses sources, persists progress and encodes video; the client always requests automatic stream selection (`apps/web/src/App.tsx`, `apps/web/src/player/sessionApi.ts`).
 
-`@homestream/web` is the React 19/Vite LAN client. Home, search, movie/show details and Settings work; Play links lead to an explicit placeholder, and dashboard tabs are navigation scaffolding (`apps/web/src/App.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`). The server owns metadata, saved progress, source selection and encoding.
+## Implementation map
 
-Read [screens](screens.md) for route behavior, [data and startup](data-and-startup.md) for cache and deferred networking, and [build and tests](build-and-tests.md) for asset and validation boundaries. Optional SDKs and privacy rules are covered once under [telemetry](../../systems/telemetry.md).
+| Area | Responsibility | Read next |
+| --- | --- | --- |
+| `apps/web/src/pages/`, `apps/web/src/components/` | Lazy routes, Home, search, details, Settings and presentation | [Screens](screens.md) |
+| `apps/web/src/api/`, `apps/web/src/events/`, `apps/web/src/device/` | Validated requests, Query cache, SSE and device identity | [Data and startup](data-and-startup.md) |
+| `apps/web/src/player/` | Session ownership, HLS, controls, tracks and progress | [Player](player.md) |
+| `apps/web/src/desktop/` | Setup, shell settings, shortcuts and mini-player handoff | [Desktop integration](desktop-integration.md) |
+| `apps/web/src/notices/` | App-wide download outcomes and dismissible toasts | [Screens](screens.md#notifications-and-toasts) |
+| `apps/web/src/telemetry/` | SDK-free facade and lazy Sentry/PostHog runtime | [Telemetry](../../systems/telemetry.md) |
+| `apps/web/src/styles/` | Tokens, global CSS and self-hosted Inter | [Build and tests](build-and-tests.md) |
+| `apps/web/src/test/`, `apps/web/e2e/` | Offline component fixtures and isolated browser tests | [Build and tests](build-and-tests.md) |
 
-## Directory layout
+## Runtime flow
 
-```text
-apps/web/
-├── src/main.tsx                 # root, Home prefetch, deferred startup
-├── src/App.tsx                  # lazy route table
-├── src/api/                     # request IDs, validation, Query options
-├── src/pages/                   # screens and dashboard placeholders
-├── src/components/              # navigation, cards, details and actions
-├── src/device/                  # browser identity and fixed capabilities
-├── src/events/                  # shared SSE and download progress store
-├── src/lib/                     # startup, formatting and hooks
-├── src/styles/                  # tokens, global CSS and local Inter font
-├── src/telemetry/               # SDK-free facade and deferred runtime
-├── src/test/                    # fixtures, mock API and render providers
-├── e2e/                         # isolated plain/stub browser builds
-├── vite.config.ts
-└── vite.plugins.ts
-```
-
-## Key abstractions
-
-| Abstraction            | Source                                | Role                                                                        |
-| ---------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
-| `App`                  | `apps/web/src/App.tsx`                | Lazy client routes, including planned-screen placeholders                   |
-| `Layout`               | `apps/web/src/components/Layout.tsx`  | Persistent navigation, Suspense outlet, route reporting and scroll behavior |
-| `createQueryClient`    | `apps/web/src/api/queries.ts`         | Shared cache, cancellation, timeouts and retry rules                        |
-| `apiGet`               | `apps/web/src/api/client.ts`          | Request correlation and shared-schema response parsing                      |
-| `getCapabilityProfile` | `apps/web/src/device/identity.ts`     | Stable device ID and conservative playback output requirements              |
-| `startServerEvents`    | `apps/web/src/events/serverEvents.ts` | One SSE connection updating cache and download progress                     |
-
-## How it works
-
-`apps/web/src/main.tsx` creates one Query client. On `/`, it starts the Home data request while the Home route chunk is loading. It schedules device registration, events and optional telemetry without awaiting them, then mounts StrictMode, QueryClientProvider and BrowserRouter. `apps/web/src/components/Layout.tsx` keeps navigation visible while routes load; new non-POP pathname navigation scrolls to the top, while back/forward navigation leaves restoration to the browser.
+The entry point in `apps/web/src/main.tsx` creates one Query client, prefetches Home when opened at `/`, schedules background startup and mounts StrictMode, error boundaries, Query providers and BrowserRouter. `Layout` in `apps/web/src/components/Layout.tsx` keeps navigation around lazy routes, except that playback owns the full window. Page changes report template page views; new non-POP path navigation scrolls to the top.
 
 ```mermaid
 graph LR
-    Entry[React entry] --> Cache[Query client]
-    Entry --> Router[Lazy routes and layout]
-    Router --> Screens[Screen components]
-    Screens --> Cache
-    Cache --> API[Schema-validating API client]
-    API --> Server[Fastify server]
-    Screens --> Mark[Content mark and idle]
-    Mark --> Events[Shared SSE connection]
-    Events --> Cache
-    Mark --> Device[Device registration]
-    Device --> API
+    Entry[React entry] --> Routes[Lazy routes]
+    Entry --> Query[Query cache]
+    Routes --> Query
+    Query --> API[Validated API requests]
+    API --> Server[HomeStream server]
+    Routes --> Player[Lazy HLS player]
+    Player --> Server
+    Entry --> Deferred[Content mark and idle]
+    Deferred --> SSE[Shared event stream]
+    SSE --> Query
+    Deferred --> Device[Device registration]
+    Deferred --> Telemetry[Optional telemetry runtime]
 ```
 
-The existing desktop-aware renderer path checks `window.homestream?.isDesktop`; it changes navigation styling, device kind and default name. It is a seam for a future preload, not proof of a running [Electron shell](../desktop.md) (`apps/web/src/device/identity.ts`, `apps/web/src/components/Nav.tsx`, `apps/web/src/env.d.ts`).
+Health is not a dashboard-only feature: navigation and desktop setup consume it globally. SSE opening fetches a baseline through the health Query; pushed answers cancel older requests. Polling runs only when the stream is not live. Device registration, SSE and telemetry wait for content and idle time, but visible-page requests do not.
+
+The renderer uses the implemented preload bridge for desktop behavior, not cross-app imports. Window creation and server supervision belong to the [Electron shell](../desktop/index.md); the renderer integration is described [separately](desktop-integration.md).
 
 ## Integration and modification points
 
-Add screens through `apps/web/src/App.tsx`, reuse query options in `apps/web/src/api/queries.ts`, and validate new responses with [shared contracts](../../packages/shared.md). Do not fetch the server directly from screen components. Keep expensive features lazy and budgeted; playback still needs actual player/session integration rather than a replacement label. See [server](../server.md), [catalog](../../features/catalog.md) and [architecture](../../overview/architecture.md) for the other side of these boundaries.
+Add routes in `apps/web/src/App.tsx`, endpoint queries in `apps/web/src/api/queries.ts`, and request/IPC contracts in [shared](../../packages/shared.md). Keep source-selection and completion policy on the server. Preserve the player's session cleanup and handoff ownership when altering navigation. Keep heavy dependencies behind lazy boundaries with explicit [bundle budgets](build-and-tests.md#asset-flow-and-budgets).
 
 ## Key source files
 
-| File                                  | Purpose                                    |
-| ------------------------------------- | ------------------------------------------ |
-| `apps/web/index.html`                 | HTML root                                  |
-| `apps/web/src/main.tsx`               | Providers, prefetch and startup scheduling |
-| `apps/web/src/App.tsx`                | Lazy route table                           |
-| `apps/web/src/components/Layout.tsx`  | Persistent chrome and route outlet         |
-| `apps/web/src/api/queries.ts`         | Query configuration and endpoint schemas   |
-| `apps/web/src/device/identity.ts`     | Local identity and registration            |
-| `apps/web/src/events/serverEvents.ts` | Deferred event stream                      |
-| `apps/web/src/App.test.tsx`           | Route and placeholder expectations         |
+| File | Purpose |
+| --- | --- |
+| `apps/web/src/main.tsx` | Root providers, prefetch and deferred startup |
+| `apps/web/src/App.tsx` | Lazy route table |
+| `apps/web/src/components/Layout.tsx` | Chrome, route boundaries and global notices |
+| `apps/web/src/api/queries.ts` | Cache, cancellation and query deadlines |
+| `apps/web/src/events/serverEvents.ts` | Latest-answer health reconciliation and download events |
+| `apps/web/src/pages/PlayerPage.tsx` | Start/attach/retry route state |
+| `apps/web/src/player/usePlaybackModel.ts` | Playback composition |
+| `apps/web/src/desktop/bridge.ts` | Browser-safe bridge detection |
+| `apps/web/src/App.test.tsx` | Route composition tests |
 
 ## Measured scope
 
-At the documented checkout, tracked `apps/web/src/` has **57 production TypeScript/TSX files**, excluding declarations, tests and `apps/web/src/test/` helpers. There are **24 colocated test files** and **2 e2e specs**, or **26/57 = 0.46 test files per production file**. Production files contain 2,857 physical lines; tests contain 3,030. CSS, assets and build configuration are outside this count. Default-branch history has **1 unique human author**, VeroxAUS, excluding bots. These are file measurements, not a test-run result.
+At commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`, committed web files contain **104 production TS/TSX files**, **39 unit/component test files** and **4 browser specs**: **43/104 = 0.41 test files per production file**. Method: enumerate `git ls-files apps/web`; production means `src/**/*.ts(x)` excluding declarations, `*.test.*` and `src/test/`; tests mean `*.test.ts(x)` plus `*.spec.ts`. CSS, fonts, helpers and build configuration are excluded from production counts. This is an inventory, not executed coverage.
+
+Unique human authors: **1**, VeroxAUS, using the supplied verified `origin/main` history with bots excluded and `.github/CODEOWNERS` as the ownership cross-check. Subpage counts use the same file method and explicit narrower scopes.

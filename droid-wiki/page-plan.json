@@ -1,1058 +1,1450 @@
 {
   "mode": "full",
+  "commitHash": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
+  "reason": "33558 changed lines exceed the 10000-line full-refresh threshold.",
+  "pagesToRemove": [
+    "apps/desktop.md"
+  ],
+  "pagesToCreate": [
+    "apps/web/player.md",
+    "apps/web/desktop-integration.md",
+    "apps/desktop/index.md",
+    "apps/desktop/supervisor.md",
+    "apps/desktop/windows-and-ipc.md"
+  ],
   "pages": [
     {
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "contentBrief": "HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, search, title details, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).",
       "relevantSourcePaths": [
-        "README.md",
-        "AGENTS.md",
-        "CONTRIBUTING.md",
         "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/config.ts",
         "apps/web/src/App.tsx",
-        "packages/shared/src"
+        "apps/desktop/src/main.ts",
+        "apps/server/src/db/migrations.ts",
+        "apps/server",
+        "apps/web",
+        "apps/desktop",
+        "packages/shared",
+        "apps/tv",
+        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx",
+        "apps/web/src/pages/PlayerPage.tsx",
+        "apps/desktop/src/shell/shell.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "overview/architecture.md",
+        "overview/getting-started.md",
+        "apps/index.md",
+        "systems/playback/index.md",
+        "features/index.md",
+        "api/index.md",
+        "how-to-contribute/index.md",
+        "systems/telemetry.md",
+        "by-the-numbers.md",
+        "lore.md",
+        "overview/glossary.md",
+        "packages/index.md",
+        "reference/index.md",
+        "cleanup-opportunities.md"
+      ]
     },
     {
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "contentBrief": "HomeStream runs a Fastify server, FFmpeg child processes, and thin LAN clients. `apps/server/src/app.ts` constructs services; `apps/server/src/index.ts` starts listeners and workers. The browser and Electron renderer share the web build, while the desktop main process supervises the server (`apps/web/src/main.tsx`, `apps/desktop/src/main.ts`).",
       "relevantSourcePaths": [
-        "README.md",
-        "AGENTS.md",
-        "CONTRIBUTING.md",
         "apps/server/src/app.ts",
         "apps/server/src/index.ts",
+        "apps/web/src/main.tsx",
+        "apps/desktop/src/main.ts",
         "apps/server/src/config.ts",
-        "apps/web/src/App.tsx",
-        "packages/shared/src"
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/routes/devices.ts",
+        "apps/server/src/db/index.ts",
+        "apps/server/src/db/migrations.ts",
+        "apps/server/src/playback/segmentStore.ts",
+        "apps/server/src/routes/sessions.ts",
+        "apps/server/src/playback/sessionStart.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "security.md",
+        "reference/data-models.md",
+        "systems/playback/index.md",
+        "by-the-numbers.md",
+        "apps/desktop/index.md",
+        "systems/network.md"
+      ]
     },
     {
       "path": "overview/getting-started.md",
       "title": "Getting started",
       "criticality": "normal",
-      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "contentBrief": "Use Node.js 24, pnpm 12, and Git. Real playback also needs FFmpeg, ffprobe, and an NVIDIA GPU with NVENC support. Offline unit and integration tests need no GPU or upstream credentials (`README.md`, `.nvmrc`, `package.json`). Run commands from the repository root.",
       "relevantSourcePaths": [
-        "README.md",
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
+        "scripts/bootstrap.mjs",
+        ".devcontainer/devcontainer.json",
         "apps/server/src/config.ts",
         "apps/web/src/App.tsx",
-        "packages/shared/src"
+        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx",
+        "apps/web/vite.config.ts",
+        "apps/server/src/index.ts",
+        "apps/desktop/README.md",
+        "apps/desktop/scripts/start.mjs",
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/supervisor.ts",
+        "apps/server/vitest.config.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "how-to-contribute/testing.md",
+        "reference/configuration.md",
+        "how-to-contribute/debugging.md"
+      ]
     },
     {
       "path": "overview/glossary.md",
       "title": "Glossary",
       "criticality": "normal",
-      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
+      "contentBrief": "These terms connect shared contracts, the server pipeline, and client playback. Start with [architecture](architecture.md) for the runtime view.",
       "relevantSourcePaths": [
-        "README.md",
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/config.ts",
-        "apps/web/src/App.tsx",
-        "packages/shared/src"
+        "packages/shared/src/schemas.ts",
+        "apps/server/src/playback/decision.ts",
+        "apps/server/src/gateway/client.ts",
+        "packages/shared/src/streams.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/server/src/playback/sessionRecord.ts",
+        "apps/server/src/playback/sessionSlots.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/prefetch/service.ts",
+        "apps/server/src/downloads/service.ts",
+        "apps/server/src/playback/placeholder.ts",
+        "apps/server/src/db/plays.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "how-to-contribute/patterns-and-conventions.md",
-      "title": "Patterns and conventions",
-      "criticality": "normal",
-      "contentBrief": "Foundation vocabulary, runtime boundaries, setup and established conventions. Completed by orchestrator before delegation.",
-      "relevantSourcePaths": [
-        "README.md",
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/config.ts",
-        "apps/web/src/App.tsx",
-        "packages/shared/src"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/index.md",
-      "title": "Systems",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/playback/index.md",
-      "title": "Playback",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/playback/encoding.md",
-      "title": "Encoding",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/playback/lifecycle.md",
-      "title": "Lifecycle",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/playback/subtitles.md",
-      "title": "Subtitles",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/source-proxy.md",
-      "title": "Source proxy",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/network.md",
-      "title": "Network controls",
-      "criticality": "critical",
-      "contentBrief": "Trace real playback startup/fallback, encoding decisions, seek/lifecycle/resource limits, subtitle defaults/extraction/burn-in, shared byte cache and lead-aware download gate. Playback writer may add focused subpages if warranted, maintaining existing path links.",
-      "relevantSourcePaths": [
-        "apps/server/src/playback",
-        "apps/server/src/sourceproxy",
-        "apps/server/src/network",
-        "apps/server/test/playback",
-        "apps/server/test/sourceproxy",
-        "apps/server/test/network"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/index.md",
-      "title": "Apps",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/server.md",
-      "title": "Server",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/web/index.md",
-      "title": "Web",
-      "criticality": "critical",
-      "contentBrief": "Browser architecture, route map, boundaries and modification entry points; links focused screen, startup and build pages.",
-      "relevantSourcePaths": [
-        "apps/web/src",
-        "apps/web/e2e",
-        "apps/web/README.md",
-        "apps/web/vite.config.ts",
-        "apps/web/.size-limit.json"
-      ],
-      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/web/screens.md",
-      "title": "Screens",
-      "criticality": "critical",
-      "contentBrief": "Implemented Home, search, movie/show details, Settings and navigation. Distinguish player/dashboard placeholders and preserve resume/download UI behavior.",
-      "relevantSourcePaths": [
-        "apps/web/src",
-        "apps/web/e2e",
-        "apps/web/README.md",
-        "apps/web/vite.config.ts",
-        "apps/web/.size-limit.json"
-      ],
-      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/web/data-and-startup.md",
-      "title": "Data and startup",
-      "criticality": "critical",
-      "contentBrief": "Schema-validating API client, Query cache, deferred content mark and idle work, SSE invalidation and device identity.",
-      "relevantSourcePaths": [
-        "apps/web/src",
-        "apps/web/e2e",
-        "apps/web/README.md",
-        "apps/web/vite.config.ts",
-        "apps/web/.size-limit.json"
-      ],
-      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/web/build-and-tests.md",
-      "title": "Build and tests",
-      "criticality": "critical",
-      "contentBrief": "Vite assets/compression, build-time keys, aggregate bundle budgets, component fixtures and isolated Playwright plain/stub runs.",
-      "relevantSourcePaths": [
-        "apps/web/src",
-        "apps/web/e2e",
-        "apps/web/README.md",
-        "apps/web/vite.config.ts",
-        "apps/web/.size-limit.json"
-      ],
-      "relatedPages": ["apps/web/index.md", "apps/desktop.md", "systems/telemetry.md", "how-to-contribute/testing.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "apps/desktop.md",
-      "title": "Desktop",
-      "criticality": "normal",
-      "action": "create",
-      "contentBrief": "Describe the Electron 45 skeleton: tested logging, request ID, analytics, scrubber and Sentry option builders. Explain the future shell wiring plan without claiming a working tray/window/preload/supervisor.",
-      "relevantSourcePaths": [
-        "apps/desktop/src",
-        "apps/desktop/test",
-        "apps/desktop/README.md",
-        "apps/desktop/package.json"
-      ],
-      "relatedPages": ["apps/web/index.md", "systems/telemetry.md", "overview/architecture.md"],
-      "status": "generated"
-    },
-    {
-      "path": "packages/index.md",
-      "title": "Packages",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "packages/shared.md",
-      "title": "Shared",
-      "criticality": "normal",
-      "contentBrief": "Describe shared Zod contract families, analytics allowlists, feature flag registry, generic sanitization and host/user identity-word scrubbers. Distinguish identity-word scrubbing from random install IDs generated in server settings.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/index.md",
-      "title": "Features",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/catalog.md",
-      "title": "Catalog",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/stream-selection.md",
-      "title": "Stream selection",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/prefetch.md",
-      "title": "Prefetch",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/downloads.md",
-      "title": "Downloads",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "features/viewing-progress.md",
-      "title": "Viewing progress",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
-    },
-    {
-      "path": "systems/gateway.md",
-      "title": "Gateway",
-      "criticality": "normal",
-      "contentBrief": "Document implemented runtimes, shared contracts, catalog/home, ranking/placeholder detection, speculative warming, persistent TorBox tracking and progress/history/stats. Distinguish placeholder/planned clients from shipped server behavior. Keep pages focused and cross-linked.",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/server/src/tmdb",
-        "apps/server/src/home",
-        "apps/server/src/streams",
-        "apps/server/src/prefetch",
-        "apps/server/src/downloads",
-        "apps/server/src/progress",
-        "apps/server/src/stats",
-        "apps/server/src/gateway",
-        "apps/web",
-        "packages/shared"
-      ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "overview/architecture.md",
+        "packages/shared.md",
+        "systems/playback/index.md",
+        "features/viewing-progress.md"
+      ]
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
-      "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "contentBrief": "Collected on **2026-11-07** (the supplied collection date), from committed tree **`5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`**, the supplied `origin/main` snapshot. Uncommitted wiki generation is not measured. These are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).",
+      "relevantSourcePaths": [
+        "docs/openapi.json",
+        "docs/schema.sql",
+        "apps/server/src/docs/generated.ts",
+        "scripts/",
+        "apps/web/index.html",
+        "apps/desktop/assets/loading.html",
+        "apps/desktop/src/main.ts",
+        "apps/server",
+        "apps/web",
+        "apps/desktop",
+        "packages/shared",
+        "apps/server/src/playback"
+      ],
+      "relatedPages": [
+        "overview/architecture.md",
+        "lore.md",
+        "systems/playback/index.md",
+        "how-to-contribute/testing.md"
+      ]
     },
     {
       "path": "lore.md",
       "title": "Lore",
       "criticality": "normal",
-      "contentBrief": "Recompute physical lines by language, file/test/config counts, activity/churn, bot attribution, exports and import chains using explicit reproducible definitions. Derive a dated narrative from the actual two-day history, distinguish commit evidence from speculation, and avoid individual productivity metrics.",
-      "relevantSourcePaths": ["git history", "apps", "packages", "scripts", "package.json"],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "contentBrief": "HomeStream's complete available history contains **97 commits**, from `c0781bd` on **2026-11-05** to **`5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`** on **2026-11-08**. In about 62 recorded hours, a server foundation grows into a playback pipeline, a browser player, and an Electron shell. See [architecture](overview/architecture.md) for the current system and [by the numbers](by-the-numbers.md) for measurement rules.",
+      "relevantSourcePaths": [
+        "apps/server/package.json",
+        "apps/web/package.json",
+        "packages/shared/package.json",
+        "apps/server/src/tmdb/service.ts",
+        "apps/server/src/tmdb/cache.ts",
+        "apps/server/src/gateway/client.ts",
+        "apps/server/src/streams/parse.ts",
+        "apps/server/src/streams/rank.ts",
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/playback/decision.ts",
+        "apps/server/src/playback/ffmpegArgs.ts",
+        "apps/server/src/db/plays.ts"
+      ],
+      "relatedPages": [
+        "overview/architecture.md",
+        "by-the-numbers.md",
+        "features/catalog.md",
+        "systems/playback/index.md",
+        "systems/source-proxy.md",
+        "systems/network.md",
+        "features/downloads.md",
+        "features/viewing-progress.md",
+        "how-to-contribute/tooling.md",
+        "systems/telemetry.md",
+        "systems/playback/lifecycle.md",
+        "apps/web/index.md",
+        "apps/desktop/index.md"
+      ]
     },
     {
       "path": "how-to-contribute/index.md",
       "title": "Contributing",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "Start from `main`, keep changes focused, and finish with tests, current contracts, and an honest record of validation. `CONTRIBUTING.md` is the human guide; `AGENTS.md` supplies product constraints and agent rules.",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
+        ".github/CODEOWNERS",
+        "packages/shared/src",
         "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/server/src/playback",
+        "apps/server/src/gateway",
+        "apps/server/src/sourceproxy",
+        "apps/web/src/pages",
+        "apps/web/src/player",
+        "apps/desktop/src",
+        "apps/server/src/db/migrations.ts",
+        "apps/server/src/config.ts",
+        "packages/shared/src/analytics.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/index.md",
+        "features/index.md",
+        "systems/index.md",
+        "how-to-contribute/development-workflow.md",
+        "how-to-contribute/testing.md",
+        "how-to-contribute/debugging.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
     },
     {
       "path": "how-to-contribute/development-workflow.md",
       "title": "Development workflow",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "Bootstrap once, branch from `main`, change code and contracts together, and run the checks appropriate to the change. Commands run from the repository root with Node 24 and pnpm 12 (`CONTRIBUTING.md`, `package.json`).",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "scripts/bootstrap.mjs",
+        ".devcontainer/devcontainer.json",
+        "apps/server/package.json",
+        "apps/web/vite.config.ts",
+        "packages/shared/package.json",
+        ".factory/skills/homestream-add-api-route/SKILL.md",
+        "apps/server/src/docs/routeDocs.ts",
+        "docs/openapi.json",
+        "apps/server/src/db/migrations.ts",
+        "docs/schema.sql",
+        "docs/database.md",
+        ".factory/skills/homestream-telemetry/SKILL.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "overview/getting-started.md",
+        "how-to-contribute/patterns-and-conventions.md",
+        "how-to-contribute/testing.md",
+        "how-to-contribute/tooling.md",
+        "deployment.md"
+      ]
     },
     {
       "path": "how-to-contribute/testing.md",
       "title": "Testing",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "Vitest separates offline unit/integration checks from real encoding and upstream calls. The safe all-workspace default is `pnpm test:ci`, not `pnpm test` (`package.json`, `apps/server/vitest.config.ts`).",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/server/vitest.config.ts",
+        "apps/server/package.json",
+        "packages/shared/vitest.config.ts",
+        "apps/web/vite.config.ts",
+        "apps/desktop/vitest.config.ts",
+        "apps/server/test/helpers.ts",
+        "apps/server/src/app.ts",
+        "apps/server/test/playback/fakeEncoder.ts",
+        "apps/server/test/playback/harness.ts",
+        "apps/web/src/test/render.tsx",
+        "apps/web/src/test/fakeHls.ts",
+        "apps/web/src/test/player.tsx"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "apps/web/build-and-tests.md",
+        "by-the-numbers.md",
+        "how-to-contribute/debugging.md",
+        "systems/playback/index.md"
+      ]
     },
     {
       "path": "how-to-contribute/debugging.md",
       "title": "Debugging",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "Start with local readiness, then identify configuration, upstream, playback, or storage failures. Request IDs connect API responses to local logs. Maintained procedures are indexed in `docs/runbooks/README.md`.",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "docs/runbooks/README.md",
+        "apps/server/src/routes/ops.ts",
+        "apps/server/src/health/service.ts",
+        "apps/server/src/http/observability.ts",
+        "apps/server/src/logger.ts",
+        "apps/server/src/events/query.ts",
+        "apps/server/src/playback/startTimeline.ts",
+        "docs/runbooks/gateway-down.md",
+        "docs/runbooks/torbox-expired.md",
+        "docs/runbooks/encoder-failing.md",
+        "docs/runbooks/disk-full-transcode.md",
+        "docs/runbooks/ffmpeg-orphans.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "how-to-monitor/logging.md",
+        "how-to-monitor/tracing.md",
+        "apps/web/index.md",
+        "systems/playback/lifecycle.md",
+        "apps/desktop/index.md",
+        "how-to-contribute/testing.md",
+        "reference/configuration.md",
+        "security.md"
+      ]
+    },
+    {
+      "path": "how-to-contribute/patterns-and-conventions.md",
+      "title": "Patterns and conventions",
+      "criticality": "normal",
+      "contentBrief": "HomeStream uses strict TypeScript, shared Zod contracts, thin routes, and explicit service construction. Follow `AGENTS.md`, `CONTRIBUTING.md`, and nearby code when changing behavior.",
+      "relevantSourcePaths": [
+        "apps/server/tsconfig.json",
+        "apps/web/tsconfig.json",
+        "scripts/code-limits.mjs",
+        "packages/shared/src",
+        "packages/shared/src/desktop.ts",
+        "apps/server/src/routes",
+        "apps/server/src/errors.ts",
+        "apps/server/src/app.ts",
+        "apps/web/src/api/client.ts",
+        "apps/web/src/lib/uuid.ts",
+        "apps/desktop/src/requestId.ts",
+        ".factory/skills/homestream-add-api-route/SKILL.md"
+      ],
+      "relatedPages": [
+        "api/index.md",
+        "how-to-contribute/testing.md",
+        "security.md",
+        "how-to-contribute/development-workflow.md"
+      ]
     },
     {
       "path": "how-to-contribute/tooling.md",
       "title": "Tooling",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "pnpm workspaces and Turbo coordinate builds and checks. Repository scripts add code-size, dependency, privacy, generated-doc, and automation gates (`package.json`). See [workflow](development-workflow.md) for when to run them.",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        ".github/workflows/ci.yml",
+        "scripts/bootstrap.mjs",
+        "apps/web/vite.config.ts",
+        "scripts/code-limits.mjs",
+        "scripts/techdebt.mjs",
+        "scripts/check-large-files.mjs",
+        "scripts/pre-commit-secrets.mjs",
+        "scripts/lib/code-limits.mjs",
+        "apps/server/src/docs/routeDocs.ts",
+        "docs/openapi.json",
+        "apps/server/src/db/migrations.ts",
+        "docs/schema.sql"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "how-to-contribute/development-workflow.md",
+        "how-to-contribute/testing.md",
+        "deployment.md",
+        "reference/dependencies.md",
+        "how-to-contribute/debugging.md"
+      ]
     },
     {
-      "path": "api/index.md",
-      "title": "API",
+      "path": "apps/index.md",
+      "title": "Apps",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "HomeStream ships a server, a browser client and an Electron shell. The server owns upstream credentials, SQLite and video encoding; clients consume shared contracts rather than importing server internals (`apps/server/src/app.ts`, `packages/shared/src/index.ts`).",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/server/src/app.ts",
+        "packages/shared/src/index.ts",
+        "apps/server/src/index.ts",
+        "apps/web/src/App.tsx",
+        "apps/desktop/src/main.ts",
+        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx",
+        "apps/web/src/pages/PlayerPage.tsx",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/web/vite.config.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/server.md",
+        "apps/web/index.md",
+        "apps/desktop/index.md",
+        "packages/shared.md",
+        "overview/architecture.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
     },
     {
-      "path": "deployment.md",
-      "title": "Deployment",
+      "path": "apps/server.md",
+      "title": "Server",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "The server is the LAN runtime for HTTP, SSE, HLS, persistence, upstream access and encoding. `buildApp` in `apps/server/src/app.ts` constructs the dependency graph; process startup in `apps/server/src/index.ts` owns listener and worker activation.",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/server/src/app.ts",
+        "apps/server/src/index.ts",
+        "apps/server/src/context.ts",
+        "apps/server/src/routes/",
+        "apps/server/src/playback/",
+        "apps/server/src/streams/",
+        "apps/server/src/downloads/",
+        "apps/server/src/config.ts",
+        "apps/server/src/shutdown.ts",
+        "apps/server/src/discovery.ts",
+        "apps/server/src/http/observability.ts",
+        "apps/server/src/routes/static.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "systems/index.md",
+        "features/index.md",
+        "reference/configuration.md",
+        "apps/web/index.md",
+        "api/index.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
     },
     {
-      "path": "security.md",
-      "title": "Security",
-      "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "path": "apps/web/index.md",
+      "title": "Web app",
+      "criticality": "critical",
+      "contentBrief": "HomeStream's React 19/Vite client implements catalog browsing, saved-progress actions, HLS playback, notifications and the Electron renderer. Only the five dashboard tabs remain placeholders. The server chooses sources, persists progress and encodes video; the client always requests automatic stream selection (`apps/web/src/App.tsx`, `apps/web/src/player/sessionApi.ts`).",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/web/src/App.tsx",
+        "apps/web/src/player/sessionApi.ts",
+        "apps/web/src/pages/",
+        "apps/web/src/components/",
+        "apps/web/src/api/",
+        "apps/web/src/events/",
+        "apps/web/src/device/",
+        "apps/web/src/player/",
+        "apps/web/src/desktop/",
+        "apps/web/src/notices/",
+        "apps/web/src/telemetry/",
+        "apps/web/src/styles/"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/web/screens.md",
+        "apps/web/data-and-startup.md",
+        "apps/web/player.md",
+        "apps/web/desktop-integration.md",
+        "systems/telemetry.md",
+        "apps/web/build-and-tests.md",
+        "apps/desktop/index.md",
+        "packages/shared.md"
+      ]
     },
     {
-      "path": "cleanup-opportunities.md",
-      "title": "Cleanup opportunities",
+      "path": "apps/web/screens.md",
+      "title": "Screens",
       "criticality": "normal",
-      "contentBrief": "Explain real contribution checks, offline/GPU/live test separation, test infrastructure, generated docs, all route groups, workflows/release/rollback, trust boundaries and verified maintenance opportunities. Document only observed tooling, commands and rules.",
+      "contentBrief": "The web routes implement browsing, search, title details, playback and Settings. This page covers presentation and notices; [player](player.md) and [desktop integration](desktop-integration.md) explain session and shell behavior.",
       "relevantSourcePaths": [
-        "AGENTS.md",
-        "CONTRIBUTING.md",
-        "apps/server/src/routes",
-        "apps/server/src/docs",
-        "apps/server/test",
-        "scripts",
-        ".github",
-        "docs/runbooks",
-        "docs/TECH_DEBT.md",
-        "eslint.config.mjs",
-        "SECURITY.md"
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/Layout.tsx",
+        "apps/web/src/components/Nav.tsx",
+        "apps/web/src/components/HealthPill.tsx",
+        "apps/web/src/pages/HomePage.tsx",
+        "apps/web/src/components/Banner.tsx",
+        "apps/web/src/components/ContinueWatchingRow.tsx",
+        "apps/web/src/pages/SearchPage.tsx",
+        "apps/web/src/lib/useTmdbId.ts",
+        "apps/web/src/components/PlayActions.tsx",
+        "apps/web/src/pages/MovieDetailsPage.tsx",
+        "apps/web/src/pages/ShowDetailsPage.tsx"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/web/player.md",
+        "apps/web/desktop-integration.md",
+        "apps/web/data-and-startup.md",
+        "systems/telemetry.md",
+        "features/viewing-progress.md",
+        "features/prefetch.md",
+        "apps/web/index.md"
+      ]
+    },
+    {
+      "path": "apps/web/player.md",
+      "title": "Player",
+      "criticality": "normal",
+      "contentBrief": "The full-window HLS player starts or attaches to a server session, drives a video element and owns progress, cleanup, controls and track selection. `PlayerPage` in `apps/web/src/pages/PlayerPage.tsx` is the route controller; `Playback` in `apps/web/src/player/Playback.tsx` renders the ready session; `usePlaybackModel` in `apps/web/src/player/usePlaybackModel.ts` composes the hooks. Server encoding and selection are covered in [playback](../../systems/playback/index.md).",
+      "relevantSourcePaths": [
+        "apps/web/src/pages/PlayerPage.tsx",
+        "apps/web/src/player/Playback.tsx",
+        "apps/web/src/player/usePlaybackModel.ts",
+        "apps/web/src/player/target.ts",
+        "apps/web/src/player/useSessionStart.ts",
+        "apps/web/src/player/sessionApi.ts",
+        "apps/web/src/player/downloading.ts",
+        "apps/web/src/App.tsx",
+        "apps/web/src/player/useHls.ts",
+        "apps/web/src/player/PlayerOverlays.module.css",
+        "apps/web/src/player/useTrackSwitching.ts",
+        "apps/web/src/player/tracks.ts"
+      ],
+      "relatedPages": [
+        "systems/playback/index.md",
+        "apps/web/desktop-integration.md",
+        "features/viewing-progress.md",
+        "apps/web/index.md",
+        "apps/web/build-and-tests.md"
+      ]
+    },
+    {
+      "path": "apps/web/data-and-startup.md",
+      "title": "Data and startup",
+      "criticality": "normal",
+      "contentBrief": "The client separates TanStack Query server data, route/component state, persistent device identity and small external stores for downloads, event-stream liveness and notices. Request code lives in `apps/web/src/api/`; SSE lives in `apps/web/src/events/`. There is no separate monolithic application-state store.",
+      "relevantSourcePaths": [
+        "apps/web/src/api/",
+        "apps/web/src/events/",
+        "apps/web/src/api/client.ts",
+        "apps/web/src/api/queries.ts",
+        "apps/web/src/player/watchState.ts",
+        "apps/web/src/main.tsx",
+        "apps/web/src/lib/startup.ts",
+        "apps/web/src/lib/useContentShown.ts",
+        "apps/web/src/telemetry/index.ts",
+        "apps/web/src/telemetry/buildEnv.ts",
+        "apps/web/vite.config.ts",
+        "apps/web/src/events/serverEvents.ts"
+      ],
+      "relatedPages": [
+        "packages/shared.md",
+        "systems/telemetry.md",
+        "apps/web/screens.md",
+        "apps/web/index.md"
+      ]
+    },
+    {
+      "path": "apps/web/desktop-integration.md",
+      "title": "Desktop integration",
+      "criticality": "normal",
+      "contentBrief": "The web build is also the implemented Electron renderer. `desktopBridge` and `inMiniPlayer` in `apps/web/src/desktop/bridge.ts` detect the preload's `window.homestream` interface and return browser-safe fallbacks. The renderer never imports the desktop app; contracts come from `packages/shared/src/desktop.ts`. The [desktop shell](../desktop/index.md) owns windows, IPC authorization, tray, process supervision and native notifications.",
+      "relevantSourcePaths": [
+        "apps/web/src/desktop/bridge.ts",
+        "packages/shared/src/desktop.ts",
+        "apps/web/src/desktop/useMissingKeys.ts",
+        "apps/web/src/desktop/configKeys.ts",
+        "apps/web/src/desktop/FinishSetup.tsx",
+        "apps/web/src/desktop/DesktopSettings.tsx",
+        "apps/web/src/desktop/useDesktopSettings.ts",
+        "apps/web/src/components/Nav.module.css",
+        "apps/web/src/desktop/AppKeys.tsx",
+        "apps/web/src/desktop/UnreachableBanner.tsx",
+        "apps/web/src/desktop/useUnreachable.ts",
+        "apps/web/src/desktop/useDesktopPlayback.ts"
+      ],
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "apps/web/player.md",
+        "apps/web/data-and-startup.md",
+        "packages/shared.md",
+        "apps/web/index.md"
+      ]
+    },
+    {
+      "path": "apps/web/build-and-tests.md",
+      "title": "Build and tests",
+      "criticality": "normal",
+      "contentBrief": "The web build keeps routes, HLS and telemetry behind lazy boundaries and generates compressed assets for server delivery. `apps/web/vite.config.ts` configures Vite/Vitest; `apps/web/playwright.config.ts` runs isolated browser fixtures. This page describes committed configuration and test scope, not results from a wiki-generation test run.",
+      "relevantSourcePaths": [
+        "apps/web/vite.config.ts",
+        "apps/web/playwright.config.ts",
+        "apps/web/package.json",
+        "apps/web/dist",
+        "apps/web/reports/analyze-dist",
+        "apps/web/reports/bundle.html",
+        "apps/web/vite.plugins.ts",
+        "apps/web/src/styles/fonts/",
+        "apps/web/src/styles/global.css",
+        "apps/web/.size-limit.json",
+        "apps/web/coverage-thresholds.json",
+        "apps/web/src/test/render.tsx"
+      ],
+      "relatedPages": [
+        "apps/web/player.md",
+        "systems/telemetry.md",
+        "how-to-contribute/testing.md",
+        "apps/web/index.md"
+      ]
+    },
+    {
+      "path": "apps/desktop/index.md",
+      "title": "Desktop shell",
+      "criticality": "critical",
+      "contentBrief": "The Electron 45 desktop app is a working single-instance tray shell around the server-hosted [web UI](../web/index.md). It supervises a local server, opens the main and mini-player windows, persists preferences, exposes a restricted preload bridge, and integrates Windows startup, notifications and power management. It does not import web or server implementation modules.",
+      "relevantSourcePaths": [
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/shell/shell.ts",
+        "apps/desktop/src/supervisor.ts",
+        "apps/desktop/src/monitor.ts",
+        "apps/desktop/src/settings.ts",
+        "apps/desktop/src/miniPlayer.ts",
+        "apps/desktop/src/keepAwake.ts",
+        "apps/desktop/src/shell/",
+        "apps/desktop/src/telemetry/",
+        "apps/desktop/src/cli.ts",
+        "packages/shared/src/desktop.ts",
+        "apps/desktop/src/jsonFile.ts"
+      ],
+      "relatedPages": [
+        "apps/web/index.md",
+        "systems/telemetry.md",
+        "apps/desktop/supervisor.md",
+        "apps/desktop/windows-and-ipc.md",
+        "overview/getting-started.md",
+        "apps/web/desktop-integration.md",
+        "packages/shared.md"
+      ]
+    },
+    {
+      "path": "apps/desktop/supervisor.md",
+      "title": "Server supervision",
+      "criticality": "normal",
+      "contentBrief": "The desktop shell keeps an owned server alive without taking ownership of a server started elsewhere. `Supervisor` in `apps/desktop/src/supervisor.ts` implements the lifecycle; `ServerMonitor` in `apps/desktop/src/monitor.ts` supplies activity and health to the tray, notifications and keep-awake policy. See the [desktop overview](index.md).",
+      "relevantSourcePaths": [
+        "apps/desktop/src/supervisor.ts",
+        "apps/desktop/src/monitor.ts",
+        "apps/desktop/src/serverHttp.ts",
+        "apps/desktop/src/serverLaunch.ts",
+        "apps/desktop/src/serverProcess.ts",
+        "apps/desktop/src/sse.ts",
+        "apps/desktop/src/trayModel.ts",
+        "apps/desktop/src/shell/trayAdapter.ts",
+        "packages/shared/src/desktop.ts",
+        "packages/shared/src/health.ts",
+        "packages/shared/src/downloads.ts",
+        "apps/desktop/src/shell/shell.ts"
+      ],
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "apps/web/desktop-integration.md",
+        "apps/server.md"
+      ]
+    },
+    {
+      "path": "apps/desktop/windows-and-ipc.md",
+      "title": "Windows and IPC",
+      "criticality": "normal",
+      "contentBrief": "The desktop shell loads the ordinary web renderer with a narrow capability bridge, rather than enabling Node in pages. Playback ownership moves between windows without starting another server session. See [desktop overview](index.md) and the renderer-side [desktop integration](../web/desktop-integration.md).",
+      "relevantSourcePaths": [
+        "apps/desktop/src/shell/windows.ts",
+        "apps/desktop/src/miniPlayer.ts",
+        "packages/shared/src/desktop.ts",
+        "apps/desktop/src/ipc.ts",
+        "apps/desktop/src/preload.cts",
+        "apps/desktop/src/windowState.ts",
+        "apps/desktop/src/shell/shell.ts",
+        "apps/desktop/src/settings.ts",
+        "apps/desktop/src/shell/appMenu.ts",
+        "apps/desktop/src/keepAwake.ts",
+        "apps/desktop/src/notifications.ts",
+        "apps/desktop/src/shell/toasts.ts"
+      ],
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "apps/web/desktop-integration.md",
+        "apps/desktop/supervisor.md"
+      ]
+    },
+    {
+      "path": "systems/index.md",
+      "title": "Systems",
+      "criticality": "normal",
+      "contentBrief": "These systems separate process ownership, source-byte delivery and operational feedback. The composition root is `apps/server/src/app.ts`; clients receive HLS while media tools read opaque loopback source handles.",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/network/downloadGate.ts",
+        "apps/server/src/playback/context.ts",
+        "apps/server/test/encode/"
+      ],
+      "relatedPages": [
+        "systems/playback/index.md",
+        "systems/source-proxy.md",
+        "systems/network.md",
+        "systems/gateway.md",
+        "systems/health.md",
+        "systems/telemetry.md",
+        "features/index.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
+    },
+    {
+      "path": "systems/playback/index.md",
+      "title": "Playback",
+      "criticality": "critical",
+      "contentBrief": "Playback turns an automatic title request into device-compatible HLS, with a first-segment readiness gate and bounded source fallback. `PlaybackManager` in `apps/server/src/playback/manager.ts` exposes the route-facing facade while focused modules own startup, processes, recovery, serving and subtitles.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/playback/context.ts",
+        "apps/server/src/playback/sessionSlots.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/server/src/playback/encoderLifecycle.ts",
+        "apps/server/src/playback/recovery.ts",
+        "apps/server/src/playback/hlsServing.ts",
+        "apps/server/src/playback/subtitleHandoff.ts",
+        "apps/server/src/playback/readAheadPacing.ts",
+        "apps/server/src/playback/session.ts",
+        "apps/server/src/streams/rank.ts",
+        "apps/server/src/playback/placeholder.ts"
+      ],
+      "relatedPages": [
+        "systems/source-proxy.md",
+        "systems/playback/encoding.md",
+        "systems/playback/lifecycle.md",
+        "systems/playback/subtitles.md",
+        "features/viewing-progress.md",
+        "packages/shared.md"
+      ]
+    },
+    {
+      "path": "systems/playback/encoding.md",
+      "title": "Encoding",
+      "criticality": "normal",
+      "contentBrief": "HomeStream always re-encodes video with NVENC. `decide` in `apps/server/src/playback/decision.ts` chooses device output; `buildFfmpegArgs` in `apps/server/src/playback/ffmpegArgs.ts` constructs decoding, color conversion, audio and HLS arguments.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback/decision.ts",
+        "apps/server/src/playback/ffmpegArgs.ts",
+        "apps/server/src/playback/probe.ts",
+        "apps/server/src/playback/recovery.ts",
+        "apps/server/src/playback/context.ts",
+        "apps/server/src/playback/playlist.ts",
+        "apps/server/src/config.ts"
+      ],
+      "relatedPages": [
+        "systems/playback/subtitles.md",
+        "systems/playback/lifecycle.md"
+      ]
+    },
+    {
+      "path": "systems/playback/lifecycle.md",
+      "title": "Playback lifecycle",
+      "criticality": "normal",
+      "contentBrief": "Playback must not start a replacement encoder until the previous one has exited. `SessionSlots` in `apps/server/src/playback/sessionSlots.ts` accounts for opening, live, failed-but-running and draining work; `Recovery` in `apps/server/src/playback/recovery.ts` serializes restart operations.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback/sessionSlots.ts",
+        "apps/server/src/playback/recovery.ts",
+        "apps/server/src/playback/session.ts",
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/playback/stuckStop.ts",
+        "apps/server/src/playback/encoderProcess.ts",
+        "apps/server/src/playback/killUntilExited.ts",
+        "apps/server/src/playback/discardStop.ts",
+        "apps/server/src/sourceproxy/inputCuts.ts",
+        "apps/server/src/playback/hlsServing.ts",
+        "apps/server/src/playback/decision.ts",
+        "apps/server/src/playback/memoryWatchdog.ts"
+      ],
+      "relatedPages": [
+        "systems/playback/index.md",
+        "systems/network.md",
+        "systems/playback/subtitles.md"
+      ]
+    },
+    {
+      "path": "systems/playback/subtitles.md",
+      "title": "Subtitles",
+      "criticality": "normal",
+      "contentBrief": "Text tracks become progressive WebVTT renditions; bitmap tracks burn into video. `SubtitleHandoff` in `apps/server/src/playback/subtitleHandoff.ts` connects HTTP readiness to `SubtitleExtractor` in `apps/server/src/playback/subtitleExtractor.ts`, with session-owned cues in `SubtitleStore` in `apps/server/src/playback/subtitleStore.ts`.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback/subtitleHandoff.ts",
+        "apps/server/src/playback/subtitleExtractor.ts",
+        "apps/server/src/playback/subtitleStore.ts",
+        "apps/server/src/playback/defaultSubtitle.ts",
+        "apps/server/src/playback/tracks.ts",
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/playback/subtitleRun.ts",
+        "apps/server/src/playback/extractorSchedule.ts",
+        "apps/server/src/playback/extractorWindow.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/playback/ffmpegArgs.ts"
+      ],
+      "relatedPages": [
+        "systems/source-proxy.md",
+        "systems/network.md",
+        "systems/playback/encoding.md",
+        "systems/playback/lifecycle.md"
+      ]
+    },
+    {
+      "path": "systems/source-proxy.md",
+      "title": "Source proxy",
+      "criticality": "normal",
+      "contentBrief": "The loopback proxy hides expiring upstream URLs and shares ranged bytes/probes between prefetch, encoders and subtitle workers. `SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` owns source handles; `SourceEntry` in `apps/server/src/sourceproxy/sourceEntry.ts` owns one exact raw gateway URL's resolved location and cached data.",
+      "relevantSourcePaths": [
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/sourceproxy/sourceEntry.ts",
+        "apps/server/src/sourceproxy/blockCache.ts",
+        "apps/server/src/sourceproxy/serve.ts",
+        "apps/server/src/sourceproxy/readerHolds.ts",
+        "apps/server/src/sourceproxy/leadBound.ts",
+        "apps/server/src/sourceproxy/inputCuts.ts",
+        "apps/server/src/sourceproxy/pacer.ts",
+        "apps/server/src/sourceproxy/upstream.ts"
+      ],
+      "relatedPages": [
+        "systems/network.md",
+        "systems/playback/lifecycle.md"
+      ]
+    },
+    {
+      "path": "systems/network.md",
+      "title": "Network controls",
+      "criticality": "normal",
+      "contentBrief": "Network controls cap remote media bytes and pause readers when sufficient media is buffered. `DownloadGate` in `apps/server/src/network/downloadGate.ts` handles aggregate scheduling; `ReadAheadWindow` in `apps/server/src/network/readAhead.ts` handles time-window hysteresis.",
+      "relevantSourcePaths": [
+        "apps/server/src/network/downloadGate.ts",
+        "apps/server/src/network/readAhead.ts",
+        "apps/server/src/network/limits.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/network/tokenBucket.ts",
+        "apps/server/src/playback/readAheadPacing.ts",
+        "apps/server/src/sourceproxy/readerHolds.ts",
+        "apps/server/src/sourceproxy/serve.ts",
+        "apps/server/src/network/rateMeter.ts",
+        "apps/server/src/network/snapshot.ts",
+        "apps/server/src/network/check.ts"
+      ],
+      "relatedPages": [
+        "systems/source-proxy.md",
+        "systems/playback/index.md",
+        "reference/configuration.md"
+      ]
+    },
+    {
+      "path": "systems/gateway.md",
+      "title": "Gateway",
+      "criticality": "normal",
+      "contentBrief": "The gateway discovers server-side source URLs and checks playback links without accepting downloading clips as titles. `GatewayClient` in `apps/server/src/gateway/client.ts` shares caching and rate-limited discovery across stream selection, prefetch and downloads.",
+      "relevantSourcePaths": [
+        "apps/server/src/gateway/client.ts",
+        "apps/server/src/gateway/types.ts",
+        "apps/server/src/streams/parse.ts",
+        "apps/server/src/gateway/cache.ts",
+        "apps/server/src/gateway/rateLimiter.ts",
+        "apps/server/src/app.ts",
+        "apps/server/src/gateway/playbackProbe.ts",
+        "apps/server/src/playback/placeholder.ts",
+        "apps/server/src/gateway/",
+        "apps/server/test/gateway/"
+      ],
+      "relatedPages": [
+        "features/downloads.md",
+        "features/stream-selection.md",
+        "systems/source-proxy.md"
+      ]
     },
     {
       "path": "systems/health.md",
       "title": "Health",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "`HealthService` in `apps/server/src/health/service.ts` combines dependency checks with live playback/network state. It is richer and more expensive than liveness/readiness. See [monitoring](../how-to-monitor/index.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/health/service.ts",
+        "apps/server/src/routes/health.ts",
+        "apps/server/src/routes/ops.ts",
+        "apps/server/src/routes/events.ts",
+        "apps/server/src/index.ts",
+        "apps/web/src/events/serverEvents.ts",
+        "apps/server/src/health/checks/config.ts",
+        "apps/server/src/health/checks/gateway.ts",
+        "apps/server/src/health/checks/torbox.ts",
+        "apps/server/src/health/checks/tmdb.ts",
+        "apps/server/src/health/checks/ffmpeg.ts",
+        "apps/server/src/health/checks/gpu.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "how-to-monitor/index.md",
+        "apps/web/data-and-startup.md",
+        "how-to-monitor/alerting.md"
+      ]
     },
     {
       "path": "systems/telemetry.md",
       "title": "Telemetry",
       "criticality": "normal",
-      "contentBrief": "Explain server/browser/desktop optional telemetry, typed events, scrubbers, disabling IP/geo inference, lazy browser startup and feature flags. Distinguish desktop pure support modules from not-yet-wired Electron initialization.",
+      "contentBrief": "HomeStream optionally reports scrubbed Sentry errors, typed PostHog events and feature flags. Server, browser and Electron main-process wiring are implemented; local logs/SSE/metrics work without cloud telemetry. `docs/PRIVACY.md` is the maintained disclosure. See [security](../security.md).",
       "relevantSourcePaths": [
-        "apps/server/src/telemetry",
-        "apps/web/src/telemetry",
-        "apps/desktop/src/telemetry",
-        "packages/shared/src/analytics.ts",
-        "packages/shared/src/sanitize.ts",
-        "packages/shared/src/flags.ts",
-        "docs/PRIVACY.md"
+        "docs/PRIVACY.md",
+        "apps/server/src/telemetry/index.ts",
+        "apps/server/src/config.ts",
+        "apps/web/src/telemetry/buildEnv.ts",
+        "apps/desktop/src/shell/telemetry.ts",
+        "apps/desktop/src/main.ts",
+        "apps/server/src/db/settings.ts",
+        "apps/web/src/telemetry/index.ts",
+        "apps/web/src/telemetry/runtime.ts",
+        "apps/web/src/lib/startup.ts",
+        "apps/web/src/telemetry/routes.ts",
+        "apps/web/src/telemetry/usePageView.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "security.md",
+        "apps/desktop/index.md",
+        "apps/web/build-and-tests.md",
+        "how-to-monitor/tracing.md",
+        "features/prefetch.md"
+      ]
+    },
+    {
+      "path": "features/index.md",
+      "title": "Features",
+      "criticality": "normal",
+      "contentBrief": "These pages follow title workflows across server services and clients. Catalog browsing, resume state and download notices feed implemented playback, while the server owns upstream access and media processing (`apps/server/src/app.ts`, `apps/web/src/pages/PlayerPage.tsx`).",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/web/src/pages/PlayerPage.tsx",
+        "apps/server/src/home/service.ts",
+        "apps/server/src/streams/service.ts",
+        "apps/server/src/prefetch/service.ts",
+        "apps/server/src/downloads/service.ts",
+        "apps/server/src/progress/service.ts",
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/tmdb/service.ts",
+        "apps/server/src/streams/rank.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx"
+      ],
+      "relatedPages": [
+        "features/catalog.md",
+        "features/stream-selection.md",
+        "features/prefetch.md",
+        "features/downloads.md",
+        "features/viewing-progress.md",
+        "systems/playback/index.md",
+        "packages/shared.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
+    },
+    {
+      "path": "features/catalog.md",
+      "title": "Catalog",
+      "criticality": "normal",
+      "contentBrief": "Catalog normalizes TMDB metadata and combines it with local progress and pending downloads. `TmdbService` in `apps/server/src/tmdb/service.ts` owns upstream/cache access; `HomeService` in `apps/server/src/home/service.ts` assembles Home rows and featured choices.",
+      "relevantSourcePaths": [
+        "apps/server/src/tmdb/service.ts",
+        "apps/server/src/home/service.ts",
+        "apps/server/src/tmdb/normalize.ts",
+        "apps/server/src/routes/catalog.ts",
+        "apps/server/src/home/featured.ts",
+        "apps/server/src/db/history.ts",
+        "apps/server/src/tmdb/cache.ts",
+        "packages/shared/src/catalog.ts"
+      ],
+      "relatedPages": [
+        "features/stream-selection.md",
+        "apps/web/index.md",
+        "features/viewing-progress.md",
+        "features/downloads.md"
+      ]
+    },
+    {
+      "path": "features/stream-selection.md",
+      "title": "Stream selection",
+      "criticality": "normal",
+      "contentBrief": "Selection exposes URL-free source metadata and determines automatic playback order. `StreamService` in `apps/server/src/streams/service.ts` combines gateway lookup, episode filtering, parsing and device-aware recommendation; real probe/output policy belongs to [playback](../systems/playback/index.md).",
+      "relevantSourcePaths": [
+        "apps/server/src/streams/service.ts",
+        "apps/server/src/routes/streams.ts",
+        "apps/server/src/streams/episode.ts",
+        "apps/server/src/streams/parse.ts",
+        "apps/server/src/gateway/types.ts",
+        "packages/shared/src/streams.ts",
+        "apps/server/src/streams/rank.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/server/src/playback/placeholder.ts",
+        "apps/server/src/gateway/playbackProbe.ts"
+      ],
+      "relatedPages": [
+        "systems/playback/index.md",
+        "features/downloads.md",
+        "features/prefetch.md"
+      ]
+    },
+    {
+      "path": "features/prefetch.md",
+      "title": "Prefetch",
+      "criticality": "normal",
+      "contentBrief": "Prefetch warms the cached source that automatic Play would recommend without creating a session, encoder or HLS files. `PrefetchService` in `apps/server/src/prefetch/service.ts` shares discovery/warming by media identity and display tier.",
+      "relevantSourcePaths": [
+        "apps/server/src/prefetch/service.ts",
+        "apps/server/src/routes/prefetch.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/app.ts",
+        "apps/server/src/streams/rank.ts",
+        "packages/shared/src/playback.ts"
+      ],
+      "relatedPages": [
+        "systems/network.md",
+        "features/downloads.md",
+        "systems/source-proxy.md",
+        "features/stream-selection.md"
+      ]
+    },
+    {
+      "path": "features/downloads.md",
+      "title": "Downloads",
+      "criticality": "normal",
+      "contentBrief": "Downloads persist tracking of remote TorBox caching, not complete media files downloaded to the PC. `DownloadService` in `apps/server/src/downloads/service.ts` asks the gateway to initiate uncached playback and polls until the title is actually listed as cached.",
+      "relevantSourcePaths": [
+        "apps/server/src/downloads/service.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/server/src/downloads/store.ts",
+        "apps/server/src/downloads/torbox.ts",
+        "apps/server/src/downloads/rules.ts",
+        "apps/server/src/routes/downloads.ts",
+        "apps/server/src/routes/catalog.ts",
+        "apps/server/src/routes/events.ts",
+        "apps/server/src/gateway/playbackProbe.ts"
+      ],
+      "relatedPages": [
+        "systems/gateway.md",
+        "apps/web/index.md",
+        "features/prefetch.md"
+      ]
+    },
+    {
+      "path": "features/viewing-progress.md",
+      "title": "Viewing progress",
+      "criticality": "normal",
+      "contentBrief": "Viewing progress persists shared resume state and derives Continue Watching/up-next cards. `PlaybackManager.ping` in `apps/server/src/playback/manager.ts` writes progress/history; `ContinueWatchingService` in `apps/server/src/progress/service.ts` builds visible entries from that data.",
+      "relevantSourcePaths": [
+        "apps/server/src/playback/manager.ts",
+        "apps/server/src/progress/service.ts",
+        "apps/server/src/db/plays.ts",
+        "apps/server/src/routes/progress.ts",
+        "apps/server/src/progress/rules.ts",
+        "packages/shared/src/progress.ts",
+        "apps/server/src/db/progress.ts",
+        "apps/server/src/playback/sessionStart.ts",
+        "apps/server/src/progress/entries.ts",
+        "apps/server/src/progress/upNext.ts",
+        "apps/server/src/routes/history.ts",
+        "apps/server/src/db/history.ts"
+      ],
+      "relatedPages": [
+        "apps/web/index.md",
+        "reference/data-models.md",
+        "api/index.md"
+      ]
+    },
+    {
+      "path": "packages/index.md",
+      "title": "Packages",
+      "criticality": "normal",
+      "contentBrief": "The repository has one internal package, [shared](shared.md), consumed by the [server](../apps/server.md), [web UI](../apps/web/index.md) and working [desktop shell](../apps/desktop/index.md). It holds cross-runtime contracts and pure policy, not application services.",
+      "relevantSourcePaths": [
+        "packages/shared/src/index.ts",
+        "packages/shared/src/",
+        "packages/shared/test/",
+        "packages/shared/package.json",
+        "packages/",
+        "packages/shared/tsconfig.build.json",
+        "packages/shared/vitest.config.ts"
+      ],
+      "relatedPages": [
+        "packages/shared.md",
+        "apps/server.md",
+        "apps/web/index.md",
+        "apps/desktop/index.md",
+        "systems/telemetry.md",
+        "api/index.md"
+      ]
+    },
+    {
+      "path": "packages/shared.md",
+      "title": "Shared contracts",
+      "criticality": "normal",
+      "contentBrief": "`@homestream/shared` exposes runtime Zod schemas, inferred TypeScript types and pure cross-runtime helpers through `packages/shared/src/index.ts`. The root export in `packages/shared/package.json` targets compiled ESM and declarations. There are no application imports, privileged desktop operations, network clients, database connections or telemetry SDKs.",
+      "relevantSourcePaths": [
+        "packages/shared/src/index.ts",
+        "packages/shared/package.json",
+        "packages/shared/src/schemas.ts",
+        "packages/shared/src/catalog.ts",
+        "packages/shared/src/streams.ts",
+        "packages/shared/src/playback.ts",
+        "packages/shared/src/downloads.ts",
+        "packages/shared/src/progress.ts",
+        "packages/shared/src/network.ts",
+        "packages/shared/src/health.ts",
+        "packages/shared/src/ops.ts",
+        "packages/shared/src/desktop.ts"
+      ],
+      "relatedPages": [
+        "features/downloads.md",
+        "reference/data-models.md",
+        "apps/desktop/supervisor.md",
+        "apps/desktop/windows-and-ipc.md",
+        "systems/telemetry.md",
+        "how-to-contribute/patterns-and-conventions.md"
+      ]
+    },
+    {
+      "path": "api/index.md",
+      "title": "API",
+      "criticality": "normal",
+      "contentBrief": "HomeStream exposes JSON under `/api`, playback under `/hls`, and root-level operational probes. There is no authentication or `/v1` prefix: callers must be on a trusted LAN. See [security](../security.md).",
+      "relevantSourcePaths": [
+        "apps/server/src/docs/openapi.ts",
+        "apps/server/src/docs/routeDocs.ts",
+        "packages/shared/src/",
+        "docs/openapi.json",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/errors.ts",
+        "apps/server/src/routes/info.ts",
+        "apps/server/src/routes/devices.ts",
+        "apps/server/src/routes/catalog.ts",
+        "apps/server/src/routes/streams.ts",
+        "apps/server/src/routes/sessions.ts",
+        "apps/server/src/routes/progress.ts"
+      ],
+      "relatedPages": [
+        "security.md",
+        "how-to-monitor/tracing.md",
+        "features/viewing-progress.md",
+        "features/downloads.md",
+        "how-to-monitor/logging.md",
+        "apps/web/player.md",
+        "systems/playback/lifecycle.md",
+        "systems/playback/subtitles.md",
+        "apps/web/data-and-startup.md",
+        "systems/health.md",
+        "deployment.md"
+      ]
+    },
+    {
+      "path": "deployment.md",
+      "title": "Deployment",
+      "criticality": "normal",
+      "contentBrief": "HomeStream runs on the encoding PC as a LAN server with a working React player and Electron tray shell. Releases create tags and release metadata, not installers or a deployed fleet. See [architecture](overview/architecture.md).",
+      "relevantSourcePaths": [
+        "apps/server/src/index.ts",
+        "scripts/bootstrap.mjs",
+        "apps/web/dist",
+        "apps/server/src/config.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/routes/static.ts",
+        "apps/web/vite.config.ts",
+        "apps/desktop/src/main.ts",
+        ".devcontainer/Dockerfile",
+        "apps/server/src/playback/pidRegistry.ts",
+        "docs/runbooks/ffmpeg-orphans.md",
+        "docs/runbooks/disk-full-transcode.md"
+      ],
+      "relatedPages": [
+        "overview/architecture.md",
+        "apps/desktop/index.md",
+        "reference/configuration.md",
+        "security.md",
+        "apps/desktop/supervisor.md",
+        "how-to-monitor/index.md",
+        "how-to-contribute/tooling.md",
+        "how-to-monitor/alerting.md"
+      ]
+    },
+    {
+      "path": "security.md",
+      "title": "Security",
+      "criticality": "normal",
+      "contentBrief": "HomeStream trusts its local network and host. These are implemented boundaries, not an internet-readiness claim or a new security audit. `SECURITY.md` defines private reporting and supported versions; see [deployment](deployment.md).",
+      "relevantSourcePaths": [
+        "apps/server/src/app.ts",
+        "apps/server/src/config.ts",
+        "apps/server/src/routes/devices.ts",
+        "apps/server/src/net.ts",
+        "apps/server/src/sourceproxy/proxy.ts",
+        "packages/shared/src/playback.ts",
+        "apps/server/src/streams/service.ts",
+        "apps/server/src/playback/resolveUrl.ts",
+        "apps/server/src/playback/encoderProcess.ts",
+        "apps/server/src/playback/probe.ts",
+        "packages/shared/src/",
+        "apps/server/src/routes/"
+      ],
+      "relatedPages": [
+        "deployment.md",
+        "systems/source-proxy.md",
+        "api/index.md",
+        "systems/network.md",
+        "apps/desktop/windows-and-ipc.md",
+        "systems/telemetry.md",
+        "how-to-contribute/debugging.md"
+      ]
     },
     {
       "path": "how-to-monitor/index.md",
       "title": "Monitoring",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "HomeStream has local structured logs, durable events, health snapshots, Prometheus metrics and optional Sentry/PostHog telemetry. These answer different questions; dashboard tabs remain placeholders, not a deployed monitoring backend. See [health](../systems/health.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
+        "apps/server/src/routes/ops.ts",
+        "apps/server/src/health/service.ts",
+        "apps/server/src/routes/events.ts",
+        "apps/web/src/events/serverEvents.ts",
         "docs/observability.md",
         "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "docs/PRIVACY.md",
+        "docs/runbooks/README.md",
+        "monitoring/prometheus/",
+        "monitoring/sentry/"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "systems/health.md",
+        "how-to-monitor/logging.md",
+        "how-to-monitor/metrics.md",
+        "how-to-monitor/tracing.md",
+        "how-to-monitor/alerting.md",
+        "systems/telemetry.md",
+        "security.md"
+      ]
     },
     {
       "path": "how-to-monitor/logging.md",
       "title": "Logging",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "Process logs, selected durable events and SSE are distinct channels. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
         "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
         "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/index.ts",
+        "apps/server/src/http/observability.ts",
+        "apps/server/src/requestContext.ts",
+        "apps/server/src/events/record.ts",
+        "apps/server/src/events/query.ts",
+        "apps/server/src/routes/health.ts",
+        "apps/server/src/routes/events.ts",
+        "apps/web/src/events/serverEvents.ts",
+        "apps/web/src/logger.ts",
+        "apps/desktop/src/shell/telemetry.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "how-to-monitor/index.md",
+        "how-to-monitor/tracing.md",
+        "api/index.md",
+        "apps/desktop/index.md",
+        "security.md",
+        "reference/data-models.md"
+      ]
     },
     {
       "path": "how-to-monitor/metrics.md",
       "title": "Metrics",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes a per-server Prometheus registry through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/metrics/serverMetrics.ts`, `apps/server/src/routes/ops.ts`).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/metrics/serverMetrics.ts",
+        "apps/server/src/routes/ops.ts",
+        "apps/server/src/app.ts",
+        "apps/server/src/telemetry/playbackObserver.ts",
+        "apps/server/src/http/observability.ts",
+        "apps/server/src/playback/observer.ts",
+        "monitoring/prometheus/prometheus.yml",
+        "monitoring/prometheus/alerts.yml",
+        "apps/server/test/integration/observability.test.ts",
+        "apps/server/test/telemetry/telemetryUnits.test.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "systems/health.md",
+        "how-to-monitor/alerting.md"
+      ]
     },
     {
       "path": "how-to-monitor/tracing.md",
       "title": "Tracing",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "HomeStream implements request-ID correlation and restricted Sentry error/breadcrumb reporting, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
         "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/logger.ts",
+        "apps/server/src/http/observability.ts",
+        "apps/server/src/app.ts",
+        "apps/web/src/api/client.ts",
+        "apps/desktop/src/serverHttp.ts",
+        "apps/desktop/src/requestId.ts",
+        "apps/server/src/telemetry/sentry.ts",
+        "apps/server/src/telemetry/playbackObserver.ts",
+        "apps/web/src/telemetry/sentry.ts",
+        "apps/desktop/src/telemetry/sentry.ts",
+        "packages/shared/src/sanitize.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "how-to-monitor/logging.md",
+        "apps/desktop/supervisor.md",
+        "systems/telemetry.md"
+      ]
     },
     {
       "path": "how-to-monitor/alerting.md",
       "title": "Alerting",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "HomeStream checks in eleven Prometheus expressions and two Sentry workflow definitions, not a provisioned paging system. Prometheus must load its rules and Sentry workflows must be applied separately; checked-in configuration is not proof of deployed monitoring (`monitoring/prometheus/alerts.yml`, `monitoring/sentry/alert-rules.json`).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "monitoring/prometheus/alerts.yml",
+        "monitoring/sentry/alert-rules.json",
+        "monitoring/prometheus/prometheus.yml",
+        "apps/server/test/integration/monitoringFiles.test.ts",
+        "apps/server/src/playback/memoryWatchdog.ts",
+        "scripts/sentry-alerts.mjs",
+        "scripts/sentry-issues.mjs",
+        ".github/workflows/sentry-issues.yml",
+        "docs/runbooks/sentry-triage.md",
+        "docs/runbooks/gateway-down.md",
+        "docs/runbooks/encoder-failing.md",
+        "docs/runbooks/profiling.md"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "systems/health.md",
+        "systems/source-proxy.md",
+        "how-to-monitor/metrics.md",
+        "reference/configuration.md",
+        "how-to-monitor/logging.md"
+      ]
+    },
+    {
+      "path": "cleanup-opportunities.md",
+      "title": "Cleanup opportunities",
+      "criticality": "normal",
+      "contentBrief": "This is a source-backed maintenance list at `5eefa37`, not a new dead-code, dependency-age, security or performance audit. The main opportunities are registered exceptions and stale maintained prose. See [contribution tooling](how-to-contribute/tooling.md).",
+      "relevantSourcePaths": [
+        "apps/server/src/config.ts",
+        "apps/server/src/health/checks/torbox.ts",
+        "apps/server/src/playback/diskCap.ts",
+        "apps/server/src/playback/probe.ts",
+        "apps/server/src/sourceproxy/serve.ts",
+        "apps/server/src/sourceproxy/sourceEntry.ts",
+        "apps/server/test/playback/subtitleSources.ts",
+        "apps/server/src/playback/manager.ts",
+        "scripts/lib/code-limits.mjs",
+        "scripts/code-limits.mjs",
+        "docs/TECH_DEBT.md",
+        "apps/web/src/"
+      ],
+      "relatedPages": [
+        "how-to-contribute/tooling.md",
+        "systems/source-proxy.md",
+        "systems/playback/index.md",
+        "by-the-numbers.md",
+        "reference/data-models.md",
+        "security.md",
+        "how-to-contribute/testing.md",
+        "apps/web/player.md",
+        "apps/desktop/index.md"
+      ]
     },
     {
       "path": "reference/index.md",
       "title": "Reference",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "These pages collect configuration, durable models, and direct dependencies for source commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. They describe the current server, web player, and Electron shell rather than planned clients.",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
         "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
+        "apps/server/src/db/migrations.ts",
+        "packages/shared/src/index.ts",
+        "apps/server/src/routes",
+        "docs/openapi.json",
         "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "packages/shared/src/analytics.ts",
+        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "reference/configuration.md",
+        "reference/data-models.md",
+        "packages/shared.md",
+        "reference/dependencies.md",
+        "api/index.md",
+        "systems/telemetry.md",
+        "apps/web/index.md",
+        "apps/desktop/index.md",
+        "security.md"
+      ]
     },
     {
       "path": "reference/configuration.md",
       "title": "Configuration",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "The server selects one env-format file, overlays recognized nonblank process variables, and derives typed defaults. Restart after changes. File values do not automatically become shell environment variables (`apps/server/src/config.ts`). See [getting started](../overview/getting-started.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
         "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/index.ts",
+        "apps/server/src/network/limits.ts",
+        "apps/web/vite.config.ts",
+        "apps/web/src/telemetry/buildEnv.ts",
+        "apps/web/src/telemetry/config.ts",
+        "apps/web/src/telemetry/index.ts",
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/envFile.ts",
+        "apps/desktop/src/shell/telemetry.ts",
+        "scripts/flags.mjs",
+        "scripts/sentry-alerts.mjs"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "overview/getting-started.md",
+        "systems/network.md",
+        "systems/health.md",
+        "apps/web/data-and-startup.md",
+        "apps/desktop/index.md",
+        "how-to-contribute/patterns-and-conventions.md",
+        "security.md"
+      ]
     },
     {
       "path": "reference/data-models.md",
       "title": "Data models",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "SQLite stores durable state; active sessions, source-cache bytes, metrics, and HLS files have separate lifecycles. Shared Zod models define the public API rather than exposing SQL row shapes directly (`apps/server/src/db/index.ts`, `packages/shared/src/index.ts`). See [shared contracts](../packages/shared.md).",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/src/db/index.ts",
+        "packages/shared/src/index.ts",
+        "apps/server/src/db/migrations.ts",
+        "apps/server/src/db/plays.ts",
+        "apps/server/src/db/progress.ts",
+        "apps/server/src/db/history.ts",
+        "apps/server/src/db/devices.ts",
+        "apps/server/src/events/record.ts",
+        "apps/server/src/events/query.ts",
+        "apps/server/src/tmdb/cache.ts",
+        "apps/server/src/gateway/cache.ts",
+        "apps/server/src/downloads/store.ts"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "packages/shared.md",
+        "features/viewing-progress.md",
+        "features/downloads.md",
+        "security.md",
+        "systems/telemetry.md",
+        "api/index.md"
+      ]
     },
     {
       "path": "reference/dependencies.md",
       "title": "Dependencies",
       "criticality": "normal",
-      "contentBrief": "Read health scheduling/checks, telemetry scrub/flags/events, logs/request ids, exact metrics and alert rules; describe limited manual tracing rather than inventing distributed auto-instrumentation. Reference configuration defaults/precedence, SQLite migrations/tables and manifest dependency counts.",
+      "contentBrief": "This inventory counts direct manifest declarations at source commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. It is not a transitive inventory, freshness report, or vulnerability audit. Four workspaces are listed in `pnpm-workspace.yaml`; root `package.json` supplies tooling.",
       "relevantSourcePaths": [
-        "apps/server/src/health",
-        "apps/server/src/telemetry",
-        "apps/server/src/http",
-        "apps/server/src/metrics",
-        "apps/server/src/logger.ts",
-        "apps/server/src/requestContext.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/db",
-        "packages/shared/src",
-        "monitoring",
-        "docs/PRIVACY.md",
-        "docs/observability.md",
-        "docs/alerting.md",
-        ".env.example",
-        "package.json"
+        "apps/server/package.json",
+        "apps/web/package.json",
+        "apps/desktop/package.json",
+        "packages/shared/package.json",
+        "apps/server/src/db/index.ts",
+        "apps/server/src/app.ts",
+        ".github/workflows/ci.yml",
+        "monitoring/prometheus/prometheus.yml"
       ],
-      "relatedPages": ["overview/architecture.md", "api/index.md", "packages/shared.md"],
-      "action": "regenerate",
-      "status": "generated"
+      "relatedPages": [
+        "apps/desktop/index.md",
+        "how-to-contribute/testing.md",
+        "how-to-contribute/tooling.md",
+        "overview/architecture.md",
+        "reference/configuration.md"
+      ]
     }
-  ],
-  "remove": ["how-to-monitor.md"],
-  "skipped": {
-    "cleanup-opportunities.md": "Verified complexity ceilings and baseline web test coverage in docs/TECH_DEBT.md; do not invent dead code or outdated dependency findings.",
-    "primitives": "Skip separate lens: contract/domain pages cover concepts without duplication.",
-    "background": "Skip separate lens: lore and conventions cover evidence and rationale.",
-    "fun-facts.md": "Skip: compact two-day history, no verified naming lore."
-  },
-  "baseCommit": "bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406",
-  "reason": "Valid previous wiki base bb48e6d9f6c0eb098ae6e3ea29ded95fd991d406; 18,095 changed lines across 273 files exceeds the 10,000-line full-generation threshold. Full history available; no git failure.",
-  "removedPages": ["apps/web.md", "how-to-monitor.md"],
-  "pageCount": 50
+  ]
 }
