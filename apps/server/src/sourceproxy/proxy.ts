@@ -238,6 +238,7 @@ export class SourceProxy {
         readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
         resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
         newToken: newKey,
+        extractorLeadBytes: this.cache.perSourceBudgetBytes / 2,
       },
     );
     entry.firstOwner = owner;

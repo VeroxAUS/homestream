@@ -41,6 +41,11 @@ export class BlockCache {
     private readonly perSourceCapBytes = PER_SOURCE_CAP_BYTES,
   ) {}
 
+  /** What one source can actually keep: the per-source cap, or less when the global cap is smaller. */
+  get perSourceBudgetBytes(): number {
+    return Math.min(this.perSourceCapBytes, this.capBytes);
+  }
+
   get(owner: BlockOwner, index: number): Buffer | undefined {
     const block = owner.blocks.get(index);
     if (!block) {

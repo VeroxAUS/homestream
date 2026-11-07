@@ -215,7 +215,9 @@ async function drainStretch(
   const { entry, reader, cache, sink, counters, pacer } = run;
   for await (const chunk of response as AsyncIterable<Buffer>) {
     if (sink.closed) break;
-    const room = front.end + 1 - front.pos;
+    // A held stream ends on a block boundary: a block cut short is never stored, and the next reader would fetch it again.
+    const toBoundary = entry.isHeld(reader) ? BLOCK_SIZE - (front.pos % BLOCK_SIZE) : Infinity;
+    const room = Math.min(front.end + 1 - front.pos, toBoundary);
     const part = chunk.length > room ? chunk.subarray(0, room) : chunk;
     if (pacer && entry.extractorLimit !== null) {
       const wait = pacer.delayFor(part.length, entry.extractorLimit, Date.now());
@@ -228,7 +230,9 @@ async function drainStretch(
     collector.add(part);
     await sink.write(part);
     front.pos += part.length;
-    if (front.pos > front.end || entry.isHeld(reader) || cache.has(entry, Math.floor(front.pos / BLOCK_SIZE))) break;
+    entry.leadBound.advance(reader, front.pos);
+    if (front.pos > front.end || cache.has(entry, Math.floor(front.pos / BLOCK_SIZE))) break;
+    if (front.pos % BLOCK_SIZE === 0 && entry.isHeld(reader)) break;
   }
 }
 
@@ -272,6 +276,22 @@ async function pumpRemote(
   sink: Sink,
   counters: ProxyCounters,
 ): Promise<void> {
+  entry.leadBound.open(reader, range.start);
+  try {
+    await pumpRange(entry, reader, cache, range, sink, counters);
+  } finally {
+    entry.leadBound.close(reader);
+  }
+}
+
+async function pumpRange(
+  entry: SourceEntry,
+  reader: ReaderRef,
+  cache: BlockCache,
+  range: ByteRange,
+  sink: Sink,
+  counters: ProxyCounters,
+): Promise<void> {
   let pos = range.start;
   let stalls = 0;
   const tailRegion = Math.max(entry.headTarget, entry.size - TAIL_BYTES);
@@ -304,6 +324,7 @@ async function pumpRemote(
       counters.servedBytes += cached.length;
       await sink.write(cached);
       pos += cached.length;
+      entry.leadBound.advance(reader, pos);
       continue;
     }
     if (entry.streamApproaching(pos, null) && (await waitForSharedBytes(entry, cache, pos, range.end, sink))) continue;

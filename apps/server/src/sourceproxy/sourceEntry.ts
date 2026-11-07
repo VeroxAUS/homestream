@@ -14,6 +14,7 @@ import {
 import { RateMeter } from '../network/rateMeter.js';
 import { encoderWindowSec, type ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
+import { ExtractorLeadBound } from './leadBound.js';
 import { ReaderHolds } from './readerHolds.js';
 import type { UpstreamClient } from './upstream.js';
 import {
@@ -34,6 +35,8 @@ const MAX_ATTEMPTS = 4;
 const RETRY_DELAY_MS = 250;
 /** An extractor needing bytes this close ahead of an encoder stream waits for that stream to bring them (about a second at 60 Mbps). */
 const SHARE_AHEAD_BYTES = 8 * 1024 * 1024;
+/** A held extractor goes on once the gap is down to this share of the hold distance. */
+const EXTRACTOR_LEAD_RESUME_FRACTION = 0.5;
 
 /** `extractor` reads are paced to the entry's `extractorLimit`. */
 export type Consumer = 'main' | 'extractor';
@@ -57,6 +60,8 @@ export interface SourceEntryDeps {
   resumeSec: number;
   /** Makes the opaque reader ids in loopback URLs. */
   newToken: () => string;
+  /** How far past its session's encoder an extractor run may read before it is held (see `ExtractorLeadBound`). */
+  extractorLeadBytes: number;
 }
 
 /**
@@ -109,6 +114,8 @@ export class SourceEntry implements BlockOwner {
   readonly refs = new Set<string>();
   /** Opaque ids in the loopback URL; the extractor one marks its reads as low priority. */
   readonly keys: Record<Consumer, string>;
+  /** Keeps a session's extractor within what the block cache holds ahead of that session's encoder. */
+  readonly leadBound: ExtractorLeadBound;
 
   size = 0;
   contentType = 'application/octet-stream';
@@ -146,6 +153,11 @@ export class SourceEntry implements BlockOwner {
     this.local = !/^https?:\/\//i.test(resolvedUrl);
     this.holds = new ReaderHolds(encoderWindowSec(deps.readAheadSec), deps.resumeSec, deps.newToken, () =>
       this.wakeHolds(),
+    );
+    this.leadBound = new ExtractorLeadBound(
+      deps.extractorLeadBytes,
+      deps.extractorLeadBytes * EXTRACTOR_LEAD_RESUME_FRACTION,
+      () => this.wakeHolds(),
     );
   }
 
@@ -199,6 +211,7 @@ export class SourceEntry implements BlockOwner {
 
   forgetOwner(owner: string): void {
     this.holds.forget(owner);
+    this.leadBound.forget(owner);
   }
 
   setExtractorHold(owner: string, runId: number, held: boolean): void {
@@ -208,7 +221,7 @@ export class SourceEntry implements BlockOwner {
   /** True when this reader must wait: it would fetch past the end of its owner's read-ahead window. Plain files never wait. */
   isHeld(reader: ReaderRef): boolean {
     if (this.local || this.closed) return false;
-    return this.holds.isHeld(reader.consumer, reader.owner, reader.runId);
+    return this.holds.isHeld(reader.consumer, reader.owner, reader.runId) || this.leadBound.isHeld(reader);
   }
 
   /** Resolves when `isHeld` may have changed, or `signal` aborts. */
