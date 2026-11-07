@@ -40,6 +40,8 @@ export class ServerMonitor {
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private sessions = new Set<string>();
   private errored = new Set<string>();
+  /** Session changes seen from the event stream while the `/api/activity` snapshot is in flight. */
+  private sinceSnapshot: Map<string, boolean> | null = null;
   private lastHealthAt = 0;
 
   constructor(
@@ -69,6 +71,7 @@ export class ServerMonitor {
     clearTimeout(this.reconnectTimer);
     this.sessions.clear();
     this.errored.clear();
+    this.sinceSnapshot = null;
     this.events.onSessions(0);
   }
 
@@ -110,13 +113,26 @@ export class ServerMonitor {
   }
 
   private async loadActivity(abort: AbortController): Promise<void> {
+    const changes = new Map<string, boolean>();
+    this.sinceSnapshot = changes;
     try {
       const activity = ActivityLiteSchema.parse(await this.client.getJson('/api/activity'));
-      if (abort.signal.aborted) return;
-      this.sessions = new Set(activity.sessions.map((session) => session.sessionId));
+      // A newer load replaced this one, so its snapshot is already stale.
+      if (abort.signal.aborted || this.sinceSnapshot !== changes) return;
+      const snapshot = new Set(
+        activity.sessions.filter((session) => isActive(session.state)).map((session) => session.sessionId),
+      );
+      // The snapshot may predate events that arrived while it was in flight: those win.
+      for (const [id, active] of changes) {
+        if (active) snapshot.add(id);
+        else snapshot.delete(id);
+      }
+      this.sessions = snapshot;
       this.events.onSessions(this.sessions.size);
     } catch {
       this.logger.warn('could not read the active sessions');
+    } finally {
+      if (this.sinceSnapshot === changes) this.sinceSnapshot = null;
     }
   }
 
@@ -163,6 +179,7 @@ export class ServerMonitor {
   }
 
   private addSession(id: string): void {
+    this.sinceSnapshot?.set(id, true);
     if (this.sessions.has(id)) return;
     this.sessions.add(id);
     this.events.onSessions(this.sessions.size);
@@ -170,8 +187,13 @@ export class ServerMonitor {
 
   private updateSession(session: SessionLite): void {
     if (session.state === 'stopped') return this.endSession(session.sessionId);
-    this.addSession(session.sessionId);
-    if (session.state !== 'error' || this.errored.has(session.sessionId)) return;
+    if (session.state !== 'error') {
+      this.errored.delete(session.sessionId);
+      return this.addSession(session.sessionId);
+    }
+    // A failed start may never get a session.end, so an errored session must not hold the stream count or keep the PC awake.
+    this.removeSession(session.sessionId);
+    if (this.errored.has(session.sessionId)) return;
     this.errored.add(session.sessionId);
     this.events.onSessionError(session);
   }
@@ -179,6 +201,15 @@ export class ServerMonitor {
   private endSession(id: unknown): void {
     if (typeof id !== 'string') return;
     this.errored.delete(id);
+    this.removeSession(id);
+  }
+
+  private removeSession(id: string): void {
+    this.sinceSnapshot?.set(id, false);
     if (this.sessions.delete(id)) this.events.onSessions(this.sessions.size);
   }
+}
+
+function isActive(state: SessionLite['state']): boolean {
+  return state !== 'stopped' && state !== 'error';
 }

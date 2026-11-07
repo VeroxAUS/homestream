@@ -22,7 +22,7 @@ function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function setup(activity: unknown[] = []) {
+function setup(activity: unknown[] = [], activityGate?: Promise<void>) {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   let streams = 0;
@@ -39,7 +39,7 @@ function setup(activity: unknown[] = []) {
     probe: () => Promise.resolve('homestream'),
     getJson(path) {
       requests.push(path);
-      if (path === '/api/activity') return Promise.resolve({ sessions: activity });
+      if (path === '/api/activity') return (activityGate ?? Promise.resolve()).then(() => ({ sessions: activity }));
       return Promise.resolve({ overall: 'ok', checks: [], checkedAt: '2026-01-01T00:00:00.000Z' });
     },
   };
@@ -106,6 +106,81 @@ describe('ServerMonitor', () => {
     await push(sse('session.update', session('a', 'error')));
     await push(sse('session.update', session('a', 'error')));
     expect(events.onSessionError).toHaveBeenCalledTimes(1);
+    monitor.stop();
+  });
+
+  it('does not count an errored session that never gets a start or an end', async () => {
+    const { monitor, events, push } = setup();
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    events.onSessions.mockClear();
+    await push(sse('session.update', session('a', 'error')));
+    expect(events.onSessionError).toHaveBeenCalledTimes(1);
+    expect(events.onSessions).not.toHaveBeenCalledWith(1);
+    monitor.stop();
+  });
+
+  it('drops a running session when it turns into an error and counts it again after it recovers', async () => {
+    const { monitor, events, push } = setup();
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    await push(sse('session.start', session('a', 'starting')));
+    expect(events.onSessions).toHaveBeenLastCalledWith(1);
+    await push(sse('session.update', session('a', 'error')));
+    expect(events.onSessions).toHaveBeenLastCalledWith(0);
+    expect(events.onSessionError).toHaveBeenCalledTimes(1);
+    await push(sse('session.update', session('a', 'playing')));
+    expect(events.onSessions).toHaveBeenLastCalledWith(1);
+    monitor.stop();
+  });
+
+  it('ignores errored sessions in the activity snapshot', async () => {
+    const { monitor, events } = setup([session('a', 'error'), session('b', 'playing')]);
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(events.onSessions).toHaveBeenLastCalledWith(1);
+    expect(events.onSessionError).not.toHaveBeenCalled();
+    monitor.stop();
+  });
+
+  it('keeps a session that ended while the activity snapshot was in flight ended', async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const { monitor, events, push } = setup([session('a', 'playing'), session('b', 'playing')], gate);
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    await push(sse('session.start', session('a', 'playing')));
+    await push(sse('session.end', { sessionId: 'a', reason: 'user', state: 'stopped' }));
+    events.onSessions.mockClear();
+    release();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(events.onSessions).toHaveBeenLastCalledWith(1);
+    monitor.stop();
+  });
+
+  it('keeps a session that started while the activity snapshot was in flight', async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const { monitor, events, push } = setup([session('a', 'playing')], gate);
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    await push(sse('session.start', session('c', 'playing')));
+    release();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(events.onSessions).toHaveBeenLastCalledWith(2);
+    monitor.stop();
+  });
+
+  it('does not resurrect a session that errored while the activity snapshot was in flight', async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const { monitor, events, push } = setup([session('a', 'starting')], gate);
+    monitor.start();
+    await vi.advanceTimersByTimeAsync(10);
+    await push(sse('session.update', session('a', 'error')));
+    release();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(events.onSessions).toHaveBeenLastCalledWith(0);
     monitor.stop();
   });
 
