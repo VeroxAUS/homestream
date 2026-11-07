@@ -84,6 +84,16 @@ export function redactValues(text, values) {
     .reduce((out, value) => out.replaceAll(value, '***'), String(text ?? ''));
 }
 
+/** Deletes every bot comment with `marker` except the newest one and returns the ids it deleted. */
+export async function pruneMarkedComments(github, issueNumber, marker) {
+  const existing = (await github.paginate(`{repo}/issues/${issueNumber}/comments`)).filter(
+    (comment) => comment.user?.type === 'Bot' && comment.body?.includes(marker),
+  );
+  const older = existing.slice(0, -1);
+  for (const comment of older) await github.request('DELETE', `{repo}/issues/comments/${comment.id}`);
+  return older.map((comment) => comment.id);
+}
+
 /**
  * Creates or updates the one comment that carries `marker` on an issue or pull request. Extra copies (a race, a manual
  * copy) are deleted so exactly one remains.

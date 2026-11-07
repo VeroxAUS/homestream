@@ -5,6 +5,7 @@ export class GithubError extends Error {
 export interface GithubComment {
   id: number;
   body?: string;
+  user?: { type?: string };
   html_url?: string;
 }
 export interface GithubClient {
@@ -23,6 +24,11 @@ export function githubClient(options: {
 export function neutralizeMentions(text: unknown): string;
 export function clampBody(text: string, max?: number): string;
 export function redactValues(text: unknown, values: Array<string | undefined>): string;
+export function pruneMarkedComments(
+  github: Pick<GithubClient, 'request' | 'paginate'>,
+  issueNumber: number,
+  marker: string,
+): Promise<number[]>;
 export function upsertMarkedComment(
   github: Pick<GithubClient, 'request' | 'paginate'>,
   issueNumber: number,

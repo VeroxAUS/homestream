@@ -55,6 +55,19 @@ jobs:
           automatic_security_review: false
           review_depth: deep
 
+      # The action adds a "Droid finished" comment on every push; keep the newest one only.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: always()
+        with:
+          node-version-file: .nvmrc
+
+      - name: Keep one Droid summary comment
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/droid-pr-cleanup.mjs
+
   skip-notice:
     name: Droid review skipped
     if: >-

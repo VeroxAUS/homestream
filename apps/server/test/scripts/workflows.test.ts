@@ -208,6 +208,8 @@ describe('workflow hygiene', () => {
     const skip = (jobs['skip-notice']?.steps ?? []).map((step) => step.run ?? '').join('\n');
     const action = jobs['pr-review']?.steps?.find((step) => step.uses?.startsWith('Factory-AI/droid-action@'));
     expect(action?.with).toMatchObject({ automatic_review: true, use_sticky_comment: true });
+    const prRun = (jobs['pr-review']?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(prRun).toContain('scripts/droid-pr-cleanup.mjs');
     expect(skip).toContain('::notice');
     expect(jobs['push-review']?.['continue-on-error']).toBe(true);
     expect(jobs['push-review']?.if).toBe("github.event_name == 'push'");
