@@ -79,7 +79,7 @@ export const FILENAME_CASES: FilenameCase[] = [
     'BluRay',
     'DTS-HD MA 5.1',
   ),
-  c('The.Shawshank.Redemption.1994.UHD.BDRip.1440p.NNMClub.mkv', 'unknown', 'other', 'unknown', 'BluRay', 'Unknown'),
+  c('The.Shawshank.Redemption.1994.UHD.BDRip.1440p.NNMClub.mkv', '1440p', 'other', 'sdr', 'BluRay', 'Unknown'),
   c(
     'The Shawshank Redemption (1994) PROPER BluRay 1080p DTS-HD MA 5.1 AVC REMUX - FraMeSToR.mkv',
     '1080p',

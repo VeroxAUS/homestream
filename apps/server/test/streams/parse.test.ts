@@ -72,3 +72,23 @@ describe('parseStream (identity and flags)', () => {
     expect(formatSize(8_685_560_485)).toBe('8.7 GB');
   });
 });
+
+describe('parseStream (resolution precedence)', () => {
+  it.each([
+    ['Movie.2022.UHD.BDRip.1440p.mkv', '1440p'],
+    ['Movie.2022.1440p.WEB-DL.x264.mkv', '1440p'],
+    ['Movie.2022.1080p.UHD.BluRay.x265.mkv', '1080p'],
+    ['Movie.2022.4K.1080p.WEB-DL.mkv', '1080p'],
+    ['Movie.2022.UHD.720p.HDTV.mkv', '720p'],
+    ['Movie.2022.4K.WEB-DL.mkv', '2160p'],
+    ['Movie.2022.UHD.BluRay.mkv', '2160p'],
+    ['Movie.2022.3840x2160.mkv', '2160p'],
+    ['Movie.2022.BluRay.mkv', 'unknown'],
+  ])('%s -> %s', (filename, resolution) => {
+    expect(parseStream(raw(filename)).resolution).toBe(resolution);
+  });
+
+  it('labels a 1440p item with its resolution', () => {
+    expect(parseStream(raw('Movie.2022.1440p.WEB-DL.mkv')).label.startsWith('1440p')).toBe(true);
+  });
+});

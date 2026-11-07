@@ -21,12 +21,15 @@ function normalizeFilename(filename: string): string {
 
 const test = (re: RegExp, text: string): boolean => re.test(text);
 
+/** An explicit pixel height always beats the 4K/UHD labels, which only mean 2160p when nothing else says otherwise. */
 function parseResolution(norm: string): StreamResolution {
   const explicit = new RegExp(`${B}(2160|1440|1080|720|576|480|360)[pi]${E}`).exec(norm);
   if (explicit) {
     switch (explicit[1]) {
       case '2160':
         return '2160p';
+      case '1440':
+        return '1440p';
       case '1080':
         return '1080p';
       case '720':
@@ -56,7 +59,7 @@ function parseHdr(norm: string, resolution: StreamResolution): StreamHdr {
   if (test(new RegExp(`${B}hdr(?: ?10)?${E}`), norm)) return 'hdr10';
   if (test(new RegExp(`${B}hlg${E}`), norm)) return 'hlg';
   if (test(new RegExp(`${B}sdr${E}`), norm)) return 'sdr';
-  return resolution === '1080p' || resolution === '720p' || resolution === '480p' ? 'sdr' : 'unknown';
+  return resolution === '2160p' || resolution === 'unknown' ? 'unknown' : 'sdr';
 }
 
 function parseSource(norm: string): string {

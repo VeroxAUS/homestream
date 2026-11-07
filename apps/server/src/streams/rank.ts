@@ -1,7 +1,8 @@
 import type { CapabilityProfile, StreamOption, StreamResolution } from '@homestream/shared';
 
 export const RESOLUTION_RANK: Record<StreamResolution, number> = {
-  '2160p': 4,
+  '2160p': 5,
+  '1440p': 4,
   '1080p': 3,
   '720p': 2,
   '480p': 1,
@@ -40,11 +41,15 @@ export function rankStreams(options: StreamOption[]): StreamOption[] {
     .map(({ option }) => option);
 }
 
+/** Rank (5 down to 1) of the first threshold the size reaches; thresholds are the 2160p, 1440p, 1080p and 720p minimums. */
+function tier(size: number, thresholds: readonly number[]): number {
+  const index = thresholds.findIndex((minimum) => size >= minimum);
+  return index === -1 ? 1 : 5 - index;
+}
+
 /** Highest resolution tier a device can show, from its reported maximum display size. */
 export function deviceMaxRank(profile: Pick<CapabilityProfile, 'maxWidth' | 'maxHeight'>): number {
-  const byHeight = profile.maxHeight >= 2160 ? 4 : profile.maxHeight >= 1080 ? 3 : profile.maxHeight >= 720 ? 2 : 1;
-  const byWidth = profile.maxWidth >= 3840 ? 4 : profile.maxWidth >= 1920 ? 3 : profile.maxWidth >= 1280 ? 2 : 1;
-  return Math.min(byHeight, byWidth);
+  return Math.min(tier(profile.maxHeight, [2160, 1440, 1080, 720]), tier(profile.maxWidth, [3840, 2560, 1920, 1280]));
 }
 
 /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const STREAM_RESOLUTIONS = ['2160p', '1080p', '720p', '480p', 'unknown'] as const;
+export const STREAM_RESOLUTIONS = ['2160p', '1440p', '1080p', '720p', '480p', 'unknown'] as const;
 export const StreamResolutionSchema = z.enum(STREAM_RESOLUTIONS);
 export type StreamResolution = z.infer<typeof StreamResolutionSchema>;
 
