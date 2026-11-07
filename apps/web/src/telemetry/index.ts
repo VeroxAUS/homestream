@@ -46,6 +46,18 @@ export function trackPageView(pathname: string): void {
   void started.then((runtime) => runtime?.recordPageView(route));
 }
 
+const reportedErrors = new WeakSet<object>();
+
+/** Reports an error that an error boundary caught, once per error object. Does nothing when telemetry is off. */
+export function reportRenderError(error: unknown, boundary: string): void {
+  if (!started) return;
+  if (typeof error === 'object' && error !== null) {
+    if (reportedErrors.has(error)) return;
+    reportedErrors.add(error);
+  }
+  void started.then((runtime) => runtime?.recordRenderError(error, boundary));
+}
+
 function safeStorage(): Storage | undefined {
   try {
     return window.localStorage;

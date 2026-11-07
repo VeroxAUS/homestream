@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from './App';
 import { createQueryClient, homeQuery } from './api/queries';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { registerDeviceWhenIdle } from './device/identity';
 import { startServerEventsWhenIdle } from './events/serverEvents';
 import { startTelemetryWhenIdle } from './telemetry';
@@ -22,10 +23,12 @@ registerDeviceWhenIdle();
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary name="app">
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

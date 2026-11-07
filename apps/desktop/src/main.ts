@@ -34,10 +34,11 @@ function loadSettings(userData: string): SettingsStore {
 
 async function run(): Promise<void> {
   const userData = app.getPath('userData');
+  const repoRoot = app.isPackaged ? null : path.resolve(app.getAppPath(), '..', '..');
   const envFile = resolveEnvFile({
     env: process.env,
     packaged: app.isPackaged,
-    repoRoot: app.isPackaged ? null : path.resolve(app.getAppPath(), '..', '..'),
+    repoRoot,
     appData: app.getPath('appData'),
   });
   loadShellEnv(envFile, process.env);
@@ -51,7 +52,8 @@ async function run(): Promise<void> {
     env: process.env,
     packaged: app.isPackaged,
     version,
-    roots: [app.getAppPath(), process.resourcesPath],
+    // From a source checkout, the dependencies live in the repository's node_modules, outside the app folder.
+    roots: [app.getAppPath(), process.resourcesPath, ...(repoRoot ? [repoRoot] : [])],
     dataDir,
     userDataDir: userData,
   });
@@ -111,6 +113,7 @@ async function run(): Promise<void> {
   });
 
   await shell.start();
+  void telemetry.reportTestError();
   telemetry.analytics?.capture('desktop_started', {
     version,
     os: 'windows',

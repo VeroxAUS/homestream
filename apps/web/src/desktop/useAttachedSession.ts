@@ -17,6 +17,7 @@ const HANDOVER_WAIT_MS = 3000;
 /**
  * Takes over a session another desktop window is playing: the shell holds the hand-over until this page asks for it,
  * the session is read from the server (same id, no new session) and playback continues at the handed-over position.
+ * When the mini window cannot load it, the shell closes that window and shows the main window on the details page.
  */
 export function useAttachedSession(enabled: boolean): AttachedSession {
   const [state, setState] = useState<StartState>({ status: 'loading' });
@@ -39,7 +40,17 @@ export function useAttachedSession(enabled: boolean): AttachedSession {
       fetchSession(incoming.sessionId).then(
         (session) =>
           active && setState({ status: 'ready', session: { ...session, startPositionSec: incoming.positionSec } }),
-        (error: unknown) => active && setState({ status: 'error', error }),
+        (error: unknown) => {
+          if (!active) return;
+          const failed = () => setState({ status: 'error', error });
+          if (!inMiniPlayer()) {
+            failed();
+            return;
+          }
+          // Retry here would start a new session inside the small window: let the shell show the details page instead.
+          logger.warn('player', 'hand-over session could not be loaded');
+          bridge.closeMiniPlayer().catch(failed);
+        },
       );
     });
     return () => {

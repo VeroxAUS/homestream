@@ -133,6 +133,7 @@ function openAttached(
   route: string,
   overrides: Partial<Handover> = {},
   bridge: Parameters<typeof installBridge>[0] = {},
+  routes: Parameters<typeof openPlayer>[0] = ATTACH_ROUTES,
 ) {
   const handover = { ...HANDOVER, ...overrides };
   const mocks = installBridge({
@@ -142,7 +143,7 @@ function openAttached(
     },
     ...bridge,
   });
-  return { mocks, ...openPlayer(ATTACH_ROUTES, route) };
+  return { mocks, ...openPlayer(routes, route) };
 }
 
 describe('the mini player window', () => {
@@ -204,17 +205,31 @@ describe('the mini player window', () => {
     expect(video.currentTime).toBe(1320);
   });
 
-  it('closes itself when the handed-over session cannot be loaded', async () => {
-    const mocks = installBridge({
-      isMiniPlayer: true,
-      onHandover: (callback) => {
-        queueMicrotask(() => callback(HANDOVER));
-        return () => undefined;
-      },
-    });
-    openPlayer({ 'GET /api/sessions/s1': apiError(404, 'not_found', 'gone') }, '/play/movie/278?attach=1&mini=1');
-    expect(await screen.findByRole('button', { name: /Back|Close|Try again/ })).toBeInTheDocument();
-    expect(mocks.openMiniPlayer).not.toHaveBeenCalled();
+  it('closes the window for the main one when the handed-over session cannot be loaded, and starts nothing', async () => {
+    const { calls, mocks } = openAttached(
+      '/play/movie/278?attach=1&mini=1',
+      {},
+      { isMiniPlayer: true },
+      { 'GET /api/sessions/s1': apiError(404, 'not_found', 'gone') },
+    );
+    await waitFor(() => expect(mocks.closeMiniPlayer).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(screen.queryByText("Couldn't start this title")).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(posts(calls)).toHaveLength(0);
+    expect(deletes(calls)).toHaveLength(0);
+    expect(mocks.returnToMain).not.toHaveBeenCalled();
+  });
+
+  it('shows the error card when the shell cannot close the mini window', async () => {
+    const { mocks } = openAttached(
+      '/play/movie/278?attach=1&mini=1',
+      {},
+      { isMiniPlayer: true, closeMiniPlayer: vi.fn(() => Promise.reject(new Error('no shell'))) },
+      { 'GET /api/sessions/s1': apiError(404, 'not_found', 'gone') },
+    );
+    expect(await screen.findByText("Couldn't start this title")).toBeInTheDocument();
+    expect(mocks.closeMiniPlayer).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a paused session paused', async () => {

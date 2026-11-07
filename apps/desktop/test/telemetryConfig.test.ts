@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_POSTHOG_HOST, resolveTelemetryConfig } from '../src/telemetry/config.js';
+import { DEFAULT_POSTHOG_HOST, resolveTelemetryConfig, testRunId } from '../src/telemetry/config.js';
 
 const DSN = 'https://abc123@o1.ingest.example.test/42';
 
@@ -51,5 +51,18 @@ describe('resolveTelemetryConfig', () => {
   it('names the environment from the setting or from the packaging', () => {
     expect(resolveTelemetryConfig({}, false).environment).toBe('development');
     expect(resolveTelemetryConfig({ SENTRY_ENVIRONMENT: 'staging' }, true).environment).toBe('staging');
+  });
+});
+
+describe('testRunId', () => {
+  it('is null unless a short lowercase run id is set', () => {
+    expect(testRunId({})).toBeNull();
+    expect(testRunId({ HOMESTREAM_TELEMETRY_TEST: '' })).toBeNull();
+    expect(testRunId({ HOMESTREAM_TELEMETRY_TEST: 'Upper Case' })).toBeNull();
+    expect(testRunId({ HOMESTREAM_TELEMETRY_TEST: 'a'.repeat(41) })).toBeNull();
+  });
+
+  it('returns a valid id, trimmed', () => {
+    expect(testRunId({ HOMESTREAM_TELEMETRY_TEST: ' check-5-20261107 ' })).toBe('check-5-20261107');
   });
 });

@@ -5,6 +5,7 @@ const sentry = vi.hoisted(() => ({
   startSentry: vi.fn(() => true),
   setSentryRoute: vi.fn(),
   captureTestError: vi.fn(),
+  captureRenderError: vi.fn(),
   flushSentry: vi.fn(() => Promise.resolve()),
   deviceKind: vi.fn(() => 'web'),
 }));
@@ -77,6 +78,16 @@ describe('runtime', () => {
     runtime.runTestTrigger('?__telemetry_test=run-1');
     expect(sentry.captureTestError).toHaveBeenCalledWith('run-1');
     expect(sentry.flushSentry).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a render error to Sentry only after it was started', async () => {
+    const runtime = await freshRuntime();
+    const error = new Error('render failed');
+    runtime.recordRenderError(error, 'app');
+    expect(sentry.captureRenderError).not.toHaveBeenCalled();
+    runtime.startTelemetry(CONFIG);
+    runtime.recordRenderError(error, 'app');
+    expect(sentry.captureRenderError).toHaveBeenCalledExactlyOnceWith(error, 'app');
   });
 
   it('sets the banner interval from the experiment variant', async () => {

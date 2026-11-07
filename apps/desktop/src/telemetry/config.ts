@@ -36,3 +36,14 @@ export function resolveTelemetryConfig(env: NodeJS.ProcessEnv, packaged: boolean
     environment: env.SENTRY_ENVIRONMENT?.trim() || (packaged ? 'production' : 'development'),
   };
 }
+
+const TEST_RUN_ID = /^[a-z0-9-]{1,40}$/;
+
+/**
+ * HOMESTREAM_TELEMETRY_TEST=<run id> makes the shell report one deliberate main-process error after it started, to
+ * check the Sentry pipeline end to end. Anything that is not a short lowercase id is ignored.
+ */
+export function testRunId(env: NodeJS.ProcessEnv): string | null {
+  const value = env.HOMESTREAM_TELEMETRY_TEST?.trim();
+  return value && TEST_RUN_ID.test(value) ? value : null;
+}

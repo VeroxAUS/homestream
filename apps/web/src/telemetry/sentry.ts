@@ -72,6 +72,14 @@ export function captureTestError(runId: string): void {
   });
 }
 
+/** Reports an error an error boundary caught; `boundary` says which one. */
+export function captureRenderError(error: unknown, boundary: string): void {
+  Sentry.withScope((scope) => {
+    scope.setTag('boundary', boundary);
+    Sentry.captureException(error);
+  });
+}
+
 export async function flushSentry(timeoutMs: number): Promise<void> {
   try {
     await Sentry.flush(timeoutMs);

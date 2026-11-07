@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPT_OUT_KEY, type RawTelemetryConfig } from './config';
 
-const runtime = vi.hoisted(() => ({ startTelemetry: vi.fn(), runTestTrigger: vi.fn(), recordPageView: vi.fn() }));
+const runtime = vi.hoisted(() => ({
+  startTelemetry: vi.fn(),
+  runTestTrigger: vi.fn(),
+  recordPageView: vi.fn(),
+  recordRenderError: vi.fn(),
+}));
 vi.mock('./runtime', () => runtime);
 
 const KEYED: RawTelemetryConfig = {
@@ -138,5 +143,33 @@ describe('telemetry loader', () => {
     trackPageView('/');
     await settle();
     expect(runtime.recordPageView).not.toHaveBeenCalled();
+  });
+
+  it('reports a caught render error once per error, also when it arrives before the runtime has loaded', async () => {
+    const { startTelemetryWhenIdle, reportRenderError } = await freshIndex();
+    startTelemetryWhenIdle(KEYED);
+    const error = new Error('render failed');
+    reportRenderError(error, 'route');
+    reportRenderError(error, 'app');
+    expect(runtime.recordRenderError).not.toHaveBeenCalled();
+    await settle();
+    expect(runtime.recordRenderError).toHaveBeenCalledExactlyOnceWith(error, 'route');
+  });
+
+  it('reports nothing for a render error without keys, and survives a runtime that failed to load', async () => {
+    const off = await freshIndex();
+    off.startTelemetryWhenIdle(NO_KEYS);
+    off.reportRenderError(new Error('render failed'), 'app');
+    await settle();
+    expect(runtime.recordRenderError).not.toHaveBeenCalled();
+
+    runtime.startTelemetry.mockImplementationOnce(() => {
+      throw new Error('chunk failed');
+    });
+    const failed = await freshIndex();
+    failed.startTelemetryWhenIdle(KEYED);
+    failed.reportRenderError('not an object', 'app');
+    await settle();
+    expect(runtime.recordRenderError).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { UnreachableBanner } from '../desktop/UnreachableBanner';
 import { DownloadNotices } from '../notices/DownloadNotices';
 import { ToastHost } from '../notices/ToastHost';
 import { usePageView } from '../telemetry/usePageView';
+import { ErrorBoundary } from './ErrorBoundary';
 import { Nav } from './Nav';
 import styles from './Layout.module.css';
 
@@ -29,9 +30,11 @@ export function Layout() {
     <>
       {inPlayer ? null : <Nav />}
       {inPlayer ? null : <UnreachableBanner />}
-      <Suspense fallback={<div className={inPlayer ? styles.playerFallback : styles.fallback} aria-busy="true" />}>
-        <Outlet />
-      </Suspense>
+      <ErrorBoundary name="route" resetKey={pathname}>
+        <Suspense fallback={<div className={inPlayer ? styles.playerFallback : styles.fallback} aria-busy="true" />}>
+          <Outlet />
+        </Suspense>
+      </ErrorBoundary>
       <AppKeys />
       <DownloadNotices />
       <ToastHost />

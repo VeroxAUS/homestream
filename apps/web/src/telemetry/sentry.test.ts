@@ -18,7 +18,8 @@ const sentry = vi.hoisted(() => {
 });
 vi.mock('@sentry/react', () => sentry);
 
-const { captureTestError, deviceKind, flushSentry, setSentryRoute, startSentry } = await import('./sentry');
+const { captureRenderError, captureTestError, deviceKind, flushSentry, setSentryRoute, startSentry } =
+  await import('./sentry');
 
 const CONFIG: TelemetryConfig = {
   sentryDsn: 'https://public@sentry.example.test/1',
@@ -119,6 +120,13 @@ describe('helpers', () => {
     captureTestError('run-1');
     expect(sentry.scope.setTag).toHaveBeenCalledWith('telemetry_test_run', 'run-1');
     expect(sentry.captureException).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('reports a caught render error with the boundary tag', () => {
+    const error = new Error('render failed');
+    captureRenderError(error, 'route');
+    expect(sentry.scope.setTag).toHaveBeenCalledWith('boundary', 'route');
+    expect(sentry.captureException).toHaveBeenCalledWith(error);
   });
 
   it('flushes, and swallows a failing flush', async () => {

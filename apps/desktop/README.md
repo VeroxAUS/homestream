@@ -64,3 +64,5 @@ This is how the shell wires telemetry (`src/shell/telemetry.ts`).
 7. Nothing in this path may block start-up or throw: telemetry is created after the window is shown, off the critical path.
 
 With no `SENTRY_DSN_WEB` and no `POSTHOG_API_KEY`, or with `HOMESTREAM_TELEMETRY=off`, no client starts and the shell makes no telemetry request. What is sent is listed in [docs/PRIVACY.md](../../docs/PRIVACY.md).
+
+**Test trigger.** Starting the shell with `HOMESTREAM_TELEMETRY_TEST=<run id>` (lowercase letters, digits and dashes, at most 40) and `SENTRY_DSN_WEB` set reports one deliberate main-process error (`HomeStream desktop telemetry test error`, tag `telemetry_test_run`) once the shell has started, then flushes. Without a DSN, or with any other value, nothing happens.

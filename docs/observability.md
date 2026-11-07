@@ -70,6 +70,8 @@ Code: `apps/web/src/telemetry` (renderer) and `apps/desktop/src/telemetry` (main
 - The renderer uses `@sentry/react` for errors only (release `homestream@<version>`, source maps uploaded by `@sentry/vite-plugin` in release builds and removed from `dist`), `posthog-js` (slim, manual capture, a `before_send` hook that keeps only catalog events) and the shared sanitizer. API calls go through `apiFetch`, which adds `X-Request-ID`; the small `logger` writes Sentry breadcrumbs.
 - The desktop main process uses `@sentry/electron` 8.3 (initialized before `app.ready`, tag `process=main`, same scrubber and DSN) and `posthog-node` for `desktop_started`. The plan and its options are in [apps/desktop/README.md](../apps/desktop/README.md).
 - A web build made with `HOMESTREAM_TELEMETRY_STUB=1` honors `?__telemetry_test=<run id>` and reports one deliberate error. The Playwright suite uses it against local receivers (`pnpm --filter @homestream/web test:e2e`).
+- The desktop shell reports one deliberate main-process error when started with `HOMESTREAM_TELEMETRY_TEST=<run id>` (lowercase letters, digits and dashes, at most 40) and `SENTRY_DSN_WEB` set. Otherwise the variable is ignored.
+- A React render error in the web UI is caught by an error boundary, which shows a reload card and reports it once through the lazily loaded Sentry chunk (tag `boundary` = `app` or `route`); see [apps/web/README.md](../apps/web/README.md).
 
 ### Required account settings
 

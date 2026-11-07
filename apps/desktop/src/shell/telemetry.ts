@@ -4,7 +4,7 @@ import path from 'node:path';
 import * as Sentry from '@sentry/electron/main';
 import { createLogger, type Logger, type LogLevel } from '../logger.js';
 import { createDesktopAnalytics, type DesktopAnalytics } from '../telemetry/analytics.js';
-import { resolveTelemetryConfig } from '../telemetry/config.js';
+import { resolveTelemetryConfig, testRunId } from '../telemetry/config.js';
 import { createMainScrubber, type MainScrubber } from '../telemetry/scrub.js';
 import { buildMainSentryOptions } from '../telemetry/sentry.js';
 
@@ -27,6 +27,8 @@ export interface MainTelemetry {
   analytics: DesktopAnalytics | null;
   sentryActive: boolean;
   logFile: string;
+  /** Reports one deliberate error when HOMESTREAM_TELEMETRY_TEST holds a run id; does nothing otherwise. */
+  reportTestError(): Promise<void>;
   flush(): Promise<void>;
 }
 
@@ -99,6 +101,15 @@ export function startTelemetry(input: TelemetryInput): MainTelemetry {
     analytics,
     sentryActive,
     logFile,
+    async reportTestError() {
+      const runId = testRunId(input.env);
+      if (!sentryActive || !runId) return;
+      Sentry.withScope((scope) => {
+        scope.setTag('telemetry_test_run', runId);
+        Sentry.captureException(new Error('HomeStream desktop telemetry test error'));
+      });
+      await Sentry.flush(2000).catch(() => false);
+    },
     async flush() {
       await Promise.allSettled([analytics?.shutdown(2000), sentryActive ? Sentry.flush(2000) : undefined]);
     },

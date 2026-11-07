@@ -2,7 +2,7 @@ import type { PageRoute } from '@homestream/shared';
 import type { TelemetryConfig } from './config';
 import { setBannerIntervalMs } from '../lib/bannerInterval';
 import { captureEvent, startPostHog, watchFlag } from './posthog';
-import { captureTestError, deviceKind, flushSentry, setSentryRoute, startSentry } from './sentry';
+import { captureRenderError, captureTestError, deviceKind, flushSentry, setSentryRoute, startSentry } from './sentry';
 
 const TEST_RUN_PARAM = '__telemetry_test';
 const TEST_RUN_ID = /^[a-z0-9-]{1,40}$/;
@@ -24,6 +24,10 @@ export function recordPageView(route: PageRoute): void {
   if (!config) return;
   setSentryRoute(route);
   if (posthogOn) captureEvent('page_viewed', { route, deviceKind: deviceKind() });
+}
+
+export function recordRenderError(error: unknown, boundary: string): void {
+  if (config) captureRenderError(error, boundary);
 }
 
 /**
