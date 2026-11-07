@@ -3,10 +3,11 @@ import {
   DownloadProgressEventSchema,
   HealthResponseSchema,
   type DownloadEvent,
+  type HealthResponse,
 } from '@homestream/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
-import { apiGet } from '../api/client';
+import { healthQuery } from '../api/queries';
 import { afterHomeContent, whenIdle } from '../lib/startup';
 import { logger } from '../logger';
 import { clearDownloadProgress, downloadKey, setDownloadProgress } from './downloadProgress';
@@ -57,17 +58,32 @@ function finishDownload(queryClient: QueryClient, outcome: DownloadOutcome): voi
   for (const listener of outcomeListeners) listener(outcome);
 }
 
+/** Raised by every open and every pushed health change; a snapshot only counts while no newer one exists. */
+let healthGeneration = 0;
+
+/**
+ * Takes the newest health answer out of band: whatever health request is in flight (the initial one, an older
+ * snapshot) is cancelled, so it can neither replace this answer nor mark the query as failed when it ends late.
+ */
+function acceptHealth(queryClient: QueryClient, health: HealthResponse): void {
+  healthGeneration += 1;
+  void queryClient.cancelQueries({ queryKey: ['health'] });
+  queryClient.setQueryData(['health'], health);
+}
+
 /**
  * The stream sends no baseline and a steady health sends no change, so a failed or older initial `GET /api/health`
- * would stay on screen. One request on every open repairs it; a change pushed meanwhile is newer and wins.
+ * would stay on screen. On every open the snapshot runs through the health query itself, replacing any request in
+ * flight, so only one health request is pending and the newest wins; a change pushed meanwhile is newer still.
  */
-function reconcileHealth(queryClient: QueryClient, pushedSince: () => boolean): void {
-  apiGet('/api/health', HealthResponseSchema).then(
-    (health) => {
-      if (!pushedSince()) queryClient.setQueryData(['health'], health);
-    },
-    () => void queryClient.invalidateQueries({ queryKey: ['health'] }),
-  );
+function reconcileHealth(queryClient: QueryClient): void {
+  healthGeneration += 1;
+  const generation = healthGeneration;
+  const outdated = () => generation !== healthGeneration;
+  void queryClient.cancelQueries({ queryKey: ['health'] });
+  queryClient.fetchQuery({ ...healthQuery(false), staleTime: 0 }).catch(() => {
+    if (!outdated()) void queryClient.invalidateQueries({ queryKey: ['health'] });
+  });
 }
 
 /**
@@ -79,13 +95,10 @@ export function startServerEvents(queryClient: QueryClient): void {
   const stream = new EventSource('/api/events');
   source = stream;
   let failed = false;
-  let pushes = 0;
 
   stream.addEventListener('health', (raw) => {
     const health = parse(HealthResponseSchema, raw);
-    if (!health) return;
-    pushes += 1;
-    queryClient.setQueryData(['health'], health);
+    if (health) acceptHealth(queryClient, health);
   });
   stream.addEventListener('download.progress', (raw) => {
     const event = parse(DownloadProgressEventSchema, raw);
@@ -109,8 +122,7 @@ export function startServerEvents(queryClient: QueryClient): void {
   };
   stream.onopen = () => {
     setLive(true);
-    const pushesAtOpen = pushes;
-    reconcileHealth(queryClient, () => pushes !== pushesAtOpen);
+    reconcileHealth(queryClient);
     if (!failed) return;
     failed = false;
     logger.info('events', 'event stream reconnected');

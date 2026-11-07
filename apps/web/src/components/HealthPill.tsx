@@ -34,7 +34,8 @@ export function HealthPill({ compact = false }: { compact?: boolean }) {
   const streamLive = useEventStreamLive();
   const { data, isError } = useQuery(healthQuery(!streamLive));
   let label: HealthLabel = { tone: 'unknown', text: 'Checking...' };
-  if (isError) label = { tone: 'err', text: 'Server unreachable' };
+  // An open stream proves the server is reachable, so a failed request must not hide the answer it pushed.
+  if (isError && !(streamLive && data)) label = { tone: 'err', text: 'Server unreachable' };
   else if (data) label = describeHealth(data);
 
   return (

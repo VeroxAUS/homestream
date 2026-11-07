@@ -248,6 +248,113 @@ describe('serverEvents', () => {
       stream.onopen?.();
       await vi.waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['health'] }));
     });
+
+    describe('requests that finish out of order', () => {
+      type Settle = { resolve: (value: unknown) => void; reject: (error: Error) => void };
+      let pending: Settle[];
+
+      /** Every health request waits until the test settles it; `pending[n]` is the n-th request. */
+      function holdHealthRequests() {
+        pending = [];
+        return mockApi({
+          'GET /api/health': () =>
+            new Promise((resolve, reject) => {
+              pending.push({ resolve, reject });
+            }),
+        });
+      }
+      const settle = async (index: number, how: (request: Settle) => void) => {
+        const request = pending[index];
+        if (!request) throw new Error(`no health request ${index}`);
+        await act(async () => {
+          how(request);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+      };
+
+      it('keeps the fresh snapshot when the initial request succeeds late', async () => {
+        holdHealthRequests();
+        renderWithProviders(<HealthPill />, '/', queryClient);
+        const stream = open();
+        act(() => stream.onopen?.());
+        await vi.waitFor(() => expect(pending.length).toBeGreaterThanOrEqual(2));
+        await settle(pending.length - 1, (request) => request.resolve(health('warn', ['warn'])));
+        expect(await screen.findByText('1 warning')).toBeInTheDocument();
+        await settle(0, (request) => request.resolve(health('ok')));
+        expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'warn' });
+        expect(screen.getByRole('link')).toHaveAttribute('data-health', 'warn');
+      });
+
+      it('does not show the server as unreachable when the initial request fails late', async () => {
+        holdHealthRequests();
+        renderWithProviders(<HealthPill />, '/', queryClient);
+        const stream = open();
+        act(() => stream.onopen?.());
+        await vi.waitFor(() => expect(pending.length).toBeGreaterThanOrEqual(2));
+        await settle(pending.length - 1, (request) => request.resolve(health('warn', ['warn'])));
+        expect(await screen.findByText('1 warning')).toBeInTheDocument();
+        await settle(0, (request) => request.reject(new TypeError('offline')));
+        expect(screen.queryByText('Server unreachable')).not.toBeInTheDocument();
+        expect(screen.getByRole('link')).toHaveAttribute('data-health', 'warn');
+        expect(queryClient.getQueryState(['health'])?.status).toBe('success');
+      });
+
+      it('keeps the newest of two overlapping reopens', async () => {
+        holdHealthRequests();
+        const stream = open();
+        stream.onopen?.();
+        stream.onerror?.();
+        stream.onopen?.();
+        await vi.waitFor(() => expect(pending.length).toBeGreaterThanOrEqual(2));
+        const newest = pending.length - 1;
+        await settle(newest, (request) => request.resolve(health('warn', ['warn'])));
+        await settle(0, (request) => request.resolve(health('error', ['error'])));
+        expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'warn' });
+      });
+
+      it('keeps a change pushed while the snapshot and the initial request are in flight', async () => {
+        holdHealthRequests();
+        renderWithProviders(<HealthPill />, '/', queryClient);
+        const stream = open();
+        act(() => stream.onopen?.());
+        await vi.waitFor(() => expect(pending.length).toBeGreaterThanOrEqual(2));
+        act(() => stream.emit('health', health('error', ['error'])));
+        expect(await screen.findByText('1 problem')).toBeInTheDocument();
+        for (let index = 0; index < pending.length; index += 1) {
+          await settle(index, (request) => request.resolve(health('ok')));
+        }
+        expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'error' });
+        expect(screen.getByRole('link')).toHaveAttribute('data-health', 'err');
+      });
+
+      it('keeps showing the pushed answer when a later request fails while the stream is live', async () => {
+        let failing = false;
+        mockApi({ 'GET /api/health': () => (failing ? new TypeError('offline') : health('ok')) });
+        renderWithProviders(<HealthPill />, '/', queryClient);
+        await screen.findByText('All systems healthy');
+        const stream = open();
+        act(() => stream.onopen?.());
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        act(() => stream.emit('health', health('warn', ['warn'])));
+        expect(await screen.findByText('1 warning')).toBeInTheDocument();
+        failing = true;
+        await act(() => queryClient.refetchQueries({ queryKey: ['health'] }));
+        expect(queryClient.getQueryState(['health'])?.status).toBe('error');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(screen.getByRole('link')).toHaveAttribute('data-health', 'warn');
+        act(() => stream.onerror?.());
+        expect(await screen.findByText('Server unreachable')).toBeInTheDocument();
+      });
+
+      it('sends no second request when nothing changed after the snapshot', async () => {
+        const { calls } = holdHealthRequests();
+        const stream = open();
+        stream.onopen?.();
+        await vi.waitFor(() => expect(pending).toHaveLength(1));
+        await settle(0, (request) => request.resolve(health('ok')));
+        expect(healthCalls(calls)).toBe(1);
+      });
+    });
   });
 
   it('opens after the content mark and idle time', async () => {
