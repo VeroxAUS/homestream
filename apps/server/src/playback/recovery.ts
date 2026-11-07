@@ -4,6 +4,7 @@ import { finalizePlay } from '../db/plays.js';
 import type { PlaybackContext } from './context.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
 import { DISCARD_STOP } from './encoderProcess.js';
+import { needsHlgToPq } from './decision.js';
 import { describeMemoryLimitHit, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SEGMENT_SECONDS } from './playlist.js';
 import { toActivitySession, type SessionRecord } from './session.js';
@@ -69,13 +70,11 @@ export class Recovery {
       details: { detail: scrub(stderrTail.split(/\r?\n/).filter(Boolean).at(-1) ?? '') },
       sessionId: rec.id,
     });
-    if (rec.decision.toneMapped && rec.toneMapper === 'libplacebo' && !this.encoder.hasSegment(rec, rec.startSegment)) {
+    const usesPlacebo = rec.decision.toneMapped || needsHlgToPq(rec.decision);
+    if (usesPlacebo && rec.toneMapper === 'libplacebo' && !this.encoder.hasSegment(rec, rec.startSegment)) {
       rec.toneMapper = 'opencl';
       this.ctx.libplaceboBroken = true;
-      options.logger.warn(
-        { sessionId: rec.id },
-        'libplacebo tone mapping failed to start; falling back to tonemap_opencl',
-      );
+      options.logger.warn({ sessionId: rec.id }, 'libplacebo failed to start; falling back to the OpenCL/CPU filters');
     }
     // The proxy re-resolves expired links by itself; this covers the encoder failing for another reason with a stale link.
     // Stopping the session must not wait for a gateway lookup that can take a minute; the lookup is abandoned, not cancelled.

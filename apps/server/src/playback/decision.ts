@@ -30,14 +30,28 @@ export function fitDimensions(
 }
 
 function canKeepHdr(video: VideoInfo, device: CapabilityProfile): boolean {
-  const hasHdr10Base = video.hdr === 'hdr10' || (video.hdr === 'dv' && video.dolbyVisionProfile !== 5);
-  return hasHdr10Base && device.hevc && device.hdr10 && device.hevcMain10;
+  const hasHdrBase =
+    video.hdr === 'hdr10' || video.hdr === 'hlg' || (video.hdr === 'dv' && video.dolbyVisionProfile !== 5);
+  return hasHdrBase && device.hevc && device.hdr10 && device.hevcMain10;
+}
+
+/** HLG is kept as HDR10, and the picture has to be converted from the HLG to the PQ transfer function to be tagged that way. */
+export function needsHlgToPq(decision: Pick<Decision, 'dynamicRange' | 'sourceVideo'>): boolean {
+  return decision.dynamicRange === 'hdr10' && decision.sourceVideo.hdr === 'hlg';
 }
 
 export function outputAudioChannels(sourceChannels: number, device: CapabilityProfile): number {
   if (sourceChannels <= 0) return 0;
   const deviceLimit = device.kind === 'tv' ? device.maxAudioChannels : Math.min(device.maxAudioChannels, 2);
   return Math.max(1, Math.min(sourceChannels, deviceLimit, MAX_OUTPUT_CHANNELS));
+}
+
+/**
+ * Channel count the master playlist advertises: the largest any track of the file can be played with on this device.
+ * The master must stay byte-identical when the audio track changes, so it cannot follow the selected track.
+ */
+export function masterAudioChannels(tracks: readonly AudioTrack[], device: CapabilityProfile): number {
+  return tracks.reduce((most, track) => Math.max(most, outputAudioChannels(track.channels, device)), 0);
 }
 
 export function decide(input: DecisionInput): Decision {

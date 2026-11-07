@@ -228,6 +228,30 @@ describe('non-English starting audio', () => {
     expect(encoders.started).toBe(2);
   });
 
+  it('keeps the master byte-identical across an audio PATCH that changes the channel count (5.1 to stereo)', async () => {
+    const surroundThenStereo = probeOf(
+      [
+        { ...audioTrack(1, 'fra'), channels: 6 },
+        { ...audioTrack(2, 'eng'), channels: 2, default: false },
+      ],
+      FOREIGN.subtitles,
+    );
+    const { harness } = await boot(surroundThenStereo);
+    const { body } = await startSession(harness, 'movie', 'chromecast4k', { audioIndex: 1 });
+    expect(body.decision.audioChannels).toBe(6);
+    const before = await master(harness, body.sessionId);
+
+    const audio = await patch(harness, body.sessionId, { audioIndex: 2 });
+    expect(audio.status).toBe(200);
+    expect(audio.body.decision.audioChannels).toBe(2);
+    expect(await master(harness, body.sessionId)).toBe(before);
+
+    const back = await patch(harness, body.sessionId, { audioIndex: 1 });
+    expect(back.body.decision.audioChannels).toBe(6);
+    expect(await master(harness, body.sessionId)).toBe(before);
+    expect(before).toContain('BANDWIDTH=12384000');
+  });
+
   it('starting with the English audio track (the file default pick) follows the English rule instead: the forced English track', async () => {
     const { harness } = await boot(FOREIGN);
     const { body } = await startSession(harness, 'movie', 'desktop');

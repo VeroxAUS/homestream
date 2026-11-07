@@ -4,6 +4,7 @@ import { copyFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { AppError } from '../errors.js';
 import type { PlaybackContext } from './context.js';
+import { masterAudioChannels } from './decision.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
 import {
   SEGMENT_SECONDS,
@@ -40,7 +41,7 @@ export class HlsServing {
 
     if (file.kind === 'master') {
       const body = generateMasterPlaylist({
-        decision: rec.decision,
+        decision: { ...rec.decision, audioChannels: masterAudioChannels(rec.probe.audio, rec.device) },
         fps: rec.probe.video.fps,
         tracks: rec.textTracks,
         defaultTrack:

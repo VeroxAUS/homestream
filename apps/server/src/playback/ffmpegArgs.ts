@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Decision } from '@homestream/shared';
-import { audioBitrateKbps, videoBitrate } from './decision.js';
+import { audioBitrateKbps, needsHlgToPq, videoBitrate } from './decision.js';
 import { PROBE_LIMIT_ARGS, type VideoInfo } from './probe.js';
 import { SEGMENT_SECONDS, segmentExtension, segmentFormatFor } from './playlist.js';
 
@@ -40,11 +40,17 @@ export function canHwDecode(video: Pick<VideoInfo, 'codec' | 'pixFmt'>): boolean
  */
 function burnsOnGpu(job: EncodeJob): boolean {
   const { dynamicRange, toneMapped, width } = job.decision;
-  return !!job.burn && dynamicRange === 'hdr10' && !toneMapped && width >= 3840 && canHwDecode(job.video);
+  const plainHdr10 = dynamicRange === 'hdr10' && !toneMapped && !needsHlgToPq(job.decision);
+  return !!job.burn && plainHdr10 && width >= 3840 && canHwDecode(job.video);
+}
+
+/** HLG to PQ runs through libplacebo; when that is unusable the CPU zscale filter does it on software-decoded frames. */
+function convertsHlgWithZscale(job: EncodeJob): boolean {
+  return needsHlgToPq(job.decision) && job.toneMapper === 'opencl';
 }
 
 function decodesOnGpu(job: EncodeJob): boolean {
-  return (!job.burn || burnsOnGpu(job)) && canHwDecode(job.video);
+  return (!job.burn || burnsOnGpu(job)) && !convertsHlgWithZscale(job) && canHwDecode(job.video);
 }
 
 /** Burn-in overlays, the OpenCL tone-map path and software decode all run filters or decoding on the CPU. */
@@ -64,11 +70,23 @@ function isHttp(url: string): boolean {
 
 const PLACEBO_TONEMAP = 'tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv';
 const OPENCL_TONEMAP = 'tonemap=hable:t=bt709:m=bt709:p=bt709';
+const PLACEBO_HLG_TO_PQ = 'colorspace=bt2020nc:color_primaries=bt2020:color_trc=smpte2084:range=tv';
+/** HLG is scene-referred with a 1000 nit nominal peak; zscale needs that figure to apply the HLG system gamma before PQ encoding. */
+const ZSCALE_HLG_TO_PQ =
+  'tin=arib-std-b67:t=smpte2084:npl=1000:pin=2020:p=2020:min=2020_ncl:m=2020_ncl:rin=tv:r=tv:f=bicubic';
 
 export function buildVideoFilter(job: EncodeJob): string {
   const { width, height, toneMapped, dynamicRange } = job.decision;
   const hw = decodesOnGpu(job);
   const size = `w=${width}:h=${height}`;
+
+  if (needsHlgToPq(job.decision)) {
+    if (convertsHlgWithZscale(job)) return `zscale=${size}:${ZSCALE_HLG_TO_PQ},format=p010le`;
+    const upload = hw ? ['hwdownload', 'format=p010le', 'hwupload'] : ['format=p010le', 'hwupload'];
+    return [...upload, `libplacebo=${PLACEBO_HLG_TO_PQ}:format=p010le:${size}`, 'hwdownload', 'format=p010le'].join(
+      ',',
+    );
+  }
 
   if (toneMapped && job.toneMapper === 'opencl') {
     return [
@@ -106,7 +124,7 @@ function inputArgs(job: EncodeJob): string[] {
   const args: string[] = [];
   const hw = decodesOnGpu(job);
   const toneMapOpencl = job.decision.toneMapped && job.toneMapper === 'opencl';
-  const toneMapPlacebo = job.decision.toneMapped && job.toneMapper === 'libplacebo';
+  const toneMapPlacebo = (job.decision.toneMapped || needsHlgToPq(job.decision)) && job.toneMapper === 'libplacebo';
 
   if (inputSeekSec(job) > 0) args.push('-ss', String(inputSeekSec(job)));
   if (toneMapPlacebo) args.push('-init_hw_device', 'vulkan=vk', '-filter_hw_device', 'vk');

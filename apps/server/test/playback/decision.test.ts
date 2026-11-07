@@ -4,6 +4,8 @@ import {
   audioBitrateKbps,
   decide,
   fitDimensions,
+  masterAudioChannels,
+  needsHlgToPq,
   outputAudioChannels,
   selectAudioTrack,
   videoBitrate,
@@ -34,6 +36,20 @@ const audio = (channels: number, overrides: Partial<AudioTrack> = {}): AudioTrac
   title: '',
   default: true,
   ...overrides,
+});
+
+describe('masterAudioChannels', () => {
+  it('is the largest channel count any track can be played with on the device, whichever track is selected', () => {
+    const tracks = [audio(6), audio(2, { index: 2 }), audio(8, { index: 3 })];
+    expect(masterAudioChannels(tracks, PROFILES.chromecast4k)).toBe(6);
+    expect(masterAudioChannels(tracks.slice(1, 2), PROFILES.chromecast4k)).toBe(2);
+    expect(masterAudioChannels(tracks, PROFILES.desktop)).toBe(2);
+  });
+
+  it('is 0 for a file without audio and ignores empty tracks', () => {
+    expect(masterAudioChannels([], PROFILES.chromecast4k)).toBe(0);
+    expect(masterAudioChannels([audio(0)], PROFILES.chromecast4k)).toBe(0);
+  });
 });
 
 describe('decide: video', () => {
@@ -143,11 +159,34 @@ describe('decide: video', () => {
     });
   });
 
-  it('tone-maps HLG and Dolby Vision profile 5 (no HDR10 base layer)', () => {
-    expect(decide({ video: video({ hdr: 'hlg' }), audio: null, device: PROFILES.chromecast4k })).toMatchObject({
-      dynamicRange: 'sdr',
-      toneMapped: true,
-    });
+  it('keeps HLG as HDR10 on an HDR10/Main10 device (converted HLG to PQ, not tone-mapped)', () => {
+    const decision = decide({ video: video({ hdr: 'hlg' }), audio: null, device: PROFILES.chromecast4k });
+    expect(decision).toMatchObject({ dynamicRange: 'hdr10', toneMapped: false, videoCodec: 'hevc', width: 3840 });
+    expect(decision.sourceVideo.hdr).toBe('hlg');
+    expect(needsHlgToPq(decision)).toBe(true);
+  });
+
+  it('tone-maps HLG to SDR when the device cannot show HDR10', () => {
+    for (const device of [
+      { ...PROFILES.chromecast4k, hevcMain10: false },
+      { ...PROFILES.chromecast4k, hdr10: false },
+      PROFILES.desktop,
+      PROFILES.emulator,
+    ]) {
+      const decision = decide({ video: video({ hdr: 'hlg' }), audio: null, device });
+      expect(decision).toMatchObject({ dynamicRange: 'sdr', toneMapped: true });
+      expect(needsHlgToPq(decision)).toBe(false);
+    }
+  });
+
+  it('needs no HLG conversion for HDR10 or SDR sources', () => {
+    expect(needsHlgToPq(decide({ video: video(), audio: null, device: PROFILES.chromecast4k }))).toBe(false);
+    expect(needsHlgToPq(decide({ video: video({ hdr: 'sdr' }), audio: null, device: PROFILES.chromecast4k }))).toBe(
+      false,
+    );
+  });
+
+  it('tone-maps Dolby Vision profile 5 (no HDR10 base layer)', () => {
     expect(
       decide({ video: video({ hdr: 'dv', dolbyVisionProfile: 5 }), audio: null, device: PROFILES.chromecast4k }),
     ).toMatchObject({ dynamicRange: 'sdr', toneMapped: true });

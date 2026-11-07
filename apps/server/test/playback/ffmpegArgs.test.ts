@@ -1,39 +1,7 @@
-import type { Decision } from '@homestream/shared';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildFfmpegArgs, buildVideoFilter, canHwDecode, type EncodeJob } from '../../src/playback/ffmpegArgs.js';
-
-function decision(overrides: Partial<Decision> = {}): Decision {
-  return {
-    videoCodec: 'hevc',
-    width: 3840,
-    height: 2160,
-    dynamicRange: 'hdr10',
-    toneMapped: false,
-    audioCodec: 'aac',
-    audioChannels: 6,
-    subtitleBurnIn: false,
-    sourceVideo: { codec: 'hevc', width: 3840, height: 2160, hdr: 'hdr10' },
-    sourceAudio: { codec: 'dts', channels: 6 },
-    ...overrides,
-  };
-}
-
-function job(overrides: Partial<EncodeJob> = {}): EncodeJob {
-  return {
-    inputUrl: 'https://store-001.example.test/file.mkv',
-    sessionDir: 'E:\\HomeStream\\transcode\\abc',
-    decision: decision(),
-    video: { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', fps: 24 },
-    audioIndex: 2,
-    startSegment: 0,
-    toneMapper: 'libplacebo',
-    threads: { gpu: 4, cpu: 8 },
-    ...overrides,
-  };
-}
-
-const valueAfter = (args: string[], flag: string): string | undefined => args[args.indexOf(flag) + 1];
+import { decision, job, valueAfter } from './ffmpegArgsFixtures.js';
 
 describe('buildFfmpegArgs: shared structure', () => {
   const args = buildFfmpegArgs(job());
