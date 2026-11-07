@@ -26,7 +26,7 @@ describe('resolveServerLaunch', () => {
   it('runs system node on the built server in development', () => {
     const launch = resolveServerLaunch({ ...base, packaged: false, env: { ELECTRON_RUN_AS_NODE: '1', KEEP: 'y' } });
     expect(launch.command).toBe('node');
-    expect(launch.args).toEqual([path.join('C:', 'repo', 'apps', 'server', 'dist', 'index.js')]);
+    expect(launch.args).toEqual([path.resolve(base.appPath, '..', 'server', 'dist', 'index.js')]);
     expect(launch.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(launch.env.KEEP).toBe('y');
   });
