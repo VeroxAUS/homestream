@@ -8,3 +8,4 @@ export function average(values) {
   for (const value of values) total += value;
   return total / values.length;
 }
+// third push
