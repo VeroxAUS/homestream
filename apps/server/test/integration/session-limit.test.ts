@@ -6,7 +6,7 @@ import { MAX_SESSIONS } from '../../src/playback/manager.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { clearSecrets } from '../../src/redact.js';
 import { makeTempDir, removeDir } from '../helpers.js';
-import { FakeEncoders } from '../playback/fakeEncoder.js';
+import { FakeEncoders, type FakeEncoder } from '../playback/fakeEncoder.js';
 import {
   bootHarness,
   PROFILES,
@@ -188,6 +188,41 @@ describe('concurrent session limit of two', () => {
       (await harness.app.inject({ method: 'DELETE', url: `/api/sessions/${broken.body.sessionId}` })).statusCode,
     ).toBeLessThan(300);
     await expectRefusedThird(harness, encoders);
+  });
+
+  it('keeps the slot of a stopped session until its encoder has exited, so a third encoder never runs', async () => {
+    const { harness, encoders } = await boot();
+    const first = await start(harness, 'chromecast4k');
+    await start(harness, 'desktop');
+    const release = (encoders.handles[0] as FakeEncoder).holdStop();
+
+    const deleting = harness.app.inject({ method: 'DELETE', url: `/api/sessions/${first.body.sessionId}` });
+    await waitFor(async () => !harness.app.ctx.playback.has(first.body.sessionId));
+    expect(encoders.handles[0]?.running).toBe(true);
+
+    await expectRefusedThird(harness, encoders);
+    expect(encoders.handles.filter((handle) => handle.running)).toHaveLength(2);
+
+    release();
+    expect((await deleting).statusCode).toBeLessThan(300);
+    expect((await start(harness, 'emulator')).status).toBe(201);
+    expect(encoders.handles.filter((handle) => handle.running)).toHaveLength(2);
+  });
+
+  it('keeps the slot of an idle session whose encoder is slow to exit', async () => {
+    const { harness, encoders } = await boot({ idleTimeoutMs: 300, monitorTickMs: 100 });
+    await start(harness, 'chromecast4k');
+    await start(harness, 'desktop');
+    const releases = encoders.handles.map((handle) => handle.holdStop());
+    // The monitor stops idle sessions one after the other, so only the first has left its slot when its encoder hangs.
+    await waitFor(async () => harness.app.ctx.playback.list().length === 1);
+
+    await expectRefusedThird(harness, encoders);
+    expect(encoders.handles.filter((handle) => handle.running)).toHaveLength(2);
+
+    for (const release of releases) release();
+    await waitFor(async () => encoders.handles.every((handle) => !handle.running));
+    expect((await start(harness, 'emulator')).status).toBe(201);
   });
 
   it('keeps the limit when a running session is stopped twice', async () => {

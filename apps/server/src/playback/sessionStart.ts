@@ -314,7 +314,9 @@ export class SessionStarter {
     try {
       await this.waitForFirstSegment(rec);
     } catch (error) {
-      await slots.abandon(rec);
+      // An explicit stream gets one attempt, so its failure is final; an automatic start's failed candidates stay quiet.
+      const final = body.streamId !== 'auto' && error instanceof AppError && error.code !== 'shutting_down';
+      await slots.abandon(rec, final ? error : undefined);
       throw error;
     }
     rec.opening = false;

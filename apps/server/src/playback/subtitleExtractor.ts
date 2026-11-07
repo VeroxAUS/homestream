@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { ReadAheadWindow } from '../network/readAhead.js';
-import type { EncoderExit } from './encoderProcess.js';
+import type { EncoderExit, EncoderHandle, EncoderProcessOptions } from './encoderProcess.js';
 import { burstActive } from './extractorSchedule.js';
 import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import type { PidRegistry } from './pidRegistry.js';
@@ -65,6 +65,8 @@ export interface SubtitleExtractorOptions {
   tracks: readonly number[];
   /** Extractor processes allowed at once; defaults to 2 (see `maxExtractorRuns`). */
   maxRuns?: number;
+  /** Test seam: replaces the ffmpeg child of every run. */
+  createProcess?: (options: EncoderProcessOptions) => EncoderHandle;
   /** Debug trail: every extractor process start and stop. */
   onRunEvent?: (event: RunEvent) => void;
   registry: PidRegistry;
@@ -166,13 +168,18 @@ export class SubtitleExtractor {
     await Promise.all(this.runs.map((run) => run.stop()));
   }
 
+  /** Runs that count against `maxRuns`: the live ones and those whose exit is still being reported (a retry may follow). */
+  private slotsTaken(): number {
+    return this.runs.filter((run) => run.holdsSlot).length;
+  }
+
   private active(): SubtitleRun[] {
     return this.runs.filter((run) => run.running && !run.stopRequested);
   }
 
   private async launchSeek(sec: number, ss: number): Promise<void> {
     let victim: SubtitleRun | undefined;
-    if (this.processCount >= this.maxRuns) {
+    if (this.slotsTaken() >= this.maxRuns) {
       victim = this.active()
         .filter((run) => run.kind !== 'main')
         .sort((a, b) => sec - b.headSec - (sec - a.headSec))[0];
@@ -180,7 +187,7 @@ export class SubtitleExtractor {
       victim ??= this.active().sort((a, b) => a.headSec - b.headSec)[0];
       await victim?.stop();
     }
-    if (this.stopped || this.gaveUp || this.processCount >= this.maxRuns) return;
+    if (this.stopped || this.gaveUp || this.slotsTaken() >= this.maxRuns) return;
     if (this.store.segmentCovered(Math.floor(sec / 4))) return;
     this.launch('seek', ss, false).needSec = sec + BURST_AHEAD_SEC;
   }
@@ -193,6 +200,7 @@ export class SubtitleExtractor {
       kind,
       ss,
       retried,
+      createProcess: this.options.createProcess,
       ffmpegPath: this.options.ffmpegPath,
       sessionId: this.options.sessionId,
       sessionDir: this.options.sessionDir,

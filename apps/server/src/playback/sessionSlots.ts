@@ -2,8 +2,8 @@ import { finalizePlay, deletePlay } from '../db/plays.js';
 import { AppError } from '../errors.js';
 import type { LogEventInput } from '../events/record.js';
 import type { FallingBehindWatch } from './fallingBehind.js';
-import type { SessionRecord } from './session.js';
-import { endStats, notFound, subjectOf, type PlaybackManagerOptions, type StopReason } from './support.js';
+import { toActivitySession, type SessionRecord } from './session.js';
+import { endStats, notFound, scrub, subjectOf, type PlaybackManagerOptions, type StopReason } from './support.js';
 
 /** Two streams at a time keeps the GPU to at most two encoders (AGENTS.md GPU safety rule 1). */
 export const MAX_SESSIONS = 2;
@@ -20,6 +20,8 @@ export interface SlotHost {
 export class SessionSlots {
   private readonly sessions = new Map<string, SessionRecord>();
   private starting = 0;
+  /** Ended sessions whose encoder has not exited yet: the GPU still runs it, so its place stays taken. */
+  private draining = 0;
 
   constructor(
     private readonly host: SlotHost,
@@ -28,7 +30,7 @@ export class SessionSlots {
 
   /** Takes a place for a start that is under way; pair it with `endReservation()`. */
   reserve(): void {
-    if (this.live().length + this.starting >= this.maxSessions) {
+    if (this.live().length + this.failedButRunning() + this.starting + this.draining >= this.maxSessions) {
       throw new AppError(
         429,
         'too_many_sessions',
@@ -67,6 +69,12 @@ export class SessionSlots {
     return this.all().filter((rec) => rec.state !== 'error' && !rec.stopping && !rec.opening);
   }
 
+  /** A failed session is not live, but the encoder the memory watchdog stopped may still be exiting. */
+  private failedButRunning(): number {
+    return this.all().filter((rec) => rec.state === 'error' && !rec.stopping && !rec.opening && rec.process?.running)
+      .length;
+  }
+
   async stopIdle(rec: SessionRecord): Promise<void> {
     this.host.event({
       level: 'info',
@@ -99,8 +107,13 @@ export class SessionSlots {
     rec.state = 'stopped';
     this.sessions.delete(rec.id);
     this.host.fallingBehind.forget(rec.id);
-    await rec.restart?.catch(() => undefined);
-    await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
+    this.draining += 1;
+    try {
+      await rec.restart?.catch(() => undefined);
+      await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
+    } finally {
+      this.draining -= 1;
+    }
     rec.source.release();
     await this.host.removeDir(rec.dir);
     if (!wasError) finalizePlay(options.db, rec.id, { endedAt: Date.now(), status: 'ok', ...endStats(rec) });
@@ -113,8 +126,11 @@ export class SessionSlots {
     options.bus.emit('session.end', { sessionId: rec.id, reason, state: 'stopped' });
   }
 
-  /** Throws away a session that never reached its first segment: nothing of it may remain. */
-  async abandon(rec: SessionRecord): Promise<void> {
+  /**
+   * Throws away a session that never reached its first segment: nothing of it may remain. A start that fails for good
+   * (`failure`, an explicit stream gets no fallback) keeps an error play record and is logged and announced instead.
+   */
+  async abandon(rec: SessionRecord, failure?: AppError): Promise<void> {
     if (rec.stopping) return;
     rec.stopping = true;
     rec.state = 'stopped';
@@ -126,6 +142,32 @@ export class SessionSlots {
     await Promise.all([rec.process?.stop(), rec.subtitles?.stop()]);
     rec.source.release();
     await this.host.removeDir(rec.dir);
-    deletePlay(this.host.options.db, rec.id);
+    if (failure) this.recordStartFailure(rec, failure);
+    else deletePlay(this.host.options.db, rec.id);
+  }
+
+  private recordStartFailure(rec: SessionRecord, failure: AppError): void {
+    const { options } = this.host;
+    // The memory watchdog logs and finalizes its own failure while the session is opening.
+    const recorded = rec.errorCode !== null;
+    rec.state = 'error';
+    rec.error ??= { message: scrub(failure.message), hint: failure.hint };
+    if (!recorded) {
+      options.logger.error({ sessionId: rec.id, code: failure.code }, 'Playback start failed');
+      this.host.event({
+        level: 'error',
+        source: 'ffmpeg',
+        message: rec.error.message,
+        details: { code: failure.code, hint: rec.error.hint },
+        sessionId: rec.id,
+      });
+      finalizePlay(options.db, rec.id, {
+        endedAt: Date.now(),
+        status: 'error',
+        errorMessage: rec.error.message,
+        ...endStats(rec),
+      });
+      options.bus.emit('session.update', toActivitySession(rec));
+    }
   }
 }

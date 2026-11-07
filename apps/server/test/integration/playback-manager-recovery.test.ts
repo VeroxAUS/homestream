@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { PlaybackContext } from '../../src/playback/context.js';
 import { clearSecrets } from '../../src/redact.js';
 import {
   bootRig,
@@ -29,6 +30,19 @@ const plays = () => rig.harness.db.prepare('SELECT status, error_message AS mess
 const get = (id: string, file: string) => rig.harness.app.inject(`/hls/${id}/${file}`);
 const HIT = { pid: 4242, rssBytes: 3 * 1024 ** 3, limitBytes: 2 * 1024 ** 3 };
 
+/** Makes the next re-resolution of a session's stream link wait until `resolve()`; a plain-file source otherwise refreshes at once. */
+function deferRefresh(sessionId: string): { readonly called: boolean; resolve(): void } {
+  const { ctx } = rig.playback as unknown as { ctx: PlaybackContext };
+  const { source } = ctx.slots.require(sessionId);
+  const state = { called: false, resolve: (): void => undefined };
+  source.refresh = () =>
+    new Promise<void>((resolve) => {
+      state.called = true;
+      state.resolve = resolve;
+    });
+  return state;
+}
+
 describe('encoder crash after the start', () => {
   it('retries once from just past the finished segments, then ends the session with an error', async () => {
     rig = await bootRig();
@@ -50,6 +64,60 @@ describe('encoder crash after the start', () => {
     const res = await get(session.sessionId, 'seg-80.m4s');
     expect(res.statusCode).toBe(502);
     expect(res.json()).toMatchObject({ error: { code: 'encoder_failed' } });
+  });
+
+  it('keeps one encoder when a segment is requested while the retry waits for the fresh stream link', async () => {
+    rig = await bootRig();
+    const session = await rig.start();
+    const refresh = deferRefresh(session.sessionId);
+
+    rig.encoders.handles[0]?.crash();
+    await until(() => refresh.called);
+    const request = get(session.sessionId, 'seg-60.m4s');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(rig.spawned).toHaveLength(1);
+
+    refresh.resolve();
+    const res = await request;
+
+    expect(res.statusCode).toBe(200);
+    expect(rig.encoders.handles.filter((handle) => handle.running)).toHaveLength(1);
+    expect(rig.spawned.map(startNumberOf)).toEqual([0, 1, 60]);
+    await rig.playback.stop(session.sessionId);
+    expect(rig.encoders.handles.filter((handle) => handle.running)).toEqual([]);
+  });
+
+  it('does not start the retry when the session is stopped while it waits for the fresh stream link', async () => {
+    rig = await bootRig();
+    const session = await rig.start();
+    const refresh = deferRefresh(session.sessionId);
+    rig.encoders.handles[0]?.crash();
+    await until(() => refresh.called);
+
+    const stopping = rig.playback.stop(session.sessionId);
+    refresh.resolve();
+    await stopping;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(rig.spawned).toHaveLength(1);
+    expect(rig.playback.has(session.sessionId)).toBe(false);
+  });
+
+  it('runs a track switch after the retry instead of next to it', async () => {
+    rig = await bootRig();
+    const session = await rig.start();
+    const refresh = deferRefresh(session.sessionId);
+    rig.encoders.handles[0]?.crash();
+    await until(() => refresh.called);
+
+    const patching = rig.playback.patch(session.sessionId, { audioIndex: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rig.spawned).toHaveLength(1);
+    refresh.resolve();
+    await patching;
+
+    expect(rig.encoders.handles.filter((handle) => handle.running)).toHaveLength(1);
+    expect(rig.spawned).toHaveLength(3);
   });
 
   it('falls back from libplacebo to tonemap_opencl when the first run never produced a segment, for later sessions too', async () => {

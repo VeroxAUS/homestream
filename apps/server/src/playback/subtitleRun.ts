@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import { EncoderProcess, type EncoderExit } from './encoderProcess.js';
+import { EncoderProcess, type EncoderExit, type EncoderHandle, type EncoderProcessOptions } from './encoderProcess.js';
 import type { Interval } from './intervals.js';
 import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import { PROBE_LIMIT_ARGS } from './probe.js';
@@ -91,6 +91,8 @@ export interface SubtitleRunOptions extends ExtractJob {
   onMemoryLimit?: (hit: MemoryLimitHit) => void;
   /** Set when this run replaces one that failed. */
   retried: boolean;
+  /** Test seam: replaces the ffmpeg child. */
+  createProcess?: (options: EncoderProcessOptions) => EncoderHandle;
   onCues: (track: number, cues: Cue[]) => void;
   onUpdate: (run: SubtitleRun) => void;
   onExit: (run: SubtitleRun, exit: EncoderExit) => void;
@@ -135,7 +137,7 @@ export class SubtitleRun {
   done = false;
   stopRequested = false;
   exit: EncoderExit | null = null;
-  private readonly process: EncoderProcess;
+  private readonly process: EncoderHandle;
   private readonly outputPath: string;
   private timebase: number | null = null;
   private readonly offsets = new Map<number, number>();
@@ -154,7 +156,7 @@ export class SubtitleRun {
     this.outputPath = path.join(options.sessionDir, options.outputDir);
     mkdirSync(this.outputPath, { recursive: true });
 
-    this.process = new EncoderProcess({
+    this.process = (options.createProcess ?? ((processOptions) => new EncoderProcess(processOptions)))({
       ffmpegPath: options.ffmpegPath,
       args: buildExtractArgs(options),
       cwd: options.sessionDir,
@@ -175,6 +177,14 @@ export class SubtitleRun {
 
   get running(): boolean {
     return this.process.running;
+  }
+
+  /**
+   * True until the run has reported its exit. The process is gone before that (the run still reads its last output), but the
+   * owner may start a replacement for it as soon as it hears, so the run keeps its place in the process budget until then.
+   */
+  get holdsSlot(): boolean {
+    return this.exit === null;
   }
 
   /** Where this run's trusted coverage starts. */

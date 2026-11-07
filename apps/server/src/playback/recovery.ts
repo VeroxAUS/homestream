@@ -36,12 +36,21 @@ export class Recovery {
 
   /** First failure: re-resolve the CDN link (and fall back from libplacebo) and carry on. Second failure ends the session. */
   async recover(rec: SessionRecord, code: number | null, stderrTail: string): Promise<void> {
-    const { options } = this.ctx;
     if (rec.retried) {
       await this.fail(rec, code, stderrTail);
       return;
     }
     rec.retried = true;
+    // The retry waits for the link refresh; as the session's restart it keeps seeks, track switches and HLS requests from
+    // launching an encoder next to the one it is about to start.
+    rec.restart = this.retry(rec, code, stderrTail).finally(() => {
+      rec.restart = null;
+    });
+    await rec.restart;
+  }
+
+  private async retry(rec: SessionRecord, code: number | null, stderrTail: string): Promise<void> {
+    const { options } = this.ctx;
     options.observer?.restarted('retry');
     this.ctx.event({
       level: 'warn',
@@ -60,7 +69,7 @@ export class Recovery {
     }
     // The proxy re-resolves expired links by itself; this covers the encoder failing for another reason with a stale link.
     await rec.source.refresh().catch(() => undefined);
-    if (rec.stopping) return;
+    if (isDead(rec)) return;
     this.encoder.launch(rec, this.encoder.resumePoint(rec));
   }
 
@@ -141,6 +150,7 @@ export class Recovery {
     };
     if (rec.opening) {
       // The start waiting on this session reports the failure (or tries the next stream); no client ever saw the session.
+      // An explicit stream's final failure is recorded as an error by `SessionSlots.abandon`.
       options.logger.warn({ sessionId: rec.id, code, detail: lastLine }, 'ffmpeg failed before the first segment');
       this.ctx.event({
         level: 'warn',

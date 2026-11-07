@@ -11,6 +11,7 @@ export class FakeEncoder implements EncoderHandle {
   readonly exited: Promise<EncoderExit>;
   running = true;
   private finish!: (exit: EncoderExit) => void;
+  private gate: Promise<void> | null = null;
 
   constructor(mode: EncoderMode, options: EncoderProcessOptions) {
     this.exited = new Promise((resolve) => {
@@ -21,8 +22,20 @@ export class FakeEncoder implements EncoderHandle {
   }
 
   stop(): Promise<void> {
-    this.end(0);
-    return Promise.resolve();
+    if (!this.gate) {
+      this.end(0);
+      return Promise.resolve();
+    }
+    return this.gate.then(() => this.end(0));
+  }
+
+  /** The next `stop()` does not finish until the returned function is called, like an ffmpeg that is slow to quit. */
+  holdStop(): () => void {
+    let release!: () => void;
+    this.gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    return release;
   }
 
   /** Dies on its own with a failure exit code, as an ffmpeg that hit an error would. */

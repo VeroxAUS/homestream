@@ -305,7 +305,7 @@ describe.skipIf(!hasNvenc())('session limit', () => {
 
 describe.skipIf(!hasNvenc())('ffmpeg failure', () => {
   it(
-    'retries once, then fails the start with 502 encoder_failed and leaves no session, directory, play record or error event',
+    'retries once, then fails the explicit start with 502 encoder_failed, an error play record, an error log and a session.update, and leaves no session or directory',
     async () => {
       const wrapperDir = path.join(root, 'wrapper');
       const exe = path.join(wrapperDir, 'failing-ffmpeg.exe');
@@ -325,8 +325,13 @@ describe.skipIf(!hasNvenc())('ffmpeg failure', () => {
       await sleep(500);
       expect(readCounter(counter)).toBe(2);
 
-      expect(harness.db.prepare('SELECT COUNT(*) AS n FROM plays').get()).toEqual({ n: 0 });
-      expect(harness.db.prepare("SELECT COUNT(*) AS n FROM events WHERE level = 'error'").get()).toEqual({ n: 0 });
+      expect(harness.db.prepare('SELECT status, error_message AS message FROM plays').all()).toEqual([
+        { status: 'error', message: expect.stringContaining('stopped unexpectedly') },
+      ]);
+      expect(
+        harness.db.prepare("SELECT COUNT(*) AS n FROM events WHERE level = 'error' AND source = 'ffmpeg'").get(),
+      ).toEqual({ n: 1 });
+      expect(events.filter((event) => event.type === 'session.update' && event.data.state === 'error')).toHaveLength(1);
       expect(events.some((event) => event.type === 'session.start')).toBe(false);
       expect(((await harness.app.inject('/api/activity')).json() as ActivityResponse).sessions).toEqual([]);
       expect(harness.app.ctx.playback.list()).toEqual([]);

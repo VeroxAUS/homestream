@@ -294,7 +294,7 @@ describe('explicit stream id', () => {
     expect(resolved).toEqual([0, 1]);
   });
 
-  it('waits for the first segment and fails with 502 encoder_failed, cleaning up', async () => {
+  it('waits for the first segment and fails with 502 encoder_failed, cleaning up and recording the error', async () => {
     const encoders = new FakeEncoders('fail');
     const { harness } = await boot({ names: SAME, encoders });
     const res = await post(harness, harness.streamIds.s0 as string);
@@ -303,7 +303,8 @@ describe('explicit stream id', () => {
     expect(res.json()).not.toHaveProperty('attempts');
     expect(encoders.started).toBe(2);
     expect(sessionDirs(harness)).toEqual([]);
-    expect(count(harness, 'SELECT COUNT(*) AS n FROM plays')).toBe(0);
+    expect(harness.db.prepare('SELECT status FROM plays').all()).toEqual([{ status: 'error' }]);
+    expect(count(harness, "SELECT COUNT(*) AS n FROM events WHERE level = 'error'")).toBe(1);
   });
 
   it('does not answer 201 before the first segment exists', async () => {

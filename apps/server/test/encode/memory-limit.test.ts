@@ -36,7 +36,7 @@ afterAll(async () => {
 
 describe.skipIf(!hasNvenc())('memory watchdog in a session', () => {
   it(
-    'fails the start with encoder_memory_limit, records an error event and leaves no ffmpeg, session or play record behind',
+    'fails the start with encoder_memory_limit, records one error event and an error play record, and leaves no ffmpeg or session behind',
     async () => {
       const before = new Set((await listFfmpegCommandLines()).filter((line) => line.includes(harness.transcodeDir)));
       const { status, body } = await startSession(harness, 'movie', 'chromecast4k');
@@ -67,7 +67,7 @@ describe.skipIf(!hasNvenc())('memory watchdog in a session', () => {
       expect(JSON.parse(events[0]?.details_json as string)).toMatchObject({ code: 'encoder_memory_limit', limitMb: 1 });
 
       expect(harness.app.ctx.playback.list()).toEqual([]);
-      expect(harness.db.prepare('SELECT COUNT(*) AS n FROM plays').get()).toEqual({ n: status === 502 ? 0 : 1 });
+      expect(harness.db.prepare('SELECT status FROM plays').all()).toEqual([{ status: 'error' }]);
       const left = (await listFfmpegCommandLines()).filter(
         (line) => line.includes(harness.transcodeDir) && !before.has(line),
       );
