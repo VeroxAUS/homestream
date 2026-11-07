@@ -12,7 +12,6 @@ import {
   IDLE_SAMPLE_GAP_MS,
   IDLE_SAMPLES,
   MAX_IDLE_UTIL_PCT,
-  parseFfmpegRunning,
   parseGpuProcessNames,
   parseNvidiaSmi,
   parseSystemInfo,
@@ -235,7 +234,7 @@ describe('--require-idle', () => {
     );
   });
 
-  it('ignores utilization while an ffmpeg is running', () => {
+  it('ignores utilization while a HomeStream ffmpeg is running', () => {
     expect(evaluate({ events: [], gpu: cool, memory: roomy, idle: idleOf(90, true), errors: [] }).ok).toBe(true);
   });
 
@@ -335,12 +334,6 @@ describe('--require-idle', () => {
     ].join('\r\n');
     expect(parseGpuProcessNames(table)).toEqual(['Discord.exe', 'explorer.exe', 'Wow.exe']);
     expect(parseGpuProcessNames('No running processes found')).toEqual([]);
-  });
-
-  it('detects a running ffmpeg from tasklist output', () => {
-    expect(parseFfmpegRunning('"ffmpeg.exe","1234","Console","1","50,000 K"\r\n')).toBe(true);
-    expect(parseFfmpegRunning('INFO: No tasks are running which match the specified criteria.\r\n')).toBe(false);
-    expect(parseFfmpegRunning('')).toBe(false);
   });
 });
 

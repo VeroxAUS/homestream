@@ -1,3 +1,5 @@
+import type { PidRegistryEntry } from './gpu-health-ffmpeg.mjs';
+
 export interface GpuEvent {
   time: string;
   log: string;
@@ -17,7 +19,9 @@ export interface GpuReading {
 }
 
 export interface MemoryReading {
+  /** Rounded for display; evaluate compares freeGbExact. */
   freeGb: number;
+  freeGbExact: number;
   totalGb: number;
 }
 
@@ -35,7 +39,9 @@ export const IDLE_SPIKE_PCT: number;
 export const IDLE_SPIKE_COUNT: number;
 
 export interface IdleReading {
+  /** A HomeStream-owned ffmpeg is running; null when the process list could not be read. */
   ffmpegRunning: boolean | null;
+  foreignFfmpeg?: number | null;
   /** Median of the samples. */
   utilPct: number | null;
   spikes?: number | null;
@@ -44,7 +50,6 @@ export interface IdleReading {
 export const SYSTEM_INFO_SCRIPT: string;
 export function parseArgs(argv: string[]): { since: string; sinceMs: number; minFreeGb: number; requireIdle: boolean };
 export function parseGpuProcessNames(stdout: string): string[];
-export function parseFfmpegRunning(stdout: string): boolean;
 export function summarizeIdle(samples: Array<number | null>): {
   samples: Array<number | null>;
   utilPct: number | null;
@@ -58,7 +63,7 @@ export function parseSystemInfo(stdout: string): SystemInfo;
 export function evaluate(input: {
   events: GpuEvent[];
   gpu: Pick<GpuReading, 'tempC'> | null;
-  memory?: Pick<MemoryReading, 'freeGb'> | null;
+  memory?: (Pick<MemoryReading, 'freeGb'> & Partial<Pick<MemoryReading, 'freeGbExact'>>) | null;
   minFreeGb?: number;
   idle?: IdleReading;
   errors: string[];
@@ -67,4 +72,10 @@ export function evaluate(input: {
   reasons: string[];
 };
 export function buildQueryScript(sinceMs: number): string;
+export function readIdle(deps?: {
+  run?: (command: string, args: string[], timeout?: number) => Promise<string>;
+  wait?: (ms: number) => Promise<void>;
+  registry?: PidRegistryEntry[];
+  roots?: string[];
+}): Promise<IdleReading & { samples: Array<number | null> }>;
 export function main(argv: string[]): Promise<number>;

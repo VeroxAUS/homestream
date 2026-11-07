@@ -2,12 +2,20 @@
 // GPU health gate (AGENTS.md "GPU safety"). Usage: node scripts/gpu-health.mjs --since <ISO-8601> [--min-free-gb 4]
 // Prints one JSON line. Exit 0 = healthy, 1 = new GPU driver events, temperature above the limit, free RAM below
 // the minimum (low_memory), or the state could not be read (a gate that cannot look fails closed).
-// With --require-idle it also fails (gpu_busy) when, while no ffmpeg runs, the median of 5 GPU utilization samples (~5 s) is >= 25%
+// With --require-idle it also fails (gpu_busy) when, while no HomeStream ffmpeg runs, the median of 5 GPU utilization samples (~5 s) is >= 25%
 // or at least 2 samples are >= 60%, so a game or other heavy GPU app blocks the step but one transient spike from a desktop app does not.
+// Only HomeStream's own ffmpeg (PID registry or command line, see gpu-health-ffmpeg.mjs) exempts that check, never an unrelated ffmpeg.
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
+import {
+  countFfmpeg,
+  FFMPEG_PROCESS_SCRIPT,
+  ownedRoots,
+  parseFfmpegProcesses,
+  readPidRegistries,
+} from './gpu-health-ffmpeg.mjs';
 
 export const MAX_TEMP_C = 83;
 export const DEFAULT_MIN_FREE_GB = 4;
@@ -106,9 +114,10 @@ export function parseNvidiaSmi(stdout) {
     throw new Error(`unexpected nvidia-smi output: ${stdout.trim().slice(0, 200)}`);
   }
   const [first] = rows;
-  const temps = rows.map((r) => num(r[0])).filter((t) => t !== null);
+  const temps = rows.map((r) => num(r[0]));
   return {
-    tempC: temps.length ? Math.max(...temps) : null,
+    // One GPU without a readable temperature makes the whole reading unreadable: the hottest one could be that GPU.
+    tempC: temps.every((t) => t !== null) ? Math.max(...temps) : null,
     utilGpuPct: num(first[1]),
     utilEncoderPct: num(first[2]),
     utilDecoderPct: num(first[3]),
@@ -122,7 +131,11 @@ export function parseNvidiaSmi(stdout) {
  * @param {number} freeBytes
  */
 export function readMemory(freeBytes = os.freemem()) {
-  return { freeGb: Math.round((freeBytes / GIB) * 100) / 100, totalGb: Math.round((os.totalmem() / GIB) * 100) / 100 };
+  return {
+    freeGb: Math.round((freeBytes / GIB) * 100) / 100,
+    freeGbExact: freeBytes / GIB,
+    totalGb: Math.round((os.totalmem() / GIB) * 100) / 100,
+  };
 }
 
 /**
@@ -158,11 +171,6 @@ export function parseGpuProcessNames(stdout) {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-/** True when `tasklist /FO CSV /NH` lists at least one ffmpeg.exe ("INFO: No tasks ..." means none). @param {string} stdout */
-export function parseFfmpegRunning(stdout) {
-  return stdout.split(/\r?\n/).some((line) => /^"ffmpeg\.exe"/i.test(line.trim()));
-}
-
 /**
  * `utilPct` is the median of the samples, so one short spike from a desktop app (Discord, Edge) does not count, while
  * sustained load does. `spikes` counts samples at or above IDLE_SPIKE_PCT, which catches bursty load whose median stays low.
@@ -186,36 +194,52 @@ $q = Get-Counter '\\PhysicalDisk(*)\\Current Disk Queue Length' | Select-Object 
 [pscustomobject]@{ pagefile = $pf; diskQueueD = if ($q) { $q.CookedValue } else { $null } } | ConvertTo-Json -Compress -Depth 3
 `;
 
+/** An unavailable or non-finite temperature is an unreadable required source, not a pass. */
+function checkTemperature(gpu) {
+  const temp = gpu?.tempC;
+  if (typeof temp !== 'number' || !Number.isFinite(temp)) return ['could not check: GPU temperature is unavailable'];
+  return temp > MAX_TEMP_C ? [`temperature ${temp} C is above ${MAX_TEMP_C} C`] : [];
+}
+
+/** Compares the unrounded free RAM; `freeGb` is rounded for display and can show 4 for 3.996. */
+function checkMemory(memory, minFreeGb) {
+  const free = memory?.freeGbExact ?? memory?.freeGb;
+  if (typeof free !== 'number' || !Number.isFinite(free)) return ['could not check: free RAM is unknown'];
+  if (free >= minFreeGb) return [];
+  const shown = Math.floor(free * 1000) / 1000;
+  return [`low_memory: ${shown} GB of RAM free, below the ${minFreeGb} GB minimum`];
+}
+
+/** `idle.ffmpegRunning` means a HomeStream-owned ffmpeg; an unrelated one does not exempt the utilization check. */
+function checkIdle(idle) {
+  if (idle.ffmpegRunning === null) return ['could not check: ffmpeg process list is unknown'];
+  if (idle.ffmpegRunning) return [];
+  if (idle.utilPct === null) return ['could not check: GPU utilization is unknown'];
+  const apps = idle.processes.length ? ` (GPU processes: ${idle.processes.join(', ')})` : '';
+  if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
+    return [
+      `gpu_busy: median GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no HomeStream ffmpeg running${apps}`,
+    ];
+  }
+  if ((idle.spikes ?? 0) >= IDLE_SPIKE_COUNT) {
+    return [
+      `gpu_busy: ${idle.spikes} GPU samples at or above ${IDLE_SPIKE_PCT}% with no HomeStream ffmpeg running${apps}`,
+    ];
+  }
+  return [];
+}
+
 /**
- * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number} | null, minFreeGb?: number, idle?: {ffmpegRunning: boolean | null, utilPct: number | null, spikes?: number | null, processes: string[]}, errors: string[]}} input
+ * @param {{events: object[], gpu: {tempC: number | null} | null, memory?: {freeGb: number, freeGbExact?: number} | null, minFreeGb?: number, idle?: {ffmpegRunning: boolean | null, utilPct: number | null, spikes?: number | null, processes: string[]}, errors: string[]}} input
  */
 export function evaluate({ events, gpu, memory, minFreeGb = DEFAULT_MIN_FREE_GB, idle, errors }) {
-  const reasons = [];
-  if (events.length > 0) reasons.push(`${events.length} new GPU driver/TDR event(s)`);
-  if (gpu && gpu.tempC !== null && gpu.tempC > MAX_TEMP_C)
-    reasons.push(`temperature ${gpu.tempC} C is above ${MAX_TEMP_C} C`);
-  if (!memory || !Number.isFinite(memory.freeGb)) reasons.push('could not check: free RAM is unknown');
-  else if (memory.freeGb < minFreeGb)
-    reasons.push(`low_memory: ${memory.freeGb} GB of RAM free, below the ${minFreeGb} GB minimum`);
-  if (idle) {
-    if (idle.ffmpegRunning === null) reasons.push('could not check: ffmpeg process list is unknown');
-    else if (!idle.ffmpegRunning) {
-      if (idle.utilPct === null) reasons.push('could not check: GPU utilization is unknown');
-      else {
-        const apps = idle.processes.length ? ` (GPU processes: ${idle.processes.join(', ')})` : '';
-        if (idle.utilPct >= MAX_IDLE_UTIL_PCT) {
-          reasons.push(
-            `gpu_busy: median GPU utilization ${idle.utilPct}% is at or above ${MAX_IDLE_UTIL_PCT}% with no ffmpeg running${apps}`,
-          );
-        } else if ((idle.spikes ?? 0) >= IDLE_SPIKE_COUNT) {
-          reasons.push(
-            `gpu_busy: ${idle.spikes} GPU samples at or above ${IDLE_SPIKE_PCT}% with no ffmpeg running${apps}`,
-          );
-        }
-      }
-    }
-  }
-  for (const error of errors) reasons.push(`could not check: ${error}`);
+  const reasons = [
+    ...(events.length > 0 ? [`${events.length} new GPU driver/TDR event(s)`] : []),
+    ...checkTemperature(gpu),
+    ...checkMemory(memory, minFreeGb),
+    ...(idle ? checkIdle(idle) : []),
+    ...errors.map((error) => `could not check: ${error}`),
+  ];
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -289,27 +313,49 @@ async function readSystemInfo() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Samples overall GPU utilisation IDLE_SAMPLES times and lists the GPU process names and whether an ffmpeg is running. */
-async function readIdle() {
+/** Counts the ffmpeg processes by owner; null when the list or its parsing failed, so the gate fails closed. */
+function countFfmpegProcesses(result, sources) {
+  if (result.status !== 'fulfilled') return null;
+  try {
+    return countFfmpeg(parseFfmpegProcesses(result.value), sources);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Samples overall GPU utilisation IDLE_SAMPLES times and lists the GPU process names and whether a HomeStream ffmpeg is running.
+ * Only HomeStream-owned ffmpeg processes count: an unrelated one must not switch the utilization check off.
+ * @param {{run?: typeof exec, wait?: typeof sleep, registry?: ReturnType<typeof readPidRegistries>, roots?: string[]}} deps
+ */
+export async function readIdle({
+  run = exec,
+  wait = sleep,
+  registry = readPidRegistries(),
+  roots = ownedRoots(),
+} = {}) {
+  const encoded = Buffer.from(FFMPEG_PROCESS_SCRIPT, 'utf16le').toString('base64');
   const [ffmpegResult, processResult] = await Promise.allSettled([
-    exec('tasklist', ['/FI', 'IMAGENAME eq ffmpeg.exe', '/FO', 'CSV', '/NH'], 15_000),
-    exec('nvidia-smi', [], 15_000),
+    run('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 20_000),
+    run('nvidia-smi', [], 15_000),
   ]);
   const samples = [];
   for (let i = 0; i < IDLE_SAMPLES; i += 1) {
-    if (i > 0) await sleep(IDLE_SAMPLE_GAP_MS);
+    if (i > 0) await wait(IDLE_SAMPLE_GAP_MS);
     try {
       samples.push(
         parseNvidiaSmi(
-          await exec('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000),
+          await run('nvidia-smi', [`--query-gpu=${SMI_FIELDS.join(',')}`, '--format=csv,noheader'], 15_000),
         ).utilGpuPct,
       );
     } catch {
       samples.push(null);
     }
   }
+  const counts = countFfmpegProcesses(ffmpegResult, { registry, roots });
   return {
-    ffmpegRunning: ffmpegResult.status === 'fulfilled' ? parseFfmpegRunning(ffmpegResult.value) : null,
+    ffmpegRunning: counts ? counts.owned > 0 : null,
+    foreignFfmpeg: counts ? counts.foreign : null,
     processes: processResult.status === 'fulfilled' ? parseGpuProcessNames(processResult.value) : [],
     ...summarizeIdle(samples),
   };

@@ -59,7 +59,6 @@ export default tseslint.config(
     { file: 'apps/server/src/sourceproxy/serve.ts', cyclomatic: 34, cognitive: 61, depth: 5 },
     { file: 'apps/server/src/sourceproxy/sourceEntry.ts', cognitive: 22 },
     { file: 'apps/server/test/playback/subtitleSources.ts', cognitive: 36 },
-    { file: 'scripts/gpu-health.mjs', cognitive: 23 },
   ].map(({ file, cyclomatic, cognitive, depth }) => ({
     files: [file],
     rules: {

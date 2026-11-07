@@ -25,7 +25,6 @@ How we track debt that is knowingly left in the code, and the list of debt that 
 | `apps/server/src/sourceproxy/serve.ts`         | `pumpRemote`       | 34         | 61        | Streaming hot path; refactor only with a benchmark |
 | `apps/server/src/sourceproxy/sourceEntry.ts`   | one method         |            | 22        |                                                    |
 | `apps/server/test/playback/subtitleSources.ts` | test helper        |            | 36        | Generates the subtitle test sources                |
-| `scripts/gpu-health.mjs`                       | one function       |            | 23        |                                                    |
 
 ### Line limits
 
