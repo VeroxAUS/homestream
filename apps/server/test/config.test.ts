@@ -201,4 +201,37 @@ describe('loadConfig', () => {
     const out = redact('uuidpart1234 blobpart5678 tmdbtokenvalue torboxkeyvalue');
     expect(out).toBe('<redacted> <redacted> <redacted> <redacted>');
   });
+
+  describe('DISK_WARN_FREE_GB', () => {
+    const load = (name: string, content: string) =>
+      loadConfig({ env: { HOMESTREAM_ENV_FILE: envFile(name, content) }, repoRoot: null });
+
+    it('defaults to 20 GB without a warning', () => {
+      const config = load('disk-default.env', '# nothing\n');
+      expect(config.diskWarnFreeGb).toBe(20);
+      expect(config.warnings.join(' ')).not.toContain('DISK_WARN_FREE_GB');
+    });
+
+    it('reads a whole or fractional value, and 0 to switch the low-space warning off', () => {
+      expect(load('disk-set.env', 'DISK_WARN_FREE_GB=150\n').diskWarnFreeGb).toBe(150);
+      expect(load('disk-fraction.env', 'DISK_WARN_FREE_GB=7.5\n').diskWarnFreeGb).toBe(7.5);
+      const off = load('disk-off.env', 'DISK_WARN_FREE_GB=0\n');
+      expect(off.diskWarnFreeGb).toBe(0);
+      expect(off.warnings.join(' ')).toContain('DISK_WARN_FREE_GB');
+    });
+
+    it.each(['abc', '-1', '-0.5', 'Infinity', '12GB'])('falls back to 20 with a config warning for %s', (raw) => {
+      const config = load(`disk-bad-${raw}.env`, `DISK_WARN_FREE_GB=${raw}\n`);
+      expect(config.diskWarnFreeGb).toBe(20);
+      expect(config.warnings).toContainEqual(
+        expect.stringMatching(/DISK_WARN_FREE_GB=".*" is not a number of GB of 0 or more; using 20\./),
+      );
+    });
+
+    it('warns that a value at or below the 5 GB error level never produces a warning on its own', () => {
+      const config = load('disk-below-error.env', 'DISK_WARN_FREE_GB=3\n');
+      expect(config.diskWarnFreeGb).toBe(3);
+      expect(config.warnings.join(' ')).toMatch(/DISK_WARN_FREE_GB=3.*5 GB/);
+    });
+  });
 });

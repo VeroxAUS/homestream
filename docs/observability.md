@@ -45,7 +45,7 @@ The server listens on the local network only, and `/metrics` is open to it like 
 | `GET /healthz` | `200 {"status":"ok"}` while the process runs. Nothing else is checked.                                                                                         |
 | `GET /readyz`  | `200 {"status":"ready"}` when the database answers and a file can be written in the data directory; otherwise `503` with `{"error":{"code":"not_ready",...}}`. |
 
-Neither calls TMDB, the gateway, TorBox or ffmpeg. For the full picture (gateway, GPU, disk) use `GET /api/health`.
+Neither calls TMDB, the gateway, TorBox or ffmpeg. For the full picture (gateway, GPU, disk) use `GET /api/health`. Its `disk` check warns when the fuller of the `TRANSCODE_DIR` and `DATA_DIR` drives has less than `DISK_WARN_FREE_GB` free (default 20 GB) and is an error under 5 GB; see the [disk-full runbook](runbooks/disk-full-transcode.md).
 
 ## Telemetry
 

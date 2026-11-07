@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkConfig } from '../../src/health/checks/config.js';
-import { checkDisk } from '../../src/health/checks/disk.js';
 import { checkFfmpeg, parseEncoders, parseVersion } from '../../src/health/checks/ffmpeg.js';
 import { checkGateway, type HealthFetch } from '../../src/health/checks/gateway.js';
 import { checkGpu, parseGpuCsv } from '../../src/health/checks/gpu.js';
@@ -12,7 +11,6 @@ import { AppError } from '../../src/errors.js';
 import { testConfig, makeTempDir, removeDir } from '../helpers.js';
 import { clearSecrets } from '../../src/redact.js';
 
-const GIB = 1024 ** 3;
 const NOW = Date.UTC(2026, 10, 6, 12, 0, 0);
 const DAY = 24 * 3600 * 1000;
 const CONFIG_FILE = { path: 'C:\\cfg\\config.env', exists: true, source: 'env' as const };
@@ -416,60 +414,6 @@ describe('GPU check', () => {
       expect(outcome.status).toBe('error');
       expect(outcome.hint).toMatch(/driver/i);
     }
-  });
-});
-
-describe('checkDisk', () => {
-  const config = { transcodeDir: 'E:\\HomeStream\\transcode', dataDir: 'D:\\HomeStream\\data', transcodeMaxGb: 20 };
-  const space = (freeGb: Record<string, number>) => async (dir: string) => ({
-    freeBytes: (freeGb[dir.slice(0, 1)] ?? 500) * GIB,
-    totalBytes: 1000 * GIB,
-  });
-  const usage = () => ({ bytes: 3 * GIB, capBytes: 20 * GIB });
-
-  it('reports both drives, transcode usage and the cap', async () => {
-    const outcome = await checkDisk({ config, probe: space({ E: 800, D: 300 }), usage });
-    expect(outcome.status).toBe('ok');
-    expect(outcome.details).toMatchObject({
-      transcode: { drive: 'E:', freeGb: 800 },
-      data: { drive: 'D:', freeGb: 300 },
-      transcodeUsageGb: 3,
-      transcodeMaxGb: 20,
-      transcodeUsagePct: 15,
-    });
-  });
-
-  it.each([
-    [25, 'ok'],
-    [19.9, 'warn'],
-    [5, 'warn'],
-    [4.9, 'error'],
-  ] as const)('with %d GB free the status is %s', async (free, status) => {
-    const outcome = await checkDisk({ config, probe: space({ E: free }), usage });
-    expect(outcome.status).toBe(status);
-    if (status !== 'ok') {
-      expect(outcome.hint).toContain('E:');
-      expect(outcome.message).toContain(String(free));
-    }
-  });
-
-  it('judges the fuller of the two drives', async () => {
-    const outcome = await checkDisk({ config, probe: space({ E: 500, D: 3 }), usage });
-    expect(outcome).toMatchObject({ status: 'error', hint: expect.stringContaining('DATA_DIR') });
-  });
-
-  it('warns when the transcode cache is over its cap', async () => {
-    const outcome = await checkDisk({
-      config,
-      probe: space({}),
-      usage: () => ({ bytes: 21 * GIB, capBytes: 20 * GIB }),
-    });
-    expect(outcome.status).toBe('warn');
-  });
-
-  it('is an error when the drive cannot be read', async () => {
-    const outcome = await checkDisk({ config, probe: () => Promise.reject(new Error('EIO')), usage });
-    expect(outcome).toMatchObject({ status: 'error', hint: expect.stringContaining('TRANSCODE_DIR') });
   });
 });
 

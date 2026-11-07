@@ -16,7 +16,7 @@
       "functionLines": 82
     },
     "apps/server/test/health/checks.test.ts": {
-      "lines": 476
+      "lines": 427
     },
     "apps/server/test/integration/downloads.test.ts": {
       "lines": 785

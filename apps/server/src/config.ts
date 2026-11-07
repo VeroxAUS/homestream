@@ -18,6 +18,7 @@ export const KNOWN_KEYS = [
   'DATA_DIR',
   'TRANSCODE_DIR',
   'TRANSCODE_MAX_GB',
+  'DISK_WARN_FREE_GB',
   'FFMPEG_PATH',
   'FFPROBE_PATH',
   'FFMPEG_THREADS',
@@ -38,6 +39,9 @@ export const KNOWN_KEYS = [
   'POSTHOG_HOST',
 ] as const;
 
+/** Free space below which the disk health check is an error; the warn level (DISK_WARN_FREE_GB) must stay above it to be seen. */
+export const DISK_ERROR_FREE_GB = 5;
+const DEFAULT_DISK_WARN_FREE_GB = 20;
 const DEFAULT_PORT = 8600;
 const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const SOURCE_PROXY_PORT_OFFSET = 50;
@@ -66,6 +70,8 @@ export interface Config {
   dataDir: string;
   transcodeDir: string;
   transcodeMaxGb: number;
+  /** The disk health check warns when the fuller drive has less than this many GB free. */
+  diskWarnFreeGb: number;
   ffmpegPath: string;
   ffprobePath: string;
   /** Thread cap for ffmpeg jobs whose filters run on the GPU. */
@@ -142,6 +148,21 @@ function positiveNumber(raw: string | undefined, fallback: number, name: string,
   if (!Number.isFinite(value) || value <= 0) {
     warnings.push(`${name}="${raw}" is not a positive number; using ${fallback}.`);
     return fallback;
+  }
+  return value;
+}
+
+function diskWarnFreeGb(raw: string | undefined, warnings: string[]): number {
+  if (raw === undefined) return DEFAULT_DISK_WARN_FREE_GB;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    warnings.push(`DISK_WARN_FREE_GB="${raw}" is not a number of GB of 0 or more; using ${DEFAULT_DISK_WARN_FREE_GB}.`);
+    return DEFAULT_DISK_WARN_FREE_GB;
+  }
+  if (value <= DISK_ERROR_FREE_GB) {
+    warnings.push(
+      `DISK_WARN_FREE_GB=${raw} is not above the ${DISK_ERROR_FREE_GB} GB error level, so the disk check will go from ok straight to error.`,
+    );
   }
   return value;
 }
@@ -243,6 +264,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     dataDir: values.DATA_DIR ?? 'E:\\HomeStream\\data',
     transcodeDir: values.TRANSCODE_DIR ?? 'E:\\HomeStream\\transcode',
     transcodeMaxGb: positiveNumber(values.TRANSCODE_MAX_GB, 20, 'TRANSCODE_MAX_GB', warnings),
+    diskWarnFreeGb: diskWarnFreeGb(values.DISK_WARN_FREE_GB, warnings),
     ffmpegPath: values.FFMPEG_PATH ?? 'ffmpeg',
     ffprobePath: values.FFPROBE_PATH ?? 'ffprobe',
     ffmpegThreads: positiveInteger(values.FFMPEG_THREADS, 4, 'FFMPEG_THREADS', warnings),

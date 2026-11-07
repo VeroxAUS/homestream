@@ -254,6 +254,29 @@ describe('induced failures', () => {
     expect(body.overall).toBe('error');
   });
 
+  it('DISK_WARN_FREE_GB above the free space makes the disk check warn with a hint that names the setting', async () => {
+    await boot({ DISK_WARN_FREE_GB: '600' });
+    const disk = rig.check(await rig.health(), 'disk');
+    expect(disk).toMatchObject({ status: 'warn', hint: expect.stringContaining('DISK_WARN_FREE_GB') });
+    expect(disk.details).toMatchObject({ thresholds: { warnFreeGb: 600, errorFreeGb: 5 } });
+  });
+
+  it('with the default setting the same free space is ok', async () => {
+    await boot();
+    const disk = rig.check(await rig.health(), 'disk');
+    expect(disk.status).toBe('ok');
+    expect(disk.details).toMatchObject({ thresholds: { warnFreeGb: 20, errorFreeGb: 5 } });
+  });
+
+  it('an invalid DISK_WARN_FREE_GB keeps the default 20 GB level and config warns', async () => {
+    await boot({ DISK_WARN_FREE_GB: '-4' });
+    const body = await rig.health();
+    expect(rig.check(body, 'disk')).toMatchObject({ status: 'ok', details: { thresholds: { warnFreeGb: 20 } } });
+    expect(rig.check(body, 'config').status).toBe('warn');
+    rig.freeGb.transcode = 12;
+    expect(rig.check(await rig.run(), 'disk').status).toBe('warn');
+  });
+
   it('a hot GPU warns', async () => {
     await boot();
     rig.runResults.gpu = { code: 0, stdout: 'NVIDIA GeForce RTX 4080, 581.29, 99, 80, 9000, 16376, 88\n', stderr: '' };

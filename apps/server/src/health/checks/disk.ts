@@ -1,13 +1,10 @@
 import path from 'node:path';
-import type { Config } from '../../config.js';
+import { DISK_ERROR_FREE_GB, type Config } from '../../config.js';
 import type { DiskProbe } from '../exec.js';
 import { GIB, type CheckOutcome } from './types.js';
 
-const DISK_WARN_FREE_GB = 20;
-const DISK_ERROR_FREE_GB = 5;
-
 export interface DiskCheckDeps {
-  config: Pick<Config, 'transcodeDir' | 'dataDir' | 'transcodeMaxGb'>;
+  config: Pick<Config, 'transcodeDir' | 'dataDir' | 'transcodeMaxGb' | 'diskWarnFreeGb'>;
   probe: DiskProbe;
   /** Finished-segment bytes of live sessions (the part of TRANSCODE_DIR the cap governs). */
   usage: () => { bytes: number; capBytes: number };
@@ -62,7 +59,7 @@ export async function checkDisk({ config, probe, usage }: DiskCheckDeps): Promis
     transcodeUsageGb: round(used.bytes / GIB, 2),
     transcodeMaxGb: config.transcodeMaxGb,
     transcodeUsagePct: used.capBytes > 0 ? round((used.bytes / used.capBytes) * 100) : 0,
-    thresholds: { warnFreeGb: DISK_WARN_FREE_GB, errorFreeGb: DISK_ERROR_FREE_GB },
+    thresholds: { warnFreeGb: config.diskWarnFreeGb, errorFreeGb: DISK_ERROR_FREE_GB },
   };
 
   const tight = [transcode, ...(data.drive === transcode.drive ? [] : [data])].sort(
@@ -78,11 +75,11 @@ export async function checkDisk({ config, probe, usage }: DiskCheckDeps): Promis
       details,
     };
   }
-  if (tight.freeGb < DISK_WARN_FREE_GB) {
+  if (tight.freeGb < config.diskWarnFreeGb) {
     return {
       status: 'warn',
-      message: `Disk space is low: ${summary}`,
-      hint: `Free up space on ${where}, or move TRANSCODE_DIR / DATA_DIR to a drive with more room.`,
+      message: `Disk space is low: ${summary} The warning level is ${config.diskWarnFreeGb} GB.`,
+      hint: `Free up space on ${where}, or move TRANSCODE_DIR / DATA_DIR to a drive with more room. To warn at a different level, change DISK_WARN_FREE_GB.`,
       details,
     };
   }
