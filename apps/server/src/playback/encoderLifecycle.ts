@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { toActivitySession, type SessionRecord } from './session.js';
 import type { PlaybackContext } from './context.js';
+import { stopAndReport } from './discardStop.js';
 import { EncoderProcess } from './encoderProcess.js';
 import { STARVED_BYTES_PER_SEC } from './extractorSchedule.js';
 import { buildFfmpegArgs } from './ffmpegArgs.js';
@@ -104,7 +105,7 @@ export class EncoderLifecycle {
     rec.restart = (async () => {
       rec.parked = true;
       rec.generation += 1;
-      await rec.process?.stop();
+      await stopAndReport(rec.process, { sessionId: rec.id, reason: 'park', logger: this.ctx.options.logger });
     })().finally(() => {
       rec.restart = null;
     });

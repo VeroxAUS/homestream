@@ -3,7 +3,7 @@ import path from 'node:path';
 import { finalizePlay } from '../db/plays.js';
 import type { PlaybackContext } from './context.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
-import { stopDiscarded, type DiscardReason } from './discardStop.js';
+import { stopAndReport, stopDiscarded, type DiscardReason } from './discardStop.js';
 import { needsHlgToPq } from './decision.js';
 import { describeMemoryLimitHit, type MemoryLimitHit } from './memoryWatchdog.js';
 import { SEGMENT_SECONDS } from './playlist.js';
@@ -128,7 +128,11 @@ export class Recovery {
       });
       this.finalizeFailed(rec);
     }
-    void Promise.all([rec.process?.stop(), rec.subtitles?.stop()]).catch(() => undefined);
+    // An opening session is stopped again by `SessionSlots.abandon`, which logs a stuck process itself.
+    const stopProcess = rec.opening
+      ? rec.process?.stop()
+      : stopAndReport(rec.process, { sessionId: rec.id, reason: 'memory', logger: options.logger });
+    void Promise.all([stopProcess, rec.subtitles?.stop()]).catch(() => undefined);
   }
 
   /** Output of the previous track selection is thrown away, including init.mp4 whose audio parameters may differ. */
