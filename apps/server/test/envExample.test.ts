@@ -38,6 +38,7 @@ const SYSTEM_VARIABLES = new Set([
   'GITHUB_SERVER_URL',
   'GITHUB_STEP_SUMMARY',
   'GITHUB_TOKEN',
+  'PR_NUMBER',
   'RUNNER_TEMP',
   'PATH',
   'Path',
