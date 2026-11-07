@@ -1,8 +1,10 @@
-import { QueryClient } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import type { QueryClient } from '@tanstack/react-query';
+import { act, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HealthPill } from '../components/HealthPill';
 import { HOME_CONTENT_MARK } from '../lib/startup';
 import { download, health } from '../test/fixtures';
+import { mockApi, renderWithProviders, testQueryClient } from '../test/render';
 import { clearDownloadProgress, downloadKey, setDownloadProgress, useDownloadProgress } from './downloadProgress';
 import { startServerEvents, startServerEventsWhenIdle, stopServerEvents, useEventStreamLive } from './serverEvents';
 import { usePendingDownload } from './usePendingDownload';
@@ -81,7 +83,8 @@ describe('serverEvents', () => {
   beforeEach(() => {
     FakeEventSource.instances = [];
     vi.stubGlobal('EventSource', FakeEventSource);
-    queryClient = new QueryClient();
+    queryClient = testQueryClient();
+    mockApi({ 'GET /api/health': health('ok') });
     stopServerEvents();
   });
   afterEach(() => {
@@ -170,9 +173,81 @@ describe('serverEvents', () => {
     stream.onerror?.();
     invalidate.mockClear();
     stream.onopen?.();
-    expect(invalidate).toHaveBeenCalledExactlyOnceWith();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    const { predicate } = invalidate.mock.calls[0]?.[0] ?? {};
+    expect(predicate?.({ queryKey: ['home'] } as never)).toBe(true);
+    expect(predicate?.({ queryKey: ['movie', 278] } as never)).toBe(true);
+    // The health snapshot is fetched once by the open handler itself.
+    expect(predicate?.({ queryKey: ['health'] } as never)).toBe(false);
     stream.onopen?.();
     expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  describe('health snapshot on open', () => {
+    const healthCalls = (calls: { method: string; path: string }[]) =>
+      calls.filter((call) => call.method === 'GET' && call.path === '/api/health').length;
+
+    it('repairs a failed initial request: the pill shows the fetched state once the stream opens', async () => {
+      let answers = 0;
+      const { calls } = mockApi({
+        'GET /api/health': () => (answers++ === 0 ? new TypeError('offline') : health('warn', ['warn'])),
+      });
+      renderWithProviders(<HealthPill />, '/', queryClient);
+      await screen.findByText('Server unreachable');
+      const stream = open();
+      act(() => stream.onopen?.());
+      expect(await screen.findByText('1 warning')).toBeInTheDocument();
+      expect(screen.getByRole('link')).toHaveAttribute('data-health', 'warn');
+      expect(healthCalls(calls)).toBe(2);
+    });
+
+    it('does not poll while the stream is live', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        const { calls } = mockApi({ 'GET /api/health': health('ok') });
+        renderWithProviders(<HealthPill />, '/', queryClient);
+        await screen.findByText('All systems healthy');
+        const stream = open();
+        act(() => stream.onopen?.());
+        await vi.waitFor(() => expect(healthCalls(calls)).toBe(2));
+        await act(() => vi.advanceTimersByTimeAsync(5 * 60_000));
+        expect(healthCalls(calls)).toBe(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('fetches one snapshot on every reopen', async () => {
+      const { calls } = mockApi({ 'GET /api/health': health('ok') });
+      const stream = open();
+      stream.onopen?.();
+      await vi.waitFor(() => expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'ok' }));
+      expect(healthCalls(calls)).toBe(1);
+      queryClient.removeQueries({ queryKey: ['health'] });
+      stream.onerror?.();
+      stream.onopen?.();
+      await vi.waitFor(() => expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'ok' }));
+      expect(healthCalls(calls)).toBe(2);
+    });
+
+    it('lets a pushed change win over an older snapshot that arrives later', async () => {
+      let release: (value: unknown) => void = () => undefined;
+      mockApi({ 'GET /api/health': () => new Promise((resolve) => (release = resolve)) });
+      const stream = open();
+      stream.onopen?.();
+      stream.emit('health', health('error', ['error']));
+      release(health('ok'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'error' });
+    });
+
+    it('asks the cache for a fresh answer when the snapshot request fails', async () => {
+      mockApi({ 'GET /api/health': new TypeError('offline') });
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+      const stream = open();
+      stream.onopen?.();
+      await vi.waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['health'] }));
+    });
   });
 
   it('opens after the content mark and idle time', async () => {

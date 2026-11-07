@@ -6,6 +6,7 @@ import {
 } from '@homestream/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
+import { apiGet } from '../api/client';
 import { afterHomeContent, whenIdle } from '../lib/startup';
 import { logger } from '../logger';
 import { clearDownloadProgress, downloadKey, setDownloadProgress } from './downloadProgress';
@@ -57,6 +58,19 @@ function finishDownload(queryClient: QueryClient, outcome: DownloadOutcome): voi
 }
 
 /**
+ * The stream sends no baseline and a steady health sends no change, so a failed or older initial `GET /api/health`
+ * would stay on screen. One request on every open repairs it; a change pushed meanwhile is newer and wins.
+ */
+function reconcileHealth(queryClient: QueryClient, pushedSince: () => boolean): void {
+  apiGet('/api/health', HealthResponseSchema).then(
+    (health) => {
+      if (!pushedSince()) queryClient.setQueryData(['health'], health);
+    },
+    () => void queryClient.invalidateQueries({ queryKey: ['health'] }),
+  );
+}
+
+/**
  * Opens the one shared `/api/events` stream. It only updates the cache: health snapshots and the progress of pending
  * downloads. Nothing here polls, and a handler does no work beyond the affected entry.
  */
@@ -65,10 +79,13 @@ export function startServerEvents(queryClient: QueryClient): void {
   const stream = new EventSource('/api/events');
   source = stream;
   let failed = false;
+  let pushes = 0;
 
   stream.addEventListener('health', (raw) => {
     const health = parse(HealthResponseSchema, raw);
-    if (health) queryClient.setQueryData(['health'], health);
+    if (!health) return;
+    pushes += 1;
+    queryClient.setQueryData(['health'], health);
   });
   stream.addEventListener('download.progress', (raw) => {
     const event = parse(DownloadProgressEventSchema, raw);
@@ -90,13 +107,15 @@ export function startServerEvents(queryClient: QueryClient): void {
     // The pill polls again from now on; this refetch makes it notice a server that is gone.
     void queryClient.invalidateQueries({ queryKey: ['health'] });
   };
-  // After a dropped connection (a server restart) the cached snapshots may be out of date.
   stream.onopen = () => {
     setLive(true);
+    const pushesAtOpen = pushes;
+    reconcileHealth(queryClient, () => pushes !== pushesAtOpen);
     if (!failed) return;
     failed = false;
     logger.info('events', 'event stream reconnected');
-    void queryClient.invalidateQueries();
+    // After a dropped connection (a server restart) the cached snapshots may be out of date. Health is fetched above.
+    void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== 'health' });
   };
 }
 

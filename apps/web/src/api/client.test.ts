@@ -37,6 +37,16 @@ describe('apiFetch', () => {
     expect(entries.map((entry) => entry.message)).toEqual(['GET /api/a -> 200', 'POST /api/b -> 200']);
   });
 
+  it('still sends a UUID request id on a plain-HTTP origin where crypto.randomUUID is undefined', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    const fetchMock = stubFetch(Response.json({}));
+    await apiFetch('/api/a');
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new Headers(init.headers).get(REQUEST_ID_HEADER)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
   it('turns an error body into an ApiError with the request id', async () => {
     stubFetch(
       Response.json({ error: { code: 'not_found', message: 'No such title', hint: 'Search again' } }, { status: 404 }),

@@ -1,6 +1,7 @@
 import type { CapabilityProfile, DeviceKind } from '@homestream/shared';
 import { apiFetch } from '../api/client';
 import { afterHomeContent, whenIdle } from '../lib/startup';
+import { randomUuid } from '../lib/uuid';
 import { logger } from '../logger';
 
 const ID_KEY = 'homestream.deviceId';
@@ -38,7 +39,7 @@ let memoryId: string | undefined;
 export function getDeviceId(): string {
   const saved = read(ID_KEY);
   if (saved) return saved;
-  const id = memoryId ?? crypto.randomUUID();
+  const id = memoryId ?? randomUuid();
   memoryId = id;
   write(ID_KEY, id);
   return id;

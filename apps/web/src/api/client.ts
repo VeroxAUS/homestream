@@ -1,4 +1,5 @@
 import type { ErrorBody } from '@homestream/shared';
+import { randomUuid } from '../lib/uuid';
 import { logger } from '../logger';
 
 /** Header the server echoes and writes as `reqId` in its log, so one failing call can be followed across both sides. */
@@ -15,10 +16,6 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
-}
-
-function newRequestId(): string {
-  return crypto.randomUUID();
 }
 
 async function toApiError(response: Response, requestId: string): Promise<ApiError> {
@@ -39,7 +36,7 @@ async function toApiError(response: Response, requestId: string): Promise<ApiErr
 
 /** `fetch` for the HomeStream API: adds an `X-Request-ID`, leaves a breadcrumb and throws `ApiError` for non-2xx. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const requestId = newRequestId();
+  const requestId = randomUuid();
   const headers = new Headers(init.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   const method = (init.method ?? 'GET').toUpperCase();

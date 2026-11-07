@@ -27,6 +27,16 @@ describe('device identity', () => {
     expect(localStorage.getItem('homestream.deviceId')).toBe(id);
   });
 
+  it('creates and registers a device id on a plain-HTTP origin where crypto.randomUUID is undefined', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    const { calls } = mockApi({ 'POST /api/devices': { ok: true } });
+    const id = getDeviceId();
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(localStorage.getItem('homestream.deviceId')).toBe(id);
+    expect(await registerDevice()).toBe(true);
+    expect(calls[0]?.body).toMatchObject({ deviceId: id });
+  });
+
   it('keeps an id in memory when storage is blocked', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
