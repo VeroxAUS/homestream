@@ -1,6 +1,11 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { EncoderExit, EncoderHandle, EncoderProcessOptions } from '../../src/playback/encoderProcess.js';
+import type {
+  EncoderExit,
+  EncoderHandle,
+  EncoderProcessOptions,
+  StopOptions,
+} from '../../src/playback/encoderProcess.js';
 
 /** `run`: writes the first segment and keeps running. `fail`: exits with code 1 at once. `hang`: neither. */
 export type EncoderMode = 'run' | 'fail' | 'hang';
@@ -21,7 +26,11 @@ export class FakeEncoder implements EncoderHandle {
     if (mode === 'run') setImmediate(() => writeFirstSegment(options));
   }
 
-  stop(): Promise<void> {
+  /** The options of every `stop()` call, in order, so tests can see how long each path was willing to wait. */
+  readonly stopCalls: Array<StopOptions | undefined> = [];
+
+  stop(options?: StopOptions): Promise<void> {
+    this.stopCalls.push(options);
     if (!this.gate) {
       this.end(0);
       return Promise.resolve();

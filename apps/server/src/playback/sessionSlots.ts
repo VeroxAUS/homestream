@@ -103,6 +103,7 @@ export class SessionSlots {
     if (rec.stopping) return;
     const { options } = this.host;
     rec.stopping = true;
+    rec.stopController.abort();
     const wasError = rec.state === 'error';
     rec.state = 'stopped';
     this.sessions.delete(rec.id);
@@ -133,6 +134,7 @@ export class SessionSlots {
   async abandon(rec: SessionRecord, failure?: AppError): Promise<void> {
     if (rec.stopping) return;
     rec.stopping = true;
+    rec.stopController.abort();
     rec.state = 'stopped';
     // A new generation keeps the exit handler of the stopped encoder from retrying it.
     rec.generation += 1;

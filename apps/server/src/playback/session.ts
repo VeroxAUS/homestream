@@ -90,6 +90,8 @@ export interface SessionRecord {
   retried: boolean;
   encoderDone: boolean;
   stopping: boolean;
+  /** Aborted when the session ends, so work that only waits on the network (a retry's link refresh) gives up at once. */
+  stopController: AbortController;
   restart: Promise<void> | null;
   /** Encoder stopped on purpose (disk cap) with its output kept; restarts when the player catches up. */
   parked: boolean;

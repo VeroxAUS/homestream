@@ -3,6 +3,7 @@ import path from 'node:path';
 import { finalizePlay } from '../db/plays.js';
 import type { PlaybackContext } from './context.js';
 import type { EncoderLifecycle } from './encoderLifecycle.js';
+import { DISCARD_STOP } from './encoderProcess.js';
 import { describeMemoryLimitHit, type MemoryLimitHit } from './memoryWatchdog.js';
 import { toActivitySession, type SessionRecord } from './session.js';
 import { endStats, scrub, subjectOf } from './support.js';
@@ -18,6 +19,14 @@ export function isLost(rec: SessionRecord, index: number): boolean {
 
 function isDead(rec: SessionRecord): boolean {
   return rec.state === 'error' || rec.stopping;
+}
+
+/** Resolves when the signal aborts; never rejects. */
+function stopped(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve();
+    else signal.addEventListener('abort', () => resolve(), { once: true });
+  });
 }
 
 /** True when the running encoder will produce `index` soon: it is at or ahead of the run's start and not too far behind it. */
@@ -68,7 +77,8 @@ export class Recovery {
       );
     }
     // The proxy re-resolves expired links by itself; this covers the encoder failing for another reason with a stale link.
-    await rec.source.refresh().catch(() => undefined);
+    // Stopping the session must not wait for a gateway lookup that can take a minute; the lookup is abandoned, not cancelled.
+    await Promise.race([rec.source.refresh().catch(() => undefined), stopped(rec.stopController.signal)]);
     if (isDead(rec)) return;
     this.encoder.launch(rec, this.encoder.resumePoint(rec));
   }
@@ -107,7 +117,7 @@ export class Recovery {
     const previous = rec.process;
     rec.generation += 1;
     this.ctx.options.observer?.restarted('tracks');
-    await previous?.stop();
+    await previous?.stop(DISCARD_STOP);
     if (rec.stopping) return;
     for (const name of await readdir(rec.dir).catch(() => [] as string[])) {
       if (/^seg-\d+\.(?:ts|m4s)$/.test(name) || name === 'init-ready.mp4') {
@@ -134,7 +144,7 @@ export class Recovery {
     const previous = rec.process;
     rec.generation += 1;
     this.ctx.options.observer?.restarted('seek');
-    await previous?.stop();
+    await previous?.stop(DISCARD_STOP);
     if (rec.stopping) return;
     rec.retried = false;
     this.encoder.launch(rec, index);

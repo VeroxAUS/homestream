@@ -91,6 +91,7 @@ export function createSessionRecord(input: SessionRecordInput): SessionRecord {
     retried: false,
     encoderDone: false,
     stopping: false,
+    stopController: new AbortController(),
     restart: null,
     parked: false,
     lastActivity: now,

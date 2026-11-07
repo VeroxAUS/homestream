@@ -23,12 +23,27 @@ export interface EncoderProcessOptions {
   onMemoryLimit?: (hit: MemoryLimitHit) => void;
 }
 
+export interface StopOptions {
+  /** How long ffmpeg may take to quit after `q` before its process tree is killed; 0 kills at once without sending `q`. */
+  graceMs?: number;
+}
+
+/** Ends of sessions and shutdown let ffmpeg finish its segment and release the GPU cleanly. */
+export const DEFAULT_STOP_GRACE_MS = 3000;
+
+/**
+ * For a run whose output is thrown away (track switch, seek restart): nothing is worth waiting for.
+ * Segments are written through temp files (`hls_flags temp_file`), so a kill leaves no torn segment.
+ */
+export const DISCARD_STOP: StopOptions = { graceMs: 0 };
+
 /** What the session manager needs from an encoder; tests substitute fakes so no ffmpeg runs. */
 export interface EncoderHandle {
   readonly pid: number | undefined;
   readonly exited: Promise<EncoderExit>;
   readonly running: boolean;
-  stop(graceMs?: number): Promise<void>;
+  /** Resolves once the process has exited (or could not be killed within a few seconds). */
+  stop(options?: StopOptions): Promise<void>;
 }
 
 const STDERR_LIMIT = 4000;
@@ -102,7 +117,7 @@ export class EncoderProcess implements EncoderHandle {
     try {
       options.onMemoryLimit?.(hit);
     } finally {
-      void this.stop(WATCHDOG_STOP_GRACE_MS);
+      void this.stop({ graceMs: WATCHDOG_STOP_GRACE_MS });
     }
   }
 
@@ -110,16 +125,18 @@ export class EncoderProcess implements EncoderHandle {
     return !this.done;
   }
 
-  async stop(graceMs = 3000): Promise<void> {
+  async stop({ graceMs = DEFAULT_STOP_GRACE_MS }: StopOptions = {}): Promise<void> {
     if (this.done) return;
-    try {
-      this.child.stdin?.write('q\n');
-      this.child.stdin?.end();
-    } catch {
-      // stdin already closed; fall through to the kill
+    if (graceMs > 0) {
+      try {
+        this.child.stdin?.write('q\n');
+        this.child.stdin?.end();
+      } catch {
+        // stdin already closed; fall through to the kill
+      }
+      const timer = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), graceMs).unref());
+      if ((await Promise.race([this.exited, timer])) !== 'timeout') return;
     }
-    const timer = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), graceMs).unref());
-    if ((await Promise.race([this.exited, timer])) !== 'timeout') return;
     if (this.pid !== undefined) await killTree(this.pid);
     await Promise.race([this.exited, new Promise((resolve) => setTimeout(resolve, 5000).unref())]);
   }
