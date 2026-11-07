@@ -2,6 +2,7 @@ import type { HealthResponse } from '@homestream/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { healthQuery } from '../api/queries';
+import { useEventStreamLive } from '../events/serverEvents';
 import styles from './HealthPill.module.css';
 
 type HealthTone = 'ok' | 'warn' | 'err' | 'unknown';
@@ -30,7 +31,8 @@ export function describeHealth(health: HealthResponse): HealthLabel {
  * the words below 1200 px instead of below 900 px; the full text stays as the accessible name and tooltip.
  */
 export function HealthPill({ compact = false }: { compact?: boolean }) {
-  const { data, isError } = useQuery(healthQuery());
+  const streamLive = useEventStreamLive();
+  const { data, isError } = useQuery(healthQuery(!streamLive));
   let label: HealthLabel = { tone: 'unknown', text: 'Checking...' };
   if (isError) label = { tone: 'err', text: 'Server unreachable' };
   else if (data) label = describeHealth(data);

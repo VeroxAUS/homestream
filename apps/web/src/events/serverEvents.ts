@@ -5,11 +5,30 @@ import {
   type DownloadEvent,
 } from '@homestream/shared';
 import type { QueryClient } from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
 import { afterHomeContent, whenIdle } from '../lib/startup';
 import { logger } from '../logger';
 import { clearDownloadProgress, downloadKey, setDownloadProgress } from './downloadProgress';
 
 let source: EventSource | null = null;
+let live = false;
+const liveListeners = new Set<() => void>();
+
+function setLive(value: boolean): void {
+  if (live === value) return;
+  live = value;
+  for (const listener of liveListeners) listener();
+}
+
+function subscribeLive(listener: () => void): () => void {
+  liveListeners.add(listener);
+  return () => liveListeners.delete(listener);
+}
+
+/** While the stream is open the server pushes every health change, so the health query does not need to poll. */
+export function useEventStreamLive(): boolean {
+  return useSyncExternalStore(subscribeLive, () => live);
+}
 
 function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }, raw: Event) {
   try {
@@ -26,8 +45,8 @@ function finishDownload(queryClient: QueryClient, event: DownloadEvent): void {
 }
 
 /**
- * Opens the one shared `/api/events` stream. It only updates the cache: health snapshots while a dashboard is open, and
- * the progress of pending downloads. Nothing here polls, and a handler does no work beyond the affected entry.
+ * Opens the one shared `/api/events` stream. It only updates the cache: health snapshots and the progress of pending
+ * downloads. Nothing here polls, and a handler does no work beyond the affected entry.
  */
 export function startServerEvents(queryClient: QueryClient): void {
   if (source || typeof EventSource === 'undefined') return;
@@ -36,7 +55,6 @@ export function startServerEvents(queryClient: QueryClient): void {
   let failed = false;
 
   stream.addEventListener('health', (raw) => {
-    if (!window.location.pathname.startsWith('/dashboard')) return;
     const health = parse(HealthResponseSchema, raw);
     if (health) queryClient.setQueryData(['health'], health);
   });
@@ -53,9 +71,14 @@ export function startServerEvents(queryClient: QueryClient): void {
   }
   stream.onerror = () => {
     failed = true;
+    if (!live) return;
+    setLive(false);
+    // The pill polls again from now on; this refetch makes it notice a server that is gone.
+    void queryClient.invalidateQueries({ queryKey: ['health'] });
   };
   // After a dropped connection (a server restart) the cached snapshots may be out of date.
   stream.onopen = () => {
+    setLive(true);
     if (!failed) return;
     failed = false;
     logger.info('events', 'event stream reconnected');
@@ -74,4 +97,5 @@ export function startServerEventsWhenIdle(queryClient: QueryClient): void {
 export function stopServerEvents(): void {
   source?.close();
   source = null;
+  setLive(false);
 }

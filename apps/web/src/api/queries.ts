@@ -48,12 +48,13 @@ export function createQueryClient(): QueryClient {
 export const homeQuery = () =>
   queryOptions({ queryKey: ['home'], queryFn: fetcher('/api/home', HomeResponseSchema), staleTime: 30_000 });
 
-export const healthQuery = () =>
+/** `polling` is false while the event stream delivers health changes by itself. */
+export const healthQuery = (polling = true) =>
   queryOptions({
     queryKey: ['health'],
     queryFn: fetcher('/api/health', HealthResponseSchema),
     staleTime: 30_000,
-    refetchInterval: HEALTH_REFRESH_MS,
+    refetchInterval: polling ? HEALTH_REFRESH_MS : false,
     refetchIntervalInBackground: false,
   });
 

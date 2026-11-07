@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOME_CONTENT_MARK } from '../lib/startup';
 import { download, health } from '../test/fixtures';
 import { clearDownloadProgress, downloadKey, setDownloadProgress, useDownloadProgress } from './downloadProgress';
-import { startServerEvents, startServerEventsWhenIdle, stopServerEvents } from './serverEvents';
+import { startServerEvents, startServerEventsWhenIdle, stopServerEvents, useEventStreamLive } from './serverEvents';
 import { usePendingDownload } from './usePendingDownload';
 
 class FakeEventSource {
@@ -111,17 +111,29 @@ describe('serverEvents', () => {
     expect(FakeEventSource.instances).toHaveLength(0);
   });
 
-  it('keeps health snapshots in the cache while a dashboard is open', () => {
+  it('keeps health snapshots in the cache on every page and ignores malformed ones', () => {
     const stream = open();
-    window.history.pushState({}, '', '/');
     stream.emit('health', health('ok'));
-    expect(queryClient.getQueryData(['health'])).toBeUndefined();
-    window.history.pushState({}, '', '/dashboard/health');
+    expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'ok' });
     stream.emit('health', health('warn', ['warn']));
     expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'warn' });
     stream.emit('health', '{not json');
     stream.emit('health', { wrong: true });
     expect(queryClient.getQueryData(['health'])).toMatchObject({ overall: 'warn' });
+  });
+
+  it('reports whether the stream is live, and asks for a fresh health answer when it drops', () => {
+    const { result } = renderHook(() => useEventStreamLive());
+    expect(result.current).toBe(false);
+    const stream = open();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    act(() => stream.onopen?.());
+    expect(result.current).toBe(true);
+    act(() => stream.onerror?.());
+    expect(result.current).toBe(false);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['health'] });
+    act(() => stream.onerror?.());
+    expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
   it('records download progress and ignores malformed events', () => {
@@ -156,8 +168,9 @@ describe('serverEvents', () => {
     stream.onopen?.();
     expect(invalidate).not.toHaveBeenCalled();
     stream.onerror?.();
+    invalidate.mockClear();
     stream.onopen?.();
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith();
     stream.onopen?.();
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
