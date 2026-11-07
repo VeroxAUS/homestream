@@ -2,7 +2,7 @@ import http from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SIZE } from '../../src/sourceproxy/blockCache.js';
 import type { SourceHandle } from '../../src/sourceproxy/proxy.js';
-import { MB, Reader, acquireSettled, cdn, installRigHooks, rig, sleep } from './bandwidthRig.js';
+import { MB, Reader, acquireSettled, installRigHooks, rig, sleep, upstreamRead } from './bandwidthRig.js';
 import { expectedBytes } from './stubCdn.js';
 
 installRigHooks();
@@ -64,9 +64,9 @@ async function finished(...readers: Array<{ ended: boolean; failed: boolean }>):
   expect(readers.some((reader) => reader.failed)).toBe(false);
 }
 
-/** Bytes the stub CDN wrote inside [lo, hi) since its served log had since entries, and how many of them it had already written before. */
-function cdnTraffic(lo: number, hi: number, since: number): { total: number; repeated: number } {
-  const intervals = cdn.served
+/** Bytes the proxy read from upstream inside [lo, hi) since its read log had since entries, and how many of them it had already read before. */
+function upstreamTraffic(lo: number, hi: number, since: number): { total: number; repeated: number } {
+  const intervals = upstreamRead
     .slice(since)
     .map((part) => ({ start: Math.max(part.start, lo), end: Math.min(part.end, hi - 1) }))
     .filter((part) => part.end >= part.start)
@@ -83,7 +83,7 @@ function cdnTraffic(lo: number, hi: number, since: number): { total: number; rep
   return { total, repeated: total - unique };
 }
 
-// A reader that ends a range early (its consumer moved on) can leave bytes already in flight; block edges add a little more.
+// A stream that ends a range early (it ran into stored blocks) has read a chunk or two past the cut; block edges add a little more.
 const EDGE_MB = 3;
 
 const LO = 100 * MB;
@@ -94,13 +94,13 @@ describe('one session, one download per byte range', () => {
   it('extractor ahead of the encoder: the encoder takes the bytes the extractor fetched', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://extractor-ahead', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const extractor = new Reader(handle.extractorUrl, LO, HI - 1);
     while (extractor.received < 15 * MB) await sleep(10);
     const encoder = new PacedReader(handle.url, LO, HI - 1, 20 * MB);
     await finished(extractor, encoder);
     expect(encoder.received).toBe(SPAN);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + EDGE_MB * MB);
   }, 60_000);
@@ -108,13 +108,13 @@ describe('one session, one download per byte range', () => {
   it('extractor behind the encoder: the extractor takes the bytes the encoder fetched', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://extractor-behind', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const encoder = new Reader(handle.url, LO, HI - 1);
     while (encoder.received < 15 * MB) await sleep(10);
     const extractor = new PacedReader(handle.extractorUrl, LO, HI - 1, 20 * MB);
     await finished(encoder, extractor);
     expect(extractor.received).toBe(SPAN);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + EDGE_MB * MB);
   }, 60_000);
@@ -122,11 +122,11 @@ describe('one session, one download per byte range', () => {
   it('both start together and the extractor is the faster reader: it leads, the encoder follows', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://extractor-fast', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const extractor = new PacedReader(handle.extractorUrl, LO, HI - 1, 40 * MB);
     const encoder = new PacedReader(handle.url, LO, HI - 1, 15 * MB);
     await finished(extractor, encoder);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + EDGE_MB * MB);
   }, 60_000);
@@ -134,11 +134,11 @@ describe('one session, one download per byte range', () => {
   it('both start together and the encoder is the faster reader: the extractor follows it', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://encoder-fast', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const encoder = new PacedReader(handle.url, LO, HI - 1, 40 * MB);
     const extractor = new PacedReader(handle.extractorUrl, LO, HI - 1, 15 * MB);
     await finished(encoder, extractor);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + EDGE_MB * MB);
   }, 60_000);
@@ -146,12 +146,12 @@ describe('one session, one download per byte range', () => {
   it('extractor starts a preroll behind the encoder position and catches up: only the preroll is its own download', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://preroll', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const preroll = 12 * MB;
     const encoder = new PacedReader(handle.url, LO, HI - 1, 20 * MB);
     const extractor = new PacedReader(handle.extractorUrl, LO - preroll, HI - 1, 30 * MB);
     await finished(encoder, extractor);
-    const { total, repeated } = cdnTraffic(LO - preroll, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO - preroll, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + preroll + EDGE_MB * MB);
   }, 60_000);
@@ -159,13 +159,13 @@ describe('one session, one download per byte range', () => {
   it('a stream that runs into blocks another stream stored ahead of it stops downloading them', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://runs-into', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const encoder = new PacedReader(handle.url, LO, HI - 1, 12 * MB);
     await sleep(300);
     const extractor = new Reader(handle.extractorUrl, LO + 20 * MB, HI - 1);
     await finished(extractor, encoder);
     expect(encoder.received).toBe(SPAN);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(SPAN + EDGE_MB * MB);
   }, 60_000);
@@ -173,13 +173,13 @@ describe('one session, one download per byte range', () => {
   it('a reader far behind the other one finds everything in the cache while the gap fits it', async () => {
     const proxy = rig({ maxDownloadMbps: 400 });
     const handle = await acquireSettled(proxy, 'gw://gap-fits', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const encoder = new Reader(handle.url, LO, HI - 1);
     await finished(encoder);
     const extractor = new Reader(handle.extractorUrl, LO, HI - 1, true);
     await finished(extractor);
     expect(extractor.matches()).toBe(true);
-    expect(cdnTraffic(LO, HI, mark)).toEqual({ total: SPAN, repeated: 0 });
+    expect(upstreamTraffic(LO, HI, mark)).toEqual({ total: SPAN, repeated: 0 });
   }, 60_000);
 
   // Documents the capacity limit: an extractor that ran alone is not held (no encoder reader to stay close to), and LRU gives
@@ -188,14 +188,14 @@ describe('one session, one download per byte range', () => {
     const cap = 32 * MB;
     const proxy = rig({ maxDownloadMbps: 400, perSourceCapBytes: cap, globalCapBytes: cap });
     const handle = await acquireSettled(proxy, 'gw://gap-exceeds', 'session-1');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const extractor = new Reader(handle.extractorRunUrl(1), LO, HI - 1);
     await finished(extractor);
     expect(extractor.received).toBe(SPAN);
     const encoder = new Reader(handle.url, LO, HI - 1, true);
     await finished(encoder);
     expect(encoder.matches()).toBe(true);
-    const { total, repeated } = cdnTraffic(LO, HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, HI, mark);
     expect(repeated).toBeLessThanOrEqual(SPAN + 2 * BLOCK_SIZE);
     expect(total).toBeLessThanOrEqual(2 * SPAN + 2 * BLOCK_SIZE);
   }, 60_000);
@@ -220,7 +220,7 @@ describe('extractor lead over the encoder', () => {
 
   it('a fast extractor and a slower encoder on a source larger than the cache download each range once', async () => {
     const handle = await session('lead-once');
-    const mark = cdn.served.length;
+    const mark = upstreamRead.length;
     const encoder = new PacedReader(handle.url, LO, LONG_HI - 1, 15 * MB, true);
     while (encoder.received === 0) await sleep(5);
     const extractor = new Reader(handle.extractorRunUrl(1), LO + AHEAD, LONG_HI - 1);
@@ -228,7 +228,7 @@ describe('extractor lead over the encoder', () => {
     expect(encoder.received).toBe(LONG);
     expect(encoder.matches()).toBe(true);
     expect(extractor.received).toBe(LONG - AHEAD);
-    const { total, repeated } = cdnTraffic(LO, LONG_HI, mark);
+    const { total, repeated } = upstreamTraffic(LO, LONG_HI, mark);
     expect(repeated).toBeLessThanOrEqual(EDGE_MB * MB);
     expect(total).toBeLessThanOrEqual(LONG + EDGE_MB * MB);
   }, 60_000);

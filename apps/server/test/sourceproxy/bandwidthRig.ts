@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 import { createSilentLogger } from '../../src/logger.js';
 import type { ProbeResult } from '../../src/playback/probe.js';
 import { SourceProxy, type SourceHandle } from '../../src/sourceproxy/proxy.js';
+import { UpstreamClient, rangeInfo } from '../../src/sourceproxy/upstream.js';
 import { expectedBytes, startStubCdn, type StubCdn } from './stubCdn.js';
 
 export const MB = 1024 * 1024;
@@ -17,12 +18,45 @@ export const cdn = new Proxy({} as StubCdn, {
   get: (_target, key) => (state.cdn as unknown as Record<string | symbol, unknown>)[key],
 });
 
+/**
+ * Byte intervals (inclusive) the proxy took out of upstream responses, in the order it read them. Unlike `cdn.served`, this
+ * leaves out what the stub wrote into the kernel's socket buffers but the proxy never read before it closed the response:
+ * Linux buffers several MB there while the proxy waits on a slow client, Windows almost none.
+ */
+export const upstreamRead: Array<{ start: number; end: number }> = [];
+
+/** Logs every chunk the proxy's upstream client hands to its reader into `upstreamRead`. */
+function recordUpstreamReads(): () => void {
+  const original = UpstreamClient.prototype.request;
+  UpstreamClient.prototype.request = async function (this: UpstreamClient, url, range, signal) {
+    const response = await original.call(this, url, range, signal);
+    let at = rangeInfo(response)?.start ?? 0;
+    const iterate = response[Symbol.asyncIterator].bind(response) as () => AsyncIterable<Buffer>;
+    const counted = async function* (): AsyncGenerator<Buffer, undefined> {
+      for await (const chunk of iterate()) {
+        upstreamRead.push({ start: at, end: at + chunk.length - 1 });
+        at += chunk.length;
+        yield chunk;
+      }
+      return undefined;
+    };
+    (response as unknown as { [Symbol.asyncIterator]: typeof counted })[Symbol.asyncIterator] = counted;
+    return response;
+  };
+  return () => {
+    UpstreamClient.prototype.request = original;
+  };
+}
+
 /** Starts the stub CDN once per test file and tears proxies and readers down after every test. */
 export function installRigHooks(): void {
+  let restore = (): void => undefined;
   beforeAll(async () => {
     state.cdn = await startStubCdn({ size: 400 * MB });
+    restore = recordUpstreamReads();
   });
   afterAll(async () => {
+    restore();
     await state.cdn?.close();
   });
   afterEach(async () => {
