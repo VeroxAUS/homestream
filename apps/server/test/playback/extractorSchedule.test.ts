@@ -84,35 +84,50 @@ describe('extractorLimit', () => {
   const lead = (segments: number, over: Partial<EncoderView> = {}) =>
     encoder({ headSegment: 150 + segments, playerSegment: 150, ...over });
 
+  /** Past the start segment, the player this many segments behind a head that is already 10+ segments in: a warm encoder with a short lead. */
+  const warmShortLead = (over: Partial<EncoderView> = {}) => encoder({ headSegment: 162, playerSegment: 159, ...over });
+
   describe('heavy source', () => {
     it('holds a fresh extractor to the warm-up rate even in its burst, so the first segments are not starved', () => {
       expect(extractorLimit({ heavy: true, bursting: true, encoder: encoder() })).toBe(WARMUP_BYTES_PER_SEC);
-      expect(extractorLimit({ heavy: true, bursting: true, encoder: lead(5, { speed: 1.8 }) })).toBe(
+      expect(extractorLimit({ heavy: true, bursting: true, encoder: lead(3, { speed: 1.8 }) })).toBe(
         WARMUP_BYTES_PER_SEC,
       );
-      expect(extractorLimit({ heavy: true, bursting: false, encoder: lead(5, { speed: 1.8 }) })).toBe(
+      expect(extractorLimit({ heavy: true, bursting: false, encoder: lead(3, { speed: 1.8 }) })).toBe(
         WARMUP_BYTES_PER_SEC,
       );
     });
 
     it('lets the burst run free once the encoder is warm and fast enough', () => {
-      expect(extractorLimit({ heavy: true, bursting: true, encoder: lead(10, { speed: 2.4 }) })).toBeNull();
+      expect(extractorLimit({ heavy: true, bursting: true, encoder: warmShortLead({ speed: 2.4 }) })).toBeNull();
       expect(
-        extractorLimit({ heavy: true, bursting: true, encoder: lead(4, { speed: 2.4, recentSpeed: 2.5 }) }),
+        extractorLimit({ heavy: true, bursting: true, encoder: lead(3, { speed: 2.4, recentSpeed: 2.5 }) }),
       ).toBeNull();
     });
 
-    it('still backs off to the starved rate when a warm encoder slows below the burst floor', () => {
+    it('still backs off to the starved rate when a warm encoder with a short lead slows below the burst floor', () => {
       expect(
-        extractorLimit({ heavy: true, bursting: true, encoder: lead(12, { speed: BURST_FLOOR_SPEED - 0.1 }) }),
+        extractorLimit({ heavy: true, bursting: true, encoder: warmShortLead({ speed: BURST_FLOOR_SPEED - 0.1 }) }),
       ).toBe(STARVED_BYTES_PER_SEC);
     });
 
-    it('uses the normal lead and speed rules after the burst', () => {
-      expect(extractorLimit({ heavy: true, bursting: false, encoder: lead(12, { speed: 2.4 }) })).toBeNull();
-      expect(extractorLimit({ heavy: true, bursting: false, encoder: lead(12, { speed: 1.5 }) })).toBe(
+    it('is starved after the burst while the lead is short, whatever the speed', () => {
+      expect(extractorLimit({ heavy: true, bursting: false, encoder: warmShortLead({ speed: 2.4 }) })).toBe(
         STARVED_BYTES_PER_SEC,
       );
+      expect(extractorLimit({ heavy: true, bursting: false, encoder: warmShortLead({ speed: 1.5 }) })).toBe(
+        STARVED_BYTES_PER_SEC,
+      );
+    });
+
+    it('applies no fixed throttle once the lead is healthy: the guaranteed share governs, warm-up included', () => {
+      for (const bursting of [true, false]) {
+        expect(extractorLimit({ heavy: true, bursting, encoder: lead(4, { speed: 1.5 }) })).toBeNull();
+        expect(extractorLimit({ heavy: true, bursting, encoder: lead(5, { speed: 1.0 }) })).toBeNull();
+        expect(
+          extractorLimit({ heavy: true, bursting, encoder: lead(9, { speed: BURST_FLOOR_SPEED - 0.2 }) }),
+        ).toBeNull();
+      }
     });
 
     it('does not limit once the encoder is done', () => {
@@ -134,17 +149,15 @@ describe('extractorLimit', () => {
       );
     });
 
-    it('without a burst the extractor needs 30 s of lead and 1.6x', () => {
-      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(7, { speed: 3 }) })).toBe(
+    it('without a burst the extractor is starved below the low lead (15 s) and unthrottled from it, so the share governs', () => {
+      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(3, { speed: 3 }) })).toBe(
         STARVED_BYTES_PER_SEC,
       );
-      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(8, { speed: 3 }) })).toBeNull();
-      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(8, { speed: 1.59 }) })).toBe(
-        STARVED_BYTES_PER_SEC,
-      );
-      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(8, { speed: 3, recentSpeed: 1.5 }) })).toBe(
-        STARVED_BYTES_PER_SEC,
-      );
+      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(4, { speed: 3 }) })).toBeNull();
+      expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(4, { speed: 1.2 }) })).toBeNull();
+      expect(
+        extractorLimit({ heavy: false, bursting: false, encoder: lead(8, { speed: 3, recentSpeed: 1.5 }) }),
+      ).toBeNull();
       expect(extractorLimit({ heavy: false, bursting: false, encoder: lead(8) })).toBeNull();
     });
 

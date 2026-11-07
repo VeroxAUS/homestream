@@ -3,7 +3,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { FastifyBaseLogger } from 'fastify';
 import { AppError } from '../errors.js';
-import { DownloadGate } from '../network/downloadGate.js';
+import { DownloadGate, atLeastExtractorShare } from '../network/downloadGate.js';
 import { DEFAULT_MAX_DOWNLOAD_MBPS, DEFAULT_READ_AHEAD_RESUME_SEC, DEFAULT_READ_AHEAD_SEC } from '../network/limits.js';
 import type { ReadAheadState } from '../network/readAhead.js';
 import type { ProbeResult, ProbeRunner } from '../playback/probe.js';
@@ -294,7 +294,7 @@ export class SourceProxy {
         entry.touch();
       },
       setExtractorLimit: (bytesPerSec) => {
-        entry.extractorLimit = bytesPerSec;
+        entry.extractorLimit = atLeastExtractorShare(bytesPerSec, this.gate.capMbps);
       },
       sizeBytes: entry.size,
       release: () => {

@@ -4,13 +4,23 @@ import type { EncoderExit, EncoderHandle, EncoderProcessOptions } from './encode
 import { burstActive } from './extractorSchedule.js';
 import type { MemoryLimitHit, MemoryWatchdog } from './memoryWatchdog.js';
 import type { PidRegistry } from './pidRegistry.js';
+import { SEGMENT_SECONDS } from './playlist.js';
 import type { ProbeResult } from './probe.js';
 import { SUBTITLE_DIR, SubtitleRun, type RunKind } from './subtitleRun.js';
 import { SubtitleStore } from './subtitleStore.js';
 
 export const MAX_TEXT_SUBTITLES = 10;
-/** An extractor starts this far before the position it is needed at, so cues already on screen there are not missed. */
-const PREROLL_SEC = 40;
+/**
+ * An extractor starts this far before the start of the segment it is needed for, so cues already on screen there are not
+ * missed. A run's cues are trusted from 10 s after its start, so this must stay above 10 s for the segment to be covered;
+ * every second more is read over the capped link before the first useful cue.
+ */
+export const PREROLL_SEC = 12;
+/**
+ * A failed run's retry starts further back than a fresh run: its predecessor's coverage ends 6 s before the head it had
+ * committed, and the retry's own trusted coverage starts 10 s after its start, so anything under 16 s leaves a gap.
+ */
+const RETRY_PREROLL_SEC = 20;
 /** A request this close ahead of a running extractor's head is simply waited for: 25x realtime gets there in seconds. */
 const NEAR_AHEAD_SEC = 120;
 /** A new run is unthrottled until it has read this far past the position it was started for (60 s of cues plus the coverage lag), but never for longer than `BURST_MAX_MS`. */
@@ -19,6 +29,11 @@ const BURST_AHEAD_SEC = 72;
 const HANDOVER_SEC = 10;
 const DEFAULT_MAX_RUNS = 2;
 const ENGLISH = /^en(g|glish)?$/i;
+
+/** Where a run needed for `sec` starts: `PREROLL_SEC` before the segment holding `sec`, which the player asks for first. */
+export function prerollStart(sec: number): number {
+  return Math.max(0, Math.floor(sec / SEGMENT_SECONDS) * SEGMENT_SECONDS - PREROLL_SEC);
+}
 
 export interface TextTrack {
   index: number;
@@ -111,7 +126,7 @@ export class SubtitleExtractor {
   /** Starts the main run; call together with the encoder. */
   start(startSec: number): void {
     if (this.runs.length > 0 || this.options.tracks.length === 0) return;
-    this.launch('main', Math.max(0, Math.floor(startSec - PREROLL_SEC)), false).needSec = startSec + BURST_AHEAD_SEC;
+    this.launch('main', prerollStart(startSec), false).needSec = startSec + BURST_AHEAD_SEC;
   }
 
   /**
@@ -156,7 +171,7 @@ export class SubtitleExtractor {
     // A run that started before `sec` covers it as soon as its head is a few seconds past; a second run there would only split the bandwidth.
     if (this.active().some((run) => !this.isHeld(run) && run.ss <= sec && sec <= run.headSec + NEAR_AHEAD_SEC)) return;
     if (this.launching) return;
-    const ss = Math.max(0, Math.floor(sec - PREROLL_SEC));
+    const ss = prerollStart(sec);
     this.launching = this.launchSeek(sec, ss).finally(() => {
       this.launching = null;
     });
@@ -253,7 +268,7 @@ export class SubtitleExtractor {
   /** A failed run is restarted once from shortly before where it stopped; the second failure ends extraction. */
   private recover(run: SubtitleRun, exit: EncoderExit): void {
     if (!run.retried) {
-      this.launch(run.kind, Math.max(0, Math.floor(run.committedHeadSec - PREROLL_SEC)), true);
+      this.launch(run.kind, Math.max(0, Math.floor(run.committedHeadSec - RETRY_PREROLL_SEC)), true);
       return;
     }
     this.gaveUp = true;

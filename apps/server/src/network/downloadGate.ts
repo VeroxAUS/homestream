@@ -16,6 +16,20 @@ export const HIGH_LEAD_SEC = 60;
 export const LOW_LEAD_MEMORY_MS = 200;
 /** While an at-risk encoder is waiting, other encoders get only tokens beyond this much of the cap (seconds), which covers the reader's gap between a grant and its next request. */
 const SURPLUS_RESERVE_SEC = 0.05;
+/**
+ * Fraction of the cap that waiting extractor reads are served first at, whenever no waiting encoder is below `LOW_LEAD_SEC`.
+ * A priority rate, not a reservation: tokens the extractors do not ask for go to the other readers.
+ */
+export const EXTRACTOR_SHARE = 0.2;
+
+export function extractorShareBytesPerSec(capMbps: number): number {
+  return mbpsToBytesPerSec(capMbps) * EXTRACTOR_SHARE;
+}
+
+/** A pacing rate for extractor reads, lifted to the guaranteed share when it would undercut it; null stays unlimited. */
+export function atLeastExtractorShare(bytesPerSec: number | null, capMbps: number): number | null {
+  return bytesPerSec === null ? null : Math.max(bytesPerSec, extractorShareBytesPerSec(capMbps));
+}
 
 /** What other encoders may take while a session with a small lead is waiting. */
 export interface Guard {
@@ -73,24 +87,33 @@ function isHeldBack(priority: Priority, guard: Guard | null): boolean {
   return priority.lead > HIGH_LEAD_SEC || !guard.surplus;
 }
 
+/** Extractors wait for an at-risk encoder, aging included: video must not stall for subtitles. */
+function extractorBlocked(priority: Priority, atRisk: boolean): boolean {
+  return atRisk && priority.rank === RANK_EXTRACTOR;
+}
+
 /**
  * Picks the waiter to serve next. Pure so the order can be tested without time passing. With a guard, encoders that
- * are not at risk of stalling are skipped, aging included, so the session about to stall gets the tokens first.
+ * are not at risk of stalling are skipped, aging included, so the session about to stall gets the tokens first, and no
+ * extractor is served while an encoder is at risk. When `shareReady` and no encoder is at risk, a waiting extractor goes
+ * before everything else: that is the extractors' guaranteed share of the cap.
  */
 export function pickNext<T extends { since: number; seq: number; priority: PriorityInput }>(
   waiters: readonly T[],
   nowMs: number,
   guard: Guard | null = null,
+  shareReady = false,
 ): T | undefined {
+  const atRisk = guard !== null || waiters.some((waiter) => isAtRisk(resolvePriority(waiter.priority)));
   let best: T | undefined;
   let bestKey: [number, number, number] = [0, 0, 0];
   for (const waiter of waiters) {
     const priority = resolvePriority(waiter.priority);
-    if (isHeldBack(priority, guard)) continue;
+    if (isHeldBack(priority, guard) || extractorBlocked(priority, atRisk)) continue;
     const aged = nowMs - waiter.since >= AGING_MS;
-    const key: [number, number, number] = aged
-      ? [-1, waiter.since, waiter.seq]
-      : [priority.rank, priority.lead, waiter.seq];
+    let key: [number, number, number] = [priority.rank, priority.lead, waiter.seq];
+    if (aged) key = [-1, waiter.since, waiter.seq];
+    if (shareReady && priority.rank === RANK_EXTRACTOR) key = [-2, priority.lead, waiter.seq];
     if (
       !best ||
       key[0] < bestKey[0] ||
@@ -111,6 +134,8 @@ export class DownloadGate {
   readonly meter = new RateMeter();
   private readonly bucket: TokenBucket;
   private readonly reserveBytes: number;
+  /** Pays out the extractors' guaranteed share. It orders grants only; the main bucket still caps the total. */
+  private readonly share: TokenBucket;
   private readonly waiters: Waiter[] = [];
   private timer: unknown = null;
   private guardTimer = false;
@@ -126,6 +151,8 @@ export class DownloadGate {
     const rate = mbpsToBytesPerSec(capMbps);
     this.bucket = new TokenBucket(rate, rate * BUCKET_DEPTH_SEC, clock.now());
     this.reserveBytes = rate * SURPLUS_RESERVE_SEC;
+    const shareRate = rate * EXTRACTOR_SHARE;
+    this.share = new TokenBucket(shareRate, shareRate * BUCKET_DEPTH_SEC, clock.now());
   }
 
   get queued(): number {
@@ -137,7 +164,13 @@ export class DownloadGate {
     const now = this.clock.now();
     if (signal?.aborted) return Promise.resolve();
     const resolved = resolvePriority(priority);
-    if (this.waiters.length === 0 && this.bucket.canTake(now) && !isHeldBack(resolved, this.guard(now))) {
+    const guard = this.guard(now);
+    if (
+      this.waiters.length === 0 &&
+      this.bucket.canTake(now) &&
+      !isHeldBack(resolved, guard) &&
+      !extractorBlocked(resolved, guard !== null)
+    ) {
       this.grantNow(bytes, now);
       return Promise.resolve();
     }
@@ -221,7 +254,8 @@ export class DownloadGate {
         return;
       }
       const guard = this.guard(now);
-      const next = pickNext(this.waiters, now, guard);
+      const shareReady = this.share.canTake(now);
+      const next = pickNext(this.waiters, now, guard, shareReady);
       if (!next) {
         // Everyone waiting is held back for a session about to stall: look again when it has been quiet long enough or the reserve is full.
         const quiet = this.atRiskAt + LOW_LEAD_MEMORY_MS - now + 1;
@@ -236,6 +270,8 @@ export class DownloadGate {
       this.waiters.splice(this.waiters.indexOf(next), 1);
       if (next.onAbort) next.signal?.removeEventListener('abort', next.onAbort);
       this.grantNow(next.bytes, now);
+      // Only a ready share is spent, so an extractor served while alone never runs up a debt that would cost it the share later.
+      if (shareReady && resolvePriority(next.priority).rank === RANK_EXTRACTOR) this.share.take(next.bytes, now);
       next.grant();
     }
   }

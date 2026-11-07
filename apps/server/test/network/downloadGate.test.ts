@@ -41,9 +41,15 @@ describe('pickNext', () => {
   });
 
   it('serves a request that waited past the aging time ahead of everything that has not', () => {
-    const waiters = [waiter(encoder(0), 1000, 1), waiter({ rank: RANK_EXTRACTOR, lead: 0 }, 0, 2)];
+    const waiters = [waiter(encoder(30), 1000, 1), waiter({ rank: RANK_EXTRACTOR, lead: 0 }, 0, 2)];
     expect(pickNext(waiters, AGING_MS - 1)?.seq).toBe(1);
     expect(pickNext(waiters, AGING_MS)?.seq).toBe(2);
+  });
+
+  it('never lets aging lift an extractor above an encoder with less than the low lead', () => {
+    const waiters = [waiter(encoder(0), 1000, 1), waiter({ rank: RANK_EXTRACTOR, lead: 0 }, 0, 2)];
+    expect(pickNext(waiters, AGING_MS)?.seq).toBe(1);
+    expect(pickNext(waiters, AGING_MS * 10)?.seq).toBe(1);
   });
 
   it('returns nothing for no waiters', () => {
@@ -121,7 +127,7 @@ describe('DownloadGate', () => {
     const gate = new DownloadGate(10, clock);
     let extractor = 0;
     const encoderLoop = async (): Promise<void> => {
-      for (;;) await gate.acquire(16_384, encoder(0));
+      for (;;) await gate.acquire(16_384, encoder(30));
     };
     void encoderLoop();
     const extractorLoop = async (): Promise<void> => {

@@ -251,7 +251,7 @@ describe('caching', () => {
   }, 60_000);
 
   it('paces extractor reads from upstream to the limit, but never the encoder reads', async () => {
-    const { proxy } = rig();
+    const { proxy } = rig({ maxDownloadMbps: 40 });
     const handle = await proxy.acquire('gw://starve', 'session-1');
     await settleHead(handle);
     const length = 2 * MB;

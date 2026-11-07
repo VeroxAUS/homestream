@@ -120,7 +120,14 @@ describe('pickNext with a guard', () => {
   });
 
   it('keeps extractor readers on their own rank', () => {
-    expect(pickNext([waiter({ rank: RANK_EXTRACTOR, lead: 200 }, 0, 1)], 0, { surplus: false })?.seq).toBe(1);
+    expect(pickNext([waiter({ rank: RANK_EXTRACTOR, lead: 200 }, 0, 1)], 0, null)?.seq).toBe(1);
+  });
+
+  it('serves no extractor while an at-risk encoder is waiting or was a moment ago', () => {
+    const extractor = waiter({ rank: RANK_EXTRACTOR, lead: 200 }, 0, 1);
+    expect(pickNext([extractor], 0, { surplus: false })).toBeUndefined();
+    expect(pickNext([extractor], 0, { surplus: true })).toBeUndefined();
+    expect(pickNext([extractor, small(2)], 10_000, null)?.seq).toBe(2);
   });
 });
 
