@@ -58,7 +58,11 @@ export default defineConfig({
     : [['list'], ['html', { open: 'never', outputFolder: 'reports/e2e-report' }]],
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [
-    { name: 'plain', testMatch: 'smoke.spec.ts', use: { baseURL: `http://127.0.0.1:${ports.serverPlain}` } },
+    {
+      name: 'plain',
+      testMatch: ['smoke.spec.ts', 'resume.spec.ts'],
+      use: { baseURL: `http://127.0.0.1:${ports.serverPlain}` },
+    },
     { name: 'telemetry', testMatch: 'telemetry.spec.ts', use: { baseURL: `http://127.0.0.1:${ports.serverStub}` } },
   ],
   webServer: [

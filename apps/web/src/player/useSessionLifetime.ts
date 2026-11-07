@@ -1,6 +1,8 @@
 import type { PingState } from '@homestream/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { beaconProgress, sendProgress, stopSession } from './sessionApi';
+import { invalidateWatchState } from './watchState';
 
 const PING_INTERVAL_MS = 10_000;
 
@@ -59,6 +61,7 @@ export function useProgressPings(
  * button or a closing page. A last ping goes first so the saved position is the final one, then DELETE.
  */
 export function useSessionEnd(sessionId: string, last: RefObject<LastKnown>): () => Promise<void> {
+  const queryClient = useQueryClient();
   const ended = useRef(false);
   const pendingUnmount = useRef<number | undefined>(undefined);
 
@@ -66,8 +69,9 @@ export function useSessionEnd(sessionId: string, last: RefObject<LastKnown>): ()
     if (ended.current) return;
     ended.current = true;
     await sendProgress(sessionId, last.current.positionSec, 'paused');
+    invalidateWatchState(queryClient);
     await stopSession(sessionId);
-  }, [sessionId, last]);
+  }, [sessionId, last, queryClient]);
 
   useEffect(() => {
     window.clearTimeout(pendingUnmount.current);
