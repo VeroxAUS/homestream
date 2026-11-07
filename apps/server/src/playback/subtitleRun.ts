@@ -10,7 +10,7 @@ import type { PidRegistry } from './pidRegistry.js';
 import { takeCueBlocks, type Cue } from './vtt.js';
 
 export const SUBTITLE_DIR = 'subs';
-/** Marks extractor processes in the pid registry; it is part of every extractor command line (`-f webvtt`). */
+/** Output format of every extractor. It is generic: the pid registry matches an extractor by its input URL, never by this. */
 export const EXTRACTOR_MARKER = 'webvtt';
 /** A cue can start this long before a seek point and still be dropped by the seek; segments are trusted from `ss + MAX_CUE_SEC`. */
 const MAX_CUE_SEC = 10;
@@ -166,7 +166,7 @@ export class SubtitleRun {
     });
     const pid = this.process.pid;
     if (pid !== undefined) {
-      options.registry.add({ pid, sessionId: options.sessionId, startedAt: Date.now(), match: EXTRACTOR_MARKER });
+      options.registry.add({ pid, sessionId: options.sessionId, startedAt: Date.now(), match: options.inputUrl });
     }
     this.finished = this.watch(pid);
   }

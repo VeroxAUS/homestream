@@ -1,6 +1,8 @@
 export interface FfmpegProcess {
   pid: number;
   commandLine: string | null;
+  /** Process creation time in epoch ms; null or absent when it could not be read. */
+  createdAtMs?: number | null;
 }
 
 export interface PidRegistryEntry {
