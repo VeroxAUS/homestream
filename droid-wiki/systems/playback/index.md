@@ -2,92 +2,76 @@
 
 Active contributors: VeroxAUS
 
-Playback turns a title request and device capabilities into seekable, server-encoded HLS. The manager waits for usable video before returning success and can try another ranked source when an automatic start fails (`apps/server/src/playback/manager.ts`).
+## Purpose
 
-## Layout and key abstractions
+Playback turns an automatic title request into device-compatible HLS, with a first-segment readiness gate and bounded source fallback. `PlaybackManager` in `apps/server/src/playback/manager.ts` exposes the route-facing facade while focused modules own startup, processes, recovery, serving and subtitles.
 
-| Area                  | Implementation                                                                                 | Detail                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Orchestration         | `apps/server/src/playback/manager.ts`                                                          | Session reservation, startup, serving, changes and cleanup |
-| Session state         | `apps/server/src/playback/session.ts`                                                          | `SessionRecord` and client/activity projections            |
-| Output policy         | `apps/server/src/playback/decision.ts`, `apps/server/src/playback/ffmpegArgs.ts`               | [Encoding](encoding.md)                                    |
-| Tracks and extraction | `apps/server/src/playback/defaultSubtitle.ts`, `apps/server/src/playback/subtitleExtractor.ts` | [Subtitles](subtitles.md)                                  |
-| Resource controls     | `apps/server/src/playback/monitor.ts`, `apps/server/src/playback/memoryWatchdog.ts`            | [Lifecycle](lifecycle.md)                                  |
-| HLS timeline          | `apps/server/src/playback/playlist.ts`                                                         | One variant and duration-derived manifests                 |
+## Layout and abstractions
 
-A `SessionRecord` in `apps/server/src/playback/session.ts` owns a `SourceHandle` from `apps/server/src/sourceproxy/proxy.ts`, probe, device/output decision, segment store, video process, progressive subtitle controller, generation token and player state. It is not a direct-play/remux decision or an adaptive-bitrate ladder.
+| Module | Responsibility |
+| --- | --- |
+| `apps/server/src/playback/context.ts` | Shared options, watchdog, registry and slots |
+| `apps/server/src/playback/sessionSlots.ts` | Reservations, records, draining and teardown |
+| `apps/server/src/playback/sessionStart.ts` | Discovery through first playable segment |
+| `apps/server/src/playback/encoderLifecycle.ts` | Launch/progress/park/resume |
+| `apps/server/src/playback/recovery.ts` | Failure retry, seeks and track reconfiguration |
+| `apps/server/src/playback/hlsServing.ts` | Manifests, safe init publication and segment waits |
+| `apps/server/src/playback/subtitleHandoff.ts` | Progressive subtitle HTTP readiness |
+| `apps/server/src/playback/readAheadPacing.ts` | Playhead feedback and extractor scheduling |
 
-The server pipeline is implemented independently of the current browser player. `apps/web/src/pages/PlayerPage.tsx` is a placeholder, so a Play link in the UI does not yet exercise this session-to-HLS flow. See [server](../../apps/server.md) for composition and [API](../../api/index.md) for the transport contract.
+`SessionRecord` in `apps/server/src/playback/session.ts` distinguishes public state from internal opening, generation, restart and parked state. Source handles belong to the [proxy](../source-proxy.md), not the encoder child.
 
-## Start-to-first-segment flow
-
-The thin POST handler validates the shared schema and returns **201** for a session or **202** for a tracked download (`apps/server/src/routes/sessions.ts`). Clients use `streamId: "auto"`; explicit IDs are still supported by the server contract.
+## Start control flow
 
 ```mermaid
-flowchart TD
-    Request[Play request] --> Existing{Existing tracked download?}
-    Existing -->|automatic and pending| Download[202 download response]
-    Existing -->|otherwise| Slot[Reserve one of two slots]
-    Slot --> Metadata[TMDB details and device upsert]
-    Metadata --> Plan[Plan ranked source candidates]
-    Plan --> Attempt[Acquire source and shared probe]
-    Attempt --> Tracks[Validate tracks and choose output]
-    Tracks --> Launch[Launch video and subtitle workers]
-    Launch --> First{First segment within deadline?}
-    First -->|yes| Session[201 ready session]
-    First -->|stream failure and candidate remains| Cleanup[Remove failed attempt]
-    Cleanup --> Attempt
-    First -->|exhausted| Error[Structured failure]
+graph TD
+    Request[Automatic Play] --> Pending{Pending download?}
+    Pending -->|yes| Tracking[202 tracking]
+    Pending -->|no| Reserve[Reserve slot]
+    Reserve --> Metadata[TMDB and device]
+    Metadata --> Candidates[Device-ordered candidates]
+    Candidates --> Cached{Cached source?}
+    Cached -->|no| Download[Probe and download handoff]
+    Download --> Tracking
+    Download -->|already playable| Acquire
+    Cached -->|yes| Acquire[Acquire proxy and probe]
+    Acquire --> Decision[Audio/subtitle/output decision]
+    Decision --> Launch[Register and launch]
+    Launch --> First[Wait first segment]
+    First --> Ready[201 session]
 ```
 
-1. **Reserve before asynchronous work.** `liveRecords().length + starting` must remain below **2**. Opening records are counted only by `starting`, avoiding double counting. A third start gets 429 `too_many_sessions` before resolution, probing or encoder creation. The reservation is released in `finally`; failed sessions do not occupy live slots (`apps/server/src/playback/manager.ts`, `apps/server/test/integration/session-limit.test.ts`).
-2. Fetch movie/show details, register/update the device and ask stream selection for at most **3** automatic candidates. The ranking/device ceiling is documented in [stream selection](../../features/stream-selection.md). Auto discovery needs an IMDb ID. An explicit ID gets one candidate and no cross-source fallback.
-3. If no cached source exists and downloads are configured, begin [TorBox tracking](../../features/downloads.md). A tracked job returns 202, not an active encoder. A link found already playable falls through to normal startup. An already-pending automatic download bypasses the slot and metadata work altogether.
-4. Acquire the candidate through the [source proxy](../source-proxy.md). A [prefetch](../../features/prefetch.md) can supply a shared successful probe and already-warmed bytes. Validate audio/subtitles, apply automatic subtitle defaults only when the request omitted the subtitle field, and derive the encode decision.
-5. Create a UUID output directory and provisional play row. Register the opening record, start video and text extraction together, then wait up to **30 seconds**, polling every **25 ms**, for the run's first finished segment.
-6. Once the file exists, mark ready, make the record visible in session listing/activity, emit `session.start` and return the response. A first-segment wait is separate from source-resolution/probe time, so 30 seconds is **not** an end-to-end request limit (`apps/server/src/playback/manager.ts`).
+`SessionStarter` in `apps/server/src/playback/sessionStart.ts` reuses existing automatic download tracking before reserving a slot or fetching metadata. Otherwise it reserves against the default **two video-session places**, upserts device capabilities, resolves metadata and plans candidates.
 
-The response preserves the requested start position, but encoding starts at `min(lastSegment, floor(startPositionSec / 4))`. It includes the successful `streamId` and earlier failed `{streamId, code}` attempts, never raw upstream links (`apps/server/src/playback/session.ts`).
+Automatic starts try at most **three cached candidates** using `apps/server/src/streams/rank.ts`. Known fitting tiers come first, above-device tiers ascend next, unknown resolution last. Uncached titles use one recommendation and can return 202 tracking without a session/playlist. Invalid user track selections and shutdown are not source faults and do not trigger another candidate.
 
-## Fallback and failure boundaries
+For each attempt, a unique owner acquires the raw stream through the proxy, reusing retained prefetch bytes/probe results. Uncached sources with listed size at least 20 MiB are rejected as downloading clips when actual size is below 10% of the listing (`apps/server/src/playback/placeholder.ts`). Redirect placeholder checks also run before clips are requested.
 
-Automatic cached starts try candidates sequentially. Resolution placeholders, probe failures, encoder failure after its internal retry, and first-segment timeout can all advance to the next candidate. Bad audio/subtitle selections and shutdown abort without fallback. An uncached single-candidate plan returns its specific error instead of wrapping it (`apps/server/src/playback/manager.ts`).
+Actual probe metadata drives audio/subtitle defaults and [encoding](encoding.md). The record/history row is registered, then video and text extraction start together. Startup waits up to **30 seconds by default**, polling every **25 ms**, for the first finished segment. Opening records are not returned by session lists/activity. A failed attempt is abandoned before fallback; a stuck old encoder prevents an overlapping replacement.
 
-An unsuccessful opening attempt is abandoned: generation is invalidated, video/subtitles stop, the source lease is released, its directory is removed and its provisional play row is deleted. No successful-start event is emitted. Exhausting cached candidates returns 502 `all_streams_failed` with the attempt list; explicit IDs retain their own error (`apps/server/test/integration/playback-fallback.test.ts`, `apps/server/src/errors.ts`).
+## HLS and continuing playback
 
-Once a session has started, the manager retries a failed encoder on the **same source** once; it does not switch to another candidate mid-play. Recovery, memory-limit behavior and residual failed records are covered in [lifecycle](lifecycle.md).
+`apps/server/src/playback/playlist.ts` builds duration-derived manifests on a four-second grid. HEVC uses fragmented MP4; H.264 uses MPEG-TS. Full-title manifests allow seeks to trigger production on demand rather than requiring a fully encoded title.
 
-## Video and subtitle scheduling
+[Lifecycle](lifecycle.md) explains serialized seek/track restarts, stable master metadata, complete init copies, disk parking, stop escalation and stuck-slot retention. [Subtitles](subtitles.md) explains unread versus silent intervals and bitmap burn-in.
 
-Video starts without waiting for all subtitles. Text extraction starts alongside it, but source height and estimated source bitrate determine how aggressively extraction may read. Heavy sources allow only one subtitle worker and limit it to **6 MiB/s during encoder warm-up** (`apps/server/src/playback/extractorSchedule.ts`).
+The facade also accepts progress pings and transactionally saves resume/history state; [viewing progress](../../features/viewing-progress.md) distinguishes watched time from position.
 
-At HEAD `7eb94ba`, the fresh-run burst clock starts after that warm-up, rather than spending its 25-second allowance while already throttled. This matters for initial cues on large sources and for new demand-driven seek runs. [Subtitles](subtitles.md#heavy-source-warm-up-and-the-burst-clock) gives the exact conditions; [network controls](../network.md) covers the separate aggregate download gate.
+## Modification entry points
 
-## HLS serving and client state
-
-The master has one video variant, with optional WebVTT renditions. HEVC uses fMP4 (`seg-N.m4s`, `init.mp4`); H.264 uses MPEG-TS (`seg-N.ts`). Video/subtitle playlists list the full duration from sequence zero and end with `EXT-X-ENDLIST`; they promise positions, not already-existing files (`apps/server/src/playback/playlist.ts`).
-
-A present video segment is served directly. A missing one waits for a nearby encoder or causes a serialized seek restart. FFmpeg's internal `enc.m3u8` is not the client playlist. HTTP responses are no-cache; segment/init byte counts feed viewing statistics (`apps/server/src/playback/manager.ts`, `apps/server/src/routes/sessions.ts`).
-
-Progress pings update position and `playing`, `paused` or `buffering` state; ordinary metadata polling does not keep a session alive. Pings and requested video segments feed the [network read-ahead window](../network.md). Persistence/resume semantics belong to [viewing progress](../../features/viewing-progress.md).
-
-## Modification and test pointers
-
-Change orchestration in `apps/server/src/playback/manager.ts`, policy in pure decision/track modules, and contract fields in [shared schemas](../../packages/shared.md). Keep handlers thin. Preserve reservation accounting, failed-attempt cleanup, first-segment success and generation checks when changing startup.
-
-Measured at `7eb94ba` on 2026-11-06: **27 source `.ts` files** under `apps/server/src/playback`, **24 `*.test.ts` files** (15 under `apps/server/test/playback`, 9 under `apps/server/test/encode`), and **4 non-test TypeScript helpers** in those test directories. Test/code file ratio is **24/27 = 0.89**, not line or branch coverage. Additional integration tests, routes and shared schemas are excluded. Scoped default-branch history has **1 unique human committer**, VeroxAUS, excluding bots.
-
-Offline fallback, reservation and default-subtitle integration tests use fake encoders. Real-media seek/output/extraction tests live under `apps/server/test/encode` and require the GPU tier. Tests were read, not run.
+Change candidate planning/first-segment behavior in `apps/server/src/playback/sessionStart.ts`; process ownership in `apps/server/src/playback/sessionSlots.ts`; recovery ordering in `apps/server/src/playback/recovery.ts`. Keep public schema changes in [shared contracts](../../packages/shared.md). Preserve the no-overlap and failed-start cleanup boundaries.
 
 ## Key source files
 
-| Repository-root path                                     | Role                                          |
-| -------------------------------------------------------- | --------------------------------------------- |
-| `apps/server/src/playback/manager.ts`                    | Startup/fallback coordinator                  |
-| `apps/server/src/playback/session.ts`                    | State and response fields                     |
-| `apps/server/src/playback/startTimeline.ts`              | Per-attempt startup timing trail              |
-| `apps/server/src/playback/playlist.ts`                   | HLS names, formats and full timeline          |
-| `apps/server/src/routes/sessions.ts`                     | Thin API and HLS handlers                     |
-| `apps/server/test/integration/playback-fallback.test.ts` | Source fallback and absence of residue        |
-| `apps/server/test/integration/session-limit.test.ts`     | Two-session limit and concurrent reservations |
-| `apps/server/test/encode/hls-encode.test.ts`             | Real encoded output expectations              |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/playback/manager.ts` | Facade and progress/track API |
+| `apps/server/src/playback/sessionStart.ts` | Startup attempts |
+| `apps/server/src/playback/sessionSlots.ts` | Admission and lifetime |
+| `apps/server/src/playback/sessionRecord.ts` | Record construction |
+| `apps/server/src/playback/placeholder.ts` | Clip classification |
+| `apps/server/src/playback/support.ts` | Options and shared helpers |
+
+## Measured scope
+
+At `5eefa37`, scoped `git ls-files` counts **42 `.ts` playback source files** and **35 `*.test.ts` files** in `apps/server/test/playback/` plus `apps/server/test/encode/`: **0.83 tests/source**. Helpers and integration tests elsewhere are excluded. This same overlapping playback scope is used on its subpages. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. No GPU/live tests were run.

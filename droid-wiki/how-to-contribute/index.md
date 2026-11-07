@@ -1,52 +1,49 @@
 # Contributing
 
-Work starts from `main` and ends with a focused pull request, tests, current generated contracts, and an honest account of checks run. `CONTRIBUTING.md` is the human guide; `AGENTS.md` adds the agent rules and product constraints.
+Start from `main`, keep changes focused, and finish with tests, current contracts, and an honest record of validation. `CONTRIBUTING.md` is the human guide; `AGENTS.md` supplies product constraints and agent rules.
 
-## Pick up a change
+## Pick up work
 
-Open an issue before work larger than a small fix. Use `.github/ISSUE_TEMPLATE/bug.yml` for reproducible failures and `.github/ISSUE_TEMPLATE/feature.yml` for proposals; security reports go privately through the Security tab as described in `SECURITY.md`. `.github/CODEOWNERS` assigns all paths to VeroxAUS.
+Discuss anything larger than a small fix in an issue first. Read the relevant [app](../apps/index.md), [feature](../features/index.md), or [system](../systems/index.md) page. Official review ownership is in `.github/CODEOWNERS`; security reports follow `SECURITY.md`, not public bug reports.
 
-Read [getting started](../overview/getting-started.md), then the relevant [feature](../features/index.md) or [system](../systems/index.md). The [web app](../apps/web/index.md) implements Home, search, movie/show details and Settings; its player and dashboard tabs remain placeholders. [Desktop](../apps/desktop.md) has tested support modules but no working Electron window, tray, supervisor or preload. TV is planned, not a workspace. Issue-template choices do not establish implementation status.
+| Change | Start here | Companion work |
+| --- | --- | --- |
+| HTTP | `packages/shared/src`, `apps/server/src/routes` | Schemas, thin handler, route docs, injection tests, regenerated OpenAPI |
+| Playback | `apps/server/src/playback` | Pure-rule tests, lifecycle/fallback tests, hot-path measurements |
+| Source access | `apps/server/src/gateway`, `apps/server/src/sourceproxy` | Stub upstreams and verify cleanup, shared ranges, and resource limits |
+| Browser | `apps/web/src/pages`, `apps/web/src/player` | Component tests, typed requests, startup and bundle checks |
+| Desktop | `apps/desktop/src` | Node tests for logic, separate Electron launch smoke when needed |
+| Persistence | `apps/server/src/db/migrations.ts` | Append migration, update adapters and docs, regenerate schema |
+| Configuration | `apps/server/src/config.ts` | Recognized key, `.env.example`, default and validation tests |
+| Telemetry | `packages/shared/src/analytics.ts` | Typed event, allowlist, privacy docs and scrubber tests |
 
-| Change          | Start here                                                                        | Required companion work                                                  |
-| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| HTTP behavior   | `apps/server/src/routes/` and `packages/shared/src/`                              | Shared schemas, thin handler, route docs, tests, regenerated OpenAPI     |
-| Playback        | `apps/server/src/playback/`                                                       | Pure-rule coverage, lifecycle/fallback tests, measurements for hot paths |
-| Upstream access | `apps/server/src/gateway/`, `apps/server/src/tmdb/`, `apps/server/src/downloads/` | Offline stubs; live verification only when needed                        |
-| Browser UI      | `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/api/`            | Schema-validating requests, component tests, startup and bundle budgets  |
-| Desktop support | `apps/desktop/src/`                                                               | Dependency-injected Node tests; do not assume an Electron runtime exists |
-| Database        | `apps/server/src/db/migrations.ts`                                                | Append migration, regenerate schema, document tables                     |
-| Setting         | `apps/server/src/config.ts`                                                       | Update `KNOWN_KEYS`, `.env.example`, defaults and tests                  |
-| Telemetry       | `packages/shared/src/analytics.ts`                                                | Typed event, allowlist, privacy docs, scrubber tests                     |
-
-See [API](../api/index.md), [testing](testing.md), and [patterns and conventions](patterns-and-conventions.md) for the details behind these boundaries.
+The web player and desktop shell are implemented; dashboard tabs remain placeholders and the TV app has no workspace (`apps/web/src/App.tsx`, `apps/desktop/src/main.ts`, `pnpm-workspace.yaml`). Avoid using older status summaries as implementation evidence.
 
 ## Definition of done
 
-- New behavior has tests; a bug fix has a regression test that would fail before the fix.
-- One logical change per commit and pull request. Use Conventional Commits and the required AI trailer from `CONTRIBUTING.md`.
-- Shared field names, actionable error hints, resource cleanup, and privacy rules remain intact.
-- Maintained docs and generated `docs/openapi.json` / `docs/schema.sql` match changed behavior.
-- Required checks pass, with GPU/live checks and any environment limitations stated explicitly.
-- `.github/pull_request_template.md` is filled in: summary, checks, telemetry/privacy, secret review, and reviewer notes.
+- New behavior has a test; a bug fix has a regression test that failed before the fix.
+- One logical change per commit and pull request, with Conventional Commits and the AI trailer when applicable.
+- Shared field names, actionable errors, privacy, performance, and cleanup rules remain intact.
+- Maintained docs and generated API/database documents match the code.
+- Required checks pass; skipped GPU/live/browser checks and environment limits are stated.
+- The pull request template is filled in (`.github/pull_request_template.md`).
 
-`AGENTS.md` records `Linux` and `Windows` as required checks on `main`; `.github/workflows/ci.yml` defines those exact job names. Lefthook's staged checks are a safety net, not the complete test/coverage gate. Never force-push or rewrite published history.
+`Linux` and `Windows` are the required CI job names recorded in `AGENTS.md` and defined in `.github/workflows/ci.yml`. Advisory Droid review, timing feedback, and code-health reports do not replace them. Hooks are a safety net, not the complete test gate (`lefthook.yml`, `docs/ci.md`).
 
-## Non-negotiable boundaries
+## Boundaries
 
-The PC always re-encodes video, clients request `streamId: "auto"`, devices are not accounts, and the server is LAN-only (`AGENTS.md`). Changes must not slow Home rendering, focus, playback start, or HLS serving; attach before/after numbers for hot paths.
+The PC always re-encodes video, clients request `streamId: "auto"`, devices are not accounts, and the server stays on a trusted LAN. Measure changes to Home rendering, focus, playback startup, and HLS serving (`AGENTS.md`).
 
-Do not put keys, signed URLs, personal addresses, local databases, or profiles into a patch or issue. Use invented fixtures and `example.test` hosts. Generated wiki pages are refreshed by automation, not edited as maintained documentation (`docs/wiki.md`).
+Never include private settings, signed URLs, real stream fixtures, local databases, or machine identifiers in a patch or issue. Use invented `example.test` fixtures. Fix maintained source/docs for lasting corrections to the generated wiki (`docs/wiki.md`).
 
 ## Key source files
 
-| File                                             | Purpose                                           |
-| ------------------------------------------------ | ------------------------------------------------- |
-| `CONTRIBUTING.md`                                | Issue, branch, test, PR, license and commit rules |
-| `AGENTS.md`                                      | Product decisions and complete quality gates      |
-| `.github/CODEOWNERS`                             | Official ownership                                |
-| `.github/pull_request_template.md`               | Review and privacy checklist                      |
-| `.factory/skills/homestream-run-checks/SKILL.md` | Scope-based verification                          |
-| `.github/workflows/ci.yml`                       | Cross-platform required jobs                      |
+| File | Purpose |
+| --- | --- |
+| `CONTRIBUTING.md` | Issue, branch, commit, PR and license rules |
+| `AGENTS.md` | Product decisions and complete quality gates |
+| `.github/CODEOWNERS` | Official review ownership |
+| `.factory/skills/homestream-run-checks/SKILL.md` | Scope-based verification |
+| `.github/workflows/ci.yml` | Required cross-platform checks |
 
-Continue with [development workflow](development-workflow.md), [testing](testing.md), [tooling](tooling.md), or [debugging](debugging.md). Contributions use the project's GPL-3.0 license and Code of Conduct (`LICENSE`, `CODE_OF_CONDUCT.md`).
+Continue with [development workflow](development-workflow.md), [testing](testing.md), [debugging](debugging.md), or [conventions](patterns-and-conventions.md).

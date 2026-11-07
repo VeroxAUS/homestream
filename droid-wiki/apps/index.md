@@ -2,37 +2,38 @@
 
 Active contributors: VeroxAUS
 
-HomeStream has a working server, an early browser UI, and a desktop support package. Only the server owns upstream access, persistence, and encoding; clients use shared contracts (`apps/server/src/app.ts`, `pnpm-workspace.yaml`).
+## Purpose
 
-## Runtime boundaries
+HomeStream ships a server, a browser client and an Electron shell. The server owns upstream credentials, SQLite and video encoding; clients consume shared contracts rather than importing server internals (`apps/server/src/app.ts`, `packages/shared/src/index.ts`).
 
-| App                   | Status and responsibility                                                                                             |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [Server](server.md)   | Fastify API, HLS, SQLite, background workers, and built web assets, `apps/server/src/index.ts`                        |
-| [Web](web/index.md)   | Home, search, movie/show details, Settings, navigation, device identity, and download updates, `apps/web/src/App.tsx` |
-| [Desktop](desktop.md) | Tested logging, request ID, and telemetry support modules; no actual Electron shell yet, `apps/desktop/src/index.ts`  |
-| Google TV             | Planned only, no app implementation or workspace, `README.md`, `pnpm-workspace.yaml`                                  |
+## Runtime layout
 
-The browser player and dashboard tabs are placeholders. The intended desktop window/tray/supervisor/preload are not implemented (`apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`, `apps/desktop/README.md`). Device kinds in `packages/shared/src/schemas.ts` do not imply shipped clients or authentication.
+| Runtime | Responsibility |
+| --- | --- |
+| [Server](server.md) | Fastify API, SSE, HLS, workers and optional built web assets; `apps/server/src/index.ts` |
+| [Web](web/index.md) | Catalog, search, details, settings, implemented HLS playback and desktop renderer views; `apps/web/src/App.tsx` |
+| [Desktop](desktop/index.md) | Implemented Electron tray/window shell, server supervision, mini player and preload IPC; `apps/desktop/src/main.ts`. |
+| Google TV | Planned; no TV source workspace in `pnpm-workspace.yaml`. |
 
-## Integration and modification
+Only dashboard tabs remain placeholders, through `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`. The browser player is implemented in `apps/web/src/pages/PlayerPage.tsx`; it is not a placeholder.
 
-The server starts both listeners, background health/download work, and discovery in `apps/server/src/index.ts`. Vite proxies `/api` and `/hls` during development; production serves built UI assets with SPA fallback (`apps/web/vite.config.ts`, `apps/server/src/routes/static.ts`).
+## Control flow and boundaries
 
-Start server composition changes in `apps/server/src/app.ts`, routes and UI work in `apps/web/src/App.tsx`, desktop support work in `apps/desktop/src/`, and wire-format changes in [shared contracts](../packages/shared.md). See [architecture](../overview/architecture.md) and [API](../api/index.md).
+The public listener serves API/media requests and built browser assets; a separate loopback proxy feeds source bytes to ffprobe/FFmpeg (`apps/server/src/index.ts`, `apps/server/src/sourceproxy/proxy.ts`). Vite proxies API/HLS during development (`apps/web/vite.config.ts`). Desktop wraps the web renderer and supervises or attaches to a server, rather than encoding in the renderer.
+
+For wire changes, start in [shared contracts](../packages/shared.md). For a service dependency, start in `apps/server/src/app.ts`; for a screen, start in `apps/web/src/App.tsx`. See [architecture](../overview/architecture.md) and [conventions](../how-to-contribute/patterns-and-conventions.md).
 
 ## Key source files
 
-| File                           | Purpose                                     |
-| ------------------------------ | ------------------------------------------- |
-| `pnpm-workspace.yaml`          | Four actual workspace packages              |
-| `apps/server/src/index.ts`     | Server process startup and shutdown         |
-| `apps/server/src/app.ts`       | Service and HTTP composition                |
-| `apps/web/src/main.tsx`        | Browser mount and deferred startup work     |
-| `apps/web/src/App.tsx`         | Lazy client routes                          |
-| `apps/desktop/src/index.ts`    | Support-module exports, not a running shell |
-| `packages/shared/src/index.ts` | Cross-runtime contracts                     |
+| File | Purpose |
+| --- | --- |
+| `pnpm-workspace.yaml` | Actual workspaces |
+| `apps/server/src/index.ts` | Process startup |
+| `apps/server/src/app.ts` | Service composition |
+| `apps/web/src/App.tsx` | Client route tree |
+| `apps/desktop/src/main.ts` | Desktop entry |
+| `packages/shared/src/index.ts` | Cross-runtime exports |
 
 ## Measured scope
 
-The three app source trees contain **198 TypeScript/TSX source files** excluding colocated test files; their app trees contain **139 test files**, a **0.70 test-to-code file ratio**. Source declarations are included; helpers outside source trees and non-test fixtures are not counted as tests. Physical file counts are not test coverage. [By the numbers](../by-the-numbers.md) gives repository-wide methods. Default-branch history has one unique human author; bot authors are excluded.
+At `5eefa37`, committed app source trees contain **290 non-test TypeScript/TSX files**, including declarations; app trees contain **208 `*.test.ts(x)` files**, ratio **208/290 = 0.72**. Method: filter `git ls-files` for `apps/*/src/` source and all app test filenames; exclude helpers/configs from tests. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. File ratios are not coverage or executed-test results.

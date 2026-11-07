@@ -4,73 +4,61 @@ Active contributors: VeroxAUS
 
 ## Purpose
 
-The gateway client discovers HTTP(S) sources and checks the first response of an uncached playback link. It centralizes persistent list caching, request sharing and one process-local limiter; media-byte delivery belongs to the [source proxy](source-proxy.md) (`apps/server/src/gateway/client.ts`).
+The gateway discovers server-side source URLs and checks playback links without accepting downloading clips as titles. `GatewayClient` in `apps/server/src/gateway/client.ts` shares caching and rate-limited discovery across stream selection, prefetch and downloads.
 
-## Lookup and structured metadata
+## Layout and discovery
 
-`GatewayClient` in `apps/server/src/gateway/client.ts` requires `GATEWAY_MANIFEST_URL`, removes the manifest suffix/trailing slashes, then constructs movie or series stream paths. It does not fetch/interpret the manifest first. Query/key/path helpers are in `apps/server/src/gateway/types.ts`.
+`parseGatewayResponse` in `apps/server/src/gateway/client.ts` requires a streams array, retains HTTP(S) entries and deduplicates by URL-derived ID. `apps/server/src/gateway/types.ts` defines query keys, provider paths and IDs. Public options contain metadata and IDs; raw links stay on the server.
 
-`parseGatewayResponse` requires a `streams` array, discards entries without HTTP(S) URLs, and deduplicates by the first **16 hex characters of SHA-256 of the raw URL**. A nonempty filename hint wins over the decoded final URL path component. A positive size hint wins over structured size; invalid/missing values become zero.
+The parser keeps filename/size hints and a small structured metadata allowlist: cached status, validated torrent hash, file index, kind and size. Structured cached false is meaningful and overrides legacy name markers in `apps/server/src/streams/parse.ts`.
 
-Every client lookup/probe sends `AIOStreams-HomeStream/1.0` so AIOStreams can include structured `streamData`. Parsing retains only the needed cached flag, validated 40-hex info hash, nonnegative file index, kind and size. The structured cached flag takes precedence over legacy name markers downstream (`apps/server/src/gateway/client.ts`, `apps/server/src/streams/parse.ts`). Raw URLs and hashes remain server-side; public metadata comes from [stream selection](../features/stream-selection.md).
+`GatewayCache` in `apps/server/src/gateway/cache.ts` stores raw list JSON in SQLite. Nonempty lists are fresh for **60 minutes**, empty lists for **five minutes**. Expired rows can still trace old stream IDs but are not fresh responses.
 
-## Cache and in-flight sharing
+Concurrent identical cache misses share work. Forced-fresh lookup uses a separate in-flight key and updates the same persistent row (`apps/server/src/gateway/client.ts`). Downloads use it to confirm newly cached sources.
 
-`GatewayCache` in `apps/server/src/gateway/cache.ts` persists lookup JSON in SQLite:
+## Request scheduling
 
-| Policy         | Behavior                                                                         |
-| -------------- | -------------------------------------------------------------------------------- |
-| Nonempty list  | Fresh for **60 minutes**                                                         |
-| Empty list     | Fresh for **5 minutes**                                                          |
-| Expired row    | Retained to reverse-map earlier stream IDs; not served as fresh                  |
-| Reverse lookup | Validate 16-hex ID, find matching JSON rows, verify parsed membership            |
-| Explicit purge | Delete rows expired for at least **7 days**; not a scheduled retention guarantee |
+`RateLimiter` in `apps/server/src/gateway/rateLimiter.ts` starts FIFO tasks under a five-per-five-seconds policy with margin. This limits dispatch starts, not active HTTP concurrency or upstream traffic from other processes.
 
-Fresh hits avoid networking. Concurrent identical misses share a promise by query key. Forced-fresh lookups bypass the cache and share a separate `fresh:` in-flight key, so normal and forced-fresh requests need not merge; both update the same stored row (`apps/server/src/gateway/client.ts`).
+List requests have a **30-second dispatched timeout** and no automatic lookup retry. Missing configuration gives 503; transport/status/JSON problems give redacted gateway errors with hints (`apps/server/src/gateway/client.ts`). Queue wait is outside request timeout.
 
-`StreamService.getStreamById` can reconstruct/refetch an expired lookup from its query key. Download confirmation uses forced-fresh lookup to notice a newly cached source (`apps/server/src/streams/service.ts`).
+The client is shared by composition in `apps/server/src/app.ts`. Ordinary media URL resolution and remote body reads are separate from discovery/probe scheduling.
 
-## Shared limiter and transport
+## Placeholder-aware playback probes
 
-`RateLimiter` in `apps/server/src/gateway/rateLimiter.ts` dispatches FIFO task starts: **5 per 5000 ms**, with a **150 ms margin**. It limits starts, not concurrency, and is local to the client/process rather than a cross-process upstream quota.
+`probePlaybackLink` in `apps/server/src/gateway/playbackProbe.ts` manually follows ranged GET responses, requesting only byte zero and cancelling bodies. It follows up to eight redirects under one default **60-second** probe deadline, checking every Location before requesting it.
 
-`apps/server/src/app.ts` constructs one gateway shared by streams, prefetch and downloads. Cache-miss discovery and download-start playback probes use its limiter. Cached reads do not; ordinary URL resolution/media-byte reads use the proxy/resolver path instead of this discovery limiter.
+`placeholderName` in `apps/server/src/playback/placeholder.ts` recognizes a path ending in `/static/<reason>.mp4`, regardless of host, prefix, query or relative Location. A downloading clip behind multiple redirects is rejected before fetching that clip.
 
-A dispatched list request has a **30-second** timeout; queue waiting is outside that timeout. There is **no automatic lookup retry**. Missing configuration produces 503 `config_missing`; timeout/network/HTTP/JSON failures produce 502 `gateway_unavailable`, with hints for rate limits or refused configuration. Failed requests are not cached (`apps/server/src/gateway/client.ts`).
+The same module's size rule recognizes directly served clips: for a known listing at least **20 MiB**, an actual positive file size below **10%** of the listing is implausible. HTTP 206 uses Content-Range total, not the one-byte Content-Length (`apps/server/src/gateway/playbackProbe.ts`).
 
-Lookup statistics include requests/errors, latest dispatch-to-result latency, last lookup/error and cache hits/misses. The playback probe path does not increment these lookup totals. App metrics and health consume the same client's state (`apps/server/src/app.ts`).
+| Outcome | Meaning |
+| --- | --- |
+| available | Final secret-bearing target can be handed directly to proxy |
+| placeholder | Named downloading/slots-full/rate-limit/other clip |
+| timeout | First-hop timeout may have initiated a remote add |
+| rate_limited | First response HTTP 429 |
+| failed | Unusable first response or exhausted redirect chain |
 
-## Playback-link probe
+An inconclusive later hop can defer final judgment to the source proxy instead of rejecting an otherwise resolved link. Debug logs record redirect shape only, not the target URL (`apps/server/src/gateway/client.ts`).
 
-`probePlayback` in `apps/server/src/gateway/client.ts` makes a range GET with manual redirects and a **60-second** dispatch timeout. It cancels the body, inspects only the first response, and never requests the redirect target. HTTP 200/206 or a non-placeholder redirect is available; known same-host placeholder redirects carry their clip name; timeouts/rate limits/failures have distinct outcomes.
+[Downloads](../features/downloads.md) interprets downloading/timeouts as tracking handoff; ordinary playback resolution maps placeholders to errors. Probing an uncached link can trigger a remote TorBox add, so it is not a harmless metadata lookup.
 
-`placeholderName` in `apps/server/src/playback/resolveUrl.ts` recognizes same-host `/static/<reason>.mp4` clips. [Downloads](../features/downloads.md) interprets these outcomes to accept tracking or return errors. This probe can cause the gateway to add a remote TorBox job; it is not a read-only list lookup.
+## Modification entry points
 
-## Modification entry points and ownership
-
-Change transport/parsing in `apps/server/src/gateway/client.ts`, expiry/reverse identity in `apps/server/src/gateway/cache.ts`, and dispatch policy in `apps/server/src/gateway/rateLimiter.ts`. Preserve server-only URLs and the single shared limiter.
-
-The app closes the client only when it created it. Limiter close clears queued tasks/timers but does not abort running requests (`apps/server/src/app.ts`, `apps/server/src/gateway/rateLimiter.ts`). See [configuration](../reference/configuration.md) and [API](../api/index.md).
-
-## Tested boundaries
-
-FIFO starts, sliding-window limits, failed tasks and rejection of new work after close are tested in `apps/server/test/gateway/rateLimiter.test.ts`. Stub-HTTP integration covers movie/series paths, concurrent lookup sharing, both cache TTLs, burst arrivals, invalid responses, missing configuration and uncached failures (`apps/server/test/integration/gateway-client.test.ts`).
-
-Download integration tests verify the single range GET, manual redirects and failure outcomes before tracking is accepted (`apps/server/test/integration/downloads.test.ts`). These boundaries do not prove live provider availability; the separate opt-in live tier owns that check.
+Change discovery parsing/sharing in `apps/server/src/gateway/client.ts`, redirect/body-size classification in `apps/server/src/gateway/playbackProbe.ts`, and clip semantics in `apps/server/src/playback/placeholder.ts`. Preserve the single shared limiter and server-only targets. See [selection](../features/stream-selection.md) and [proxy](source-proxy.md).
 
 ## Key source files
 
-| File                                                  | Purpose                                            |
-| ----------------------------------------------------- | -------------------------------------------------- |
-| `apps/server/src/gateway/client.ts`                   | Lookup, probe, parsing, sharing and statistics     |
-| `apps/server/src/gateway/cache.ts`                    | Persistent TTL and reverse-ID cache                |
-| `apps/server/src/gateway/rateLimiter.ts`              | FIFO sliding-window starts                         |
-| `apps/server/src/gateway/types.ts`                    | Query identities, URL hashes and user agent        |
-| `apps/server/src/streams/service.ts`                  | URL-free metadata and expired-ID refresh           |
-| `apps/server/test/gateway/rateLimiter.test.ts`        | Dispatch policy                                    |
-| `apps/server/test/integration/gateway-client.test.ts` | Parsing, caching, sharing and errors               |
-| `apps/server/test/integration/downloads.test.ts`      | Structured metadata and playback-probe integration |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/gateway/client.ts` | Discovery and probe facade |
+| `apps/server/src/gateway/playbackProbe.ts` | Redirect/size checks |
+| `apps/server/src/gateway/cache.ts` | Persistent TTL and reverse IDs |
+| `apps/server/src/gateway/rateLimiter.ts` | Dispatch queue |
+| `apps/server/src/gateway/types.ts` | Identities and wire types |
+| `apps/server/src/playback/placeholder.ts` | Clip/error rules |
 
 ## Measured scope
 
-`apps/server/src/gateway/`: **4 source files**. Direct tests: **2 files**, counting `apps/server/test/gateway/*.test.ts` plus `apps/server/test/integration/gateway-client.test.ts`; **0.50 test-to-code file ratio** (test files divided by source files). Download/live tests and stub helpers are excluded from this count. Default-branch history has **1 unique human committer**, VeroxAUS, excluding bots. No live gateway calls were made for this documentation.
+At `5eefa37`, scoped `git ls-files` counts **5 gateway `.ts` source / 2 matching `*.test.ts` files**, ratio **0.40**, using only `apps/server/src/gateway/` and `apps/server/test/gateway/`. Integration/download/live tests and helpers are excluded. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. No gateway requests were made for documentation.

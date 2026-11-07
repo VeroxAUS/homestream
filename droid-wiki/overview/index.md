@@ -1,25 +1,29 @@
 # HomeStream
 
-HomeStream is a LAN media server. A Windows PC finds stream sources, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS. The React web app has Home, search, title details, and Settings screens; its player and dashboard tabs are placeholders. The Electron package contains support modules, not a working window or supervisor yet (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/desktop/src/index.ts`).
+HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, search, title details, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).
 
 ## Start here
 
-- [Architecture](architecture.md): runtimes, service boundaries, and playback flow.
-- [Getting started](getting-started.md): install, configure, test, and run.
-- [Apps](../apps/index.md): server, browser UI, and desktop status.
-- [Playback](../systems/playback/index.md): encoding, seeking, subtitles, and resource limits.
-- [Features](../features/index.md): metadata, stream selection, downloads, and viewing progress.
-- [API](../api/index.md): HTTP, HLS, events, and shared contracts.
-- [Contributing](../how-to-contribute/index.md): workflow, conventions, and checks.
+- [Architecture](architecture.md): runtimes, boundaries, and playback flow.
+- [Getting started](getting-started.md): install, configure, build, and run.
+- [Glossary](glossary.md): domain terms used throughout the code.
+- [Apps](../apps/index.md): the server, browser UI, and desktop shell.
+- [Playback](../systems/playback/index.md): sessions, encoders, HLS, and subtitles.
+- [Features](../features/index.md): catalog, source selection, prefetch, downloads, and progress.
+- [API](../api/index.md): shared contracts, HTTP, HLS, and events.
+- [Contributing](../how-to-contribute/index.md): workflow and checks.
+- [Packages](../packages/index.md): shared contracts and cross-runtime building blocks.
+- [Reference](../reference/index.md): settings, durable models, and dependencies.
+- [Cleanup opportunities](../cleanup-opportunities.md): verified maintenance work.
 
 ## Product boundaries
 
-There are no user accounts. Device identity records client capabilities, not authentication. Clients request `streamId: "auto"`; the PC always re-encodes video. Do not expose the listener to the internet (`AGENTS.md`).
+There are no accounts or authentication. Devices record capabilities, not permission to access the server. Clients request `streamId: "auto"`, and video is always re-encoded on the PC. Keep the server on a trusted local network, never exposed to the internet (`AGENTS.md`, `apps/server/src/app.ts`).
 
-Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared`. The Google TV app is planned, with no `apps/tv` implementation in this checkout (`pnpm-workspace.yaml`, `README.md`).
+TMDB supplies metadata, an AIOStreams gateway supplies source candidates, and TorBox optionally caches unavailable titles upstream. Local SQLite stores devices, viewing history, progress, events, and cache records (`apps/server/src/app.ts`, `apps/server/src/db/migrations.ts`). Optional Sentry and PostHog integrations remain off without matching keys; see [telemetry](../systems/telemetry.md).
 
-TMDB supplies metadata, a configured AIOStreams gateway supplies source candidates, and TorBox optionally caches unavailable titles upstream. SQLite persists local state. Sentry and PostHog are optional and disabled without matching keys (`apps/server/src/app.ts`, `apps/server/src/telemetry/index.ts`). See [security](../security.md) before deployment.
+## Implementation status
 
-## Snapshot
+Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared` (`pnpm-workspace.yaml`). The TV app is planned, with no `apps/tv` implementation. Dashboard tabs remain placeholders, but the browser player and desktop shell are implemented (`apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/desktop/src/shell/shell.ts`). The status table in `README.md` lags these implementations.
 
-This wiki describes commit `7eb94bafed5e0e046987a81d0cbbff8e6ba999d1`. [Statistics](../by-the-numbers.md) records its measurement scope; [lore](../lore.md) uses git timestamps for history. Maintained operational documents are under `docs/`; scheduled generation is described in `docs/wiki.md`.
+This wiki describes commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. [Statistics](../by-the-numbers.md) defines its measurement scope, and [lore](../lore.md) follows git timestamps. Maintained docs and runbooks live under `docs/`; automated refresh is explained in `docs/wiki.md`.

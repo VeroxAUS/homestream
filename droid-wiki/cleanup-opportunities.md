@@ -1,64 +1,53 @@
 # Cleanup opportunities
 
-This is an evidence-backed maintenance list at commit `7eb94bafed5e0e046987a81d0cbbff8e6ba999d1`, not an unrun scanner's dead-code or dependency-age report. The clearest opportunities are registered complexity exceptions and debt-document statements that no longer match the implemented browser (`eslint.config.mjs`, `docs/TECH_DEBT.md`, `apps/web/src/App.test.tsx`, `knip.jsonc`). See [contribution tooling](how-to-contribute/tooling.md).
+This is a source-backed maintenance list at `5eefa37`, not a new dead-code, dependency-age, security or performance audit. The main opportunities are registered exceptions and stale maintained prose. See [contribution tooling](how-to-contribute/tooling.md).
 
 ## Registered complexity
 
-Ordinary ceilings are cyclomatic **20**, cognitive **20**, and nesting depth **4**. These are the **configured per-file maxima**, not newly measured function scores. Blank cells mean the normal ceiling applies (`eslint.config.mjs`).
+`eslint.config.mjs` sets ordinary ceilings of cyclomatic **20**, cognitive **20** and nesting depth **4**. The following are configured per-file exceptions, not scores measured during this wiki refresh.
 
-| File                                           | Cyclomatic ceiling | Cognitive ceiling | Depth exception | Area                              |
-| ---------------------------------------------- | -----------------: | ----------------: | --------------: | --------------------------------- |
-| `apps/server/src/config.ts`                    |                 29 |                   |                 | Env/default assembly              |
-| `apps/server/src/health/checks/torbox.ts`      |                 27 |                22 |                 | Account-state handling            |
-| `apps/server/src/playback/diskCap.ts`          |                 24 |                43 |                 | Park/resume planning              |
-| `apps/server/src/playback/manager.ts`          |                 24 |                23 |                 | Start/fallback/seek orchestration |
-| `apps/server/src/playback/probe.ts`            |                 31 |                22 |                 | ffprobe JSON parsing              |
-| `apps/server/src/sourceproxy/serve.ts`         |                 34 |                61 |               5 | Streaming/backpressure/retries    |
-| `apps/server/src/sourceproxy/sourceEntry.ts`   |                    |                22 |                 | Source-entry lifecycle            |
-| `apps/server/test/playback/subtitleSources.ts` |                    |                36 |                 | Subtitle fixtures                 |
-| `scripts/gpu-health.mjs`                       |                    |                23 |                 | GPU health gate                   |
+| File | Cyclomatic | Cognitive | Depth |
+| --- | ---: | ---: | ---: |
+| `apps/server/src/config.ts` | 29 | — | — |
+| `apps/server/src/health/checks/torbox.ts` | 27 | 22 | — |
+| `apps/server/src/playback/diskCap.ts` | 24 | 43 | — |
+| `apps/server/src/playback/probe.ts` | 31 | 22 | — |
+| `apps/server/src/sourceproxy/serve.ts` | 34 | 61 | 5 |
+| `apps/server/src/sourceproxy/sourceEntry.ts` | — | 22 | — |
+| `apps/server/test/playback/subtitleSources.ts` | — | 36 | — |
 
-Extract pure decision/parsing stages behind existing interfaces, test the seams, then remove the exception and its debt-register row. Do not raise ceilings or create new exceptions (`AGENTS.md`, `docs/TECH_DEBT.md`).
+The old playback-manager and GPU-health exceptions are gone. `PlaybackManager` in `apps/server/src/playback/manager.ts` is now a facade over smaller lifecycle/start/serving modules; do not carry its former complexity ceiling into new work.
 
-The streaming loop is explicitly identified as a hot path in `eslint.config.mjs`: benchmark before/after, retaining backpressure, retry, bounded memory and cleanup behavior. Playback orchestration changes must preserve ownership and failure cleanup, not just reduce a lint number. Use [source proxy](systems/source-proxy.md), [network controls](systems/network.md), [playback](systems/playback/index.md) and [debugging](how-to-contribute/debugging.md).
+Extract pure parsing/decision stages behind existing interfaces, preserve ownership/cleanup, test seams and remove paid-off exceptions. The proxy streaming loop is a hot path: retain backpressure, bounded memory and retries, and benchmark before/after any refactor. This documentation task performed no benchmark. See [source proxy](systems/source-proxy.md) and [playback](systems/playback/index.md).
 
-### Churn helps prioritize review, not justify rewrites
+Use the dated methodology in [by the numbers](by-the-numbers.md) for churn prioritization. Creation, file moves and formatting can dominate recent history; churn is neither a defect count nor justification for a rewrite.
 
-The completed [statistics](by-the-numbers.md) analysis records **2,073 added-plus-deleted lines across 20 commits** for `apps/server/src/playback/manager.ts`, the highest current-file churn in its HEAD-relative 90-day window. Only about two days of history exist; the window includes initial creation, formatting and moves. It is not a stable long-term trend or a bug count.
+## Line limits only shrink
 
-That overlap of an explicit complexity exception and recent change activity makes manager seams a reasonable review target. Source-proxy complexity is a separate registered concern; do not invent equally high churn for it. Test-file churn also reflects tier moves, not proof of flaky behavior.
+`limitConfigBlocks` in `scripts/lib/code-limits.mjs` integrates the **400-line file / 80-line function** rules with ESLint. Blank lines/comments do not count. Tests are exempt from the function ceiling only, not the file ceiling.
 
-## Correct stale debt-register statements
+`code-limits.baseline.json` records grandfathered over-limit sizes. `scripts/code-limits.mjs` requires entries to equal measured size, removes obsolete entries and prevents additions/increases relative to the previous main baseline. Lower ceilings with `node scripts/code-limits.mjs --write`; split code instead of raising them. This is a maintenance ratchet, not permission to create new giant modules.
 
-`docs/TECH_DEBT.md` still says the web app has “one placeholder test” and Knip ignores its shared dependency “until the first screen imports it.” Both descriptions are stale:
+## Correct stale maintained documentation
 
-| Stale statement                                                             | Current evidence                                                                                                                                                                                                                                                                                          | Bounded follow-up                                                                                              |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Web has only a placeholder test/baseline                                    | `apps/web/src/App.test.tsx` exercises routes/Home content; `apps/web/src/pages/HomePage.test.tsx`, `apps/web/src/pages/SearchPage.test.tsx`, `apps/web/src/pages/MovieDetailsPage.test.tsx`, `apps/web/src/pages/ShowDetailsPage.test.tsx`, `apps/web/src/pages/SettingsPage.test.tsx` cover real screens | Replace the placeholder-era debt entry with current scope and actual remaining UI limits                       |
-| Web shared dependency is ignored by Knip                                    | `knip.jsonc` has no web `ignoreDependencies`; `apps/web/src/api/queries.ts` imports shared schemas                                                                                                                                                                                                        | Remove the obsolete exception description, preserving the still-real script declaration ignore                 |
-| Duplication discussion uses about 14,000 lines and claims no clones “today” | The dated [statistics](by-the-numbers.md) inventory has 58,241 tracked text lines under its own exclusions; that is not the jscpd denominator                                                                                                                                                             | Refresh the explanation from a scoped duplication run rather than carrying forward an undated zero-clone claim |
-| Database prose says no stream URL is stored anywhere                        | `apps/server/src/gateway/cache.ts` serializes server-only streams; `apps/server/src/gateway/types.ts` includes `url`                                                                                                                                                                                      | Narrow `docs/database.md`'s guarantee to the appropriate records and explain sensitive local cache data        |
+These follow-ups concern source documentation outside this generated wiki; no changes to those files are made here.
 
-These are documentation follow-ups, not changes made by this wiki. The cache finding does not imply URLs reach clients or telemetry. See [data models](reference/data-models.md) and [security](security.md).
+| File/claim | Current evidence | Bounded follow-up |
+| --- | --- | --- |
+| `docs/TECH_DEBT.md`: web has one placeholder test | Real route, catalog, settings and player tests exist under `apps/web/src/` | Replace placeholder-era coverage prose with actual remaining gaps |
+| `docs/TECH_DEBT.md`: Knip ignores web's shared dependency until first use | `knip.jsonc` no longer has that web ignore; shared schemas are imported by real screens/API code | Remove obsolete exception description |
+| `docs/TECH_DEBT.md`: undated zero clones and old size denominator | A configured duplication gate is not a newly run result | Refresh only from a scoped duplication run |
+| `README.md`: player/desktop status | `apps/web/src/player/` and `apps/desktop/src/main.ts` implement playback and shell behavior | Update status without claiming a shipped installer or TV app |
+| `docs/database.md`: no stream URL stored anywhere | `apps/server/src/gateway/cache.ts` serializes server streams containing `url` from `apps/server/src/gateway/types.ts` | Narrow guarantee and document sensitive cache/backups |
 
-## Current coverage gates, not measured coverage
+The database discrepancy does not imply raw source URLs reach public stream options or telemetry. See [data models](reference/data-models.md) and [security](security.md).
 
-All percentages below are minimum configured thresholds. They do not report a newly run suite or establish the quality of uncovered behaviors.
+## Verification and scope
 
-| File                                       | Lines | Functions | Branches | Statements |
-| ------------------------------------------ | ----: | --------: | -------: | ---------: |
-| `apps/server/coverage-thresholds.json`     |    87 |        87 |       79 |         85 |
-| `apps/web/coverage-thresholds.json`        |    95 |        98 |       89 |         95 |
-| `apps/desktop/coverage-thresholds.json`    |    92 |        83 |       98 |         89 |
-| `packages/shared/coverage-thresholds.json` |    98 |        98 |       98 |         98 |
+Coverage thresholds are configured minima, not measured current coverage; `pnpm coverage:ratchet` only tightens them (`scripts/coverage-ratchet.mjs`). A high percentage does not establish that races, resource bounds or GPU behavior are covered.
 
-The web player/dashboard placeholders are explicit feature scope, not evidence that the whole web package is untested (`apps/web/src/pages/PlayerPage.tsx`, `apps/web/src/App.test.tsx`). Desktop tests exercise support modules without launching Electron (`apps/desktop/README.md`). Treat implementation work and debt cleanup separately; see [web screens](apps/web/screens.md), [desktop](apps/desktop.md) and [testing](how-to-contribute/testing.md).
+Dashboard placeholders and absent TV source are feature scope, not evidence that the working player/shell are skeletons. Desktop unit tests do not launch Electron; its separate smoke tier does. GPU/live tiers deliberately require separate machinery and keys. See [testing](how-to-contribute/testing.md), [web player](apps/web/player.md) and [desktop](apps/desktop/index.md).
 
-`pnpm coverage:ratchet` is a one-way tightening workflow, not permission to lower a gate (`scripts/coverage-ratchet.mjs`, `docs/TECH_DEBT.md`). GPU/live tiers remain intentionally separate from offline CI, not ordinary skipped tests to enable blindly (`AGENTS.md`).
+Cache expiry and physical row deletion are separate policies; inspect runtime scheduling before assuming purge methods run periodically (`apps/server/src/tmdb/cache.ts`, `apps/server/src/gateway/cache.ts`). Any retention change needs an explicit requirement and must avoid adding heavy work to playback.
 
-## Guardrails for follow-up work
-
-- TODO/FIXME/HACK budgets are zero (`techdebt.config.json`). Record a scoped issue/debt entry rather than adding an unowned marker.
-- Knip's desktop `electron` ignore is explained by the absent shell start script; it does not establish that the planned runtime dependency is unwanted (`knip.jsonc`, `apps/desktop/src/index.ts`).
-- Cache expiry is not guaranteed physical deletion: cache classes expose purge methods without a runtime scheduling call. Decide retention requirements before adding background work to a hot server (`apps/server/src/tmdb/cache.ts`, `apps/server/src/gateway/cache.ts`); see [data models](reference/data-models.md).
-- No dependency freshness, vulnerability, dead-export or clone scan was run for this documentation task. Verify such findings with the relevant [tooling gate](how-to-contribute/tooling.md) before proposing removals; the [dependency inventory](reference/dependencies.md) is not an audit result.
+No test suite, scanner, dependency-freshness research or live account inspection was run for this page. Confirm proposed dead-code, clone or vulnerability findings with the relevant gate before removing code or changing dependencies.

@@ -2,118 +2,70 @@
 
 Active contributors: VeroxAUS
 
-Network controls cap aggregate upstream media downloads and stop reading when enough media is buffered. When bandwidth is scarce, lower-lead encoders get priority over already-buffered playback, speculative warming and subtitles (`apps/server/src/network/downloadGate.ts`, `apps/server/src/network/readAhead.ts`).
+## Purpose
 
-## Layout and key abstractions
+Network controls cap remote media bytes and pause readers when sufficient media is buffered. `DownloadGate` in `apps/server/src/network/downloadGate.ts` handles aggregate scheduling; `ReadAheadWindow` in `apps/server/src/network/readAhead.ts` handles time-window hysteresis.
 
-| Module                                    | Responsibility                                          |
-| ----------------------------------------- | ------------------------------------------------------- |
-| `apps/server/src/network/limits.ts`       | Defaults, validation and decimal-Mbps conversion        |
-| `apps/server/src/network/tokenBucket.ts`  | Byte-token accounting on an explicit clock              |
-| `apps/server/src/network/downloadGate.ts` | One cap, waiter priority, aging and low-lead protection |
-| `apps/server/src/network/readAhead.ts`    | Filling/waiting hysteresis and lead formula             |
-| `apps/server/src/network/rateMeter.ts`    | Bounded sliding-window byte meter                       |
-| `apps/server/src/network/snapshot.ts`     | Proxy totals joined with playback session readings      |
-| `apps/server/src/network/check.ts`        | Live network health status                              |
+## Layout and defaults
 
-`SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` creates one `DownloadGate` from `apps/server/src/network/downloadGate.ts`; every remote source entry uses it for head/tail warming and demand reads. This does not cap TMDB/gateway metadata, all server networking, client HLS downloads or TorBox's own remote caching job. The one-byte redirect resolver is outside the media-body gate (`apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/playback/resolveUrl.ts`). Cache regions, opaque source ownership and HTTP recovery belong to the [source proxy](source-proxy.md).
+| Setting | Default and validation |
+| --- | --- |
+| MAX_DOWNLOAD_MBPS | **150 decimal Mbps**, minimum accepted 5 |
+| READ_AHEAD_SEC | **180 seconds** |
+| READ_AHEAD_RESUME_SEC | **120 seconds**, strictly below read-ahead |
 
-## Aggregate download cap
+`resolveDownloadLimits` in `apps/server/src/network/limits.ts` warns and falls back on invalid settings; invalid window/resume settings reset the pair together. Zero does not disable limits. One Mbps is 1,000,000 bits/s.
 
-`MAX_DOWNLOAD_MBPS` defaults to **150 Mbps**, using **1 Mbps = 1,000,000 bit/s**, not MiB/s. Minimum accepted value is **5**; invalid/nonfinite values warn and use the default. Zero is not an unlimited switch (`apps/server/src/network/limits.ts`).
+The source proxy creates one gate shared by remote head/tail warming and demand reads (`apps/server/src/sourceproxy/proxy.ts`). This is not a limit on TMDB/gateway metadata, outbound HLS, all machine traffic or TorBox's remote caching job. Cached/local-file reads do not spend remote-byte tokens.
+
+## Scheduling and extractor share
+
+`TokenBucket` in `apps/server/src/network/tokenBucket.ts` backs the gate with a **0.2-second** bucket depth. Readers request grants before passing downloaded chunks onward; scheduling controls application reads, not every byte already buffered by the OS.
+
+Ordinary priority is encoder, prefetch, extractor, with lower encoder lead first. Requests age after **1500 ms**, but aging does not override protection of an encoder at risk below **15 seconds** lead. The low-lead guard remembers contention for **200 ms**; other encoders with high lead or no surplus wait.
+
+Extractors have a **20% priority share** of the cap while no encoder is at risk. It is not a reserved slice: unused tokens go to other readers, and the main bucket still caps total grants. Even aged extractors yield to at-risk video (`apps/server/src/network/downloadGate.ts`).
+
+`atLeastExtractorShare` in `apps/server/src/network/downloadGate.ts` raises finite extractor pacing to this share, while null remains unlimited. At the default 150 Mbps cap the floor is **3,750,000 bytes/s**, so a proposed 2 MiB/s local throttle is raised. Local pacing never bypasses the aggregate gate.
 
 ```mermaid
-flowchart LR
-    Warm[Head and tail warming] --> Gate[One DownloadGate]
-    Encoder[Encoder demand reads] --> Gate
-    Prefetch[Prefetch-only source reads] --> Gate
-    Extractor[Subtitle upstream reads] --> Pace[Per-response extractor pacing]
-    Pace --> Gate
-    Gate --> Grant[Grant bytes by priority]
-    Grant --> Consume[Cache and deliver chunk]
-    Consume --> Next[Read next upstream chunk]
-    Cache[Already-cached bytes] --> Local[Deliver without cap tokens]
+graph LR
+    Encoder[Encoder bytes] --> Gate[Shared token gate]
+    Prefetch[Warm-up bytes] --> Gate
+    Extractor[Extractor bytes] --> Gate
+    Risk[Low-lead guard] --> Gate
+    Share[Extractor share] --> Gate
+    Gate --> Meter[Granted-byte meter]
+    Meter --> Reader[Loopback reader]
 ```
 
-Readers receive a chunk from the socket, ask the gate to account for it, then retain/deliver it before pulling more. The bucket starts with **0.2 seconds** of cap credit; whole chunks can overdraw it and subsequent grants wait for repayment. Long-run accounting is bounded, but initial credit, chunk size and OS/socket buffers mean this is **not an exact packet-level instantaneous bandwidth ceiling** (`apps/server/src/network/tokenBucket.ts`, `apps/server/src/network/downloadGate.ts`, `apps/server/src/sourceproxy/upstream.ts`).
+## Read-ahead and source ownership
 
-Cached/local-file reads do not spend tokens. Demand read disconnects abort their wait/upstream response. Closing the gate releases waiters and clears its timer; shutdown then closes sources/transport (`apps/server/src/sourceproxy/serve.ts`, `apps/server/src/sourceproxy/proxy.ts`).
+`leadSeconds` in `apps/server/src/network/readAhead.ts` measures the end of the current head segment minus player position. Hysteresis holds at the threshold and resumes strictly below the resume point. Starts/seeks/restarts reset filling.
 
-## Lead-aware scheduling
+`encoderWindowSec` in `apps/server/src/network/readAhead.ts` subtracts a **four-second pipeline allowance**, so default owned readers hold at **176 seconds**, then resume below 120. This distinction matters when comparing configuration to observed finished-segment lead.
 
-Ordinary waiter ordering is:
+`ReadAheadPacing` in `apps/server/src/playback/readAheadPacing.ts` feeds encoder progress, reported/requested playhead and recent speed into the source handle. Subtitle reach includes the latest requested video segment. Each session gets its own main/run windows through `apps/server/src/sourceproxy/readerHolds.ts`; a shared byte cache does not imply one viewer's window holds another viewer.
 
-1. **Encoder/main reads**, rank 0.
-2. **Prefetch-only source reads**, rank 1.
-3. **Extractor reads**, rank 2.
+The proxy also has an independent cache-sized extractor byte-gap hold. Held remote readers stop upstream stretches on block boundaries and remain connected; cached bytes obey holds too (`apps/server/src/sourceproxy/serve.ts`). See [source proxy](source-proxy.md).
 
-Within a rank, smaller current lead goes first, then arrival sequence. Priority callbacks are reevaluated at each pick: an entry warmed for prefetch can become a playback-priority entry when a session acquires it. Waiters aged **≥1.5 seconds** advance ahead of unaged requests, preventing low-priority readers from being permanently starved under normal scheduling (`apps/server/src/network/downloadGate.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
+## Measurements and modification
 
-### Protect a player close to stalling
+`RateMeter` in `apps/server/src/network/rateMeter.ts` tracks byte windows; `apps/server/src/network/snapshot.ts` joins aggregate and per-session data; `apps/server/src/network/check.ts` interprets health. Per-session rates can describe the same shared source, so do not sum them as independent downloads.
 
-A held encoder request with **lead <15 seconds** activates the low-lead guard. The condition persists for **200 ms** between requests so a greedy buffered reader cannot take all tokens during the endangered reader's short request gap (`apps/server/src/network/downloadGate.ts`).
-
-While guarded:
-
-| Other encoder lead | Eligibility                                                     |
-| ------------------ | --------------------------------------------------------------- |
-| <15 seconds        | Still eligible                                                  |
-| 15–60 seconds      | Eligible only with surplus above **0.05 seconds** of cap tokens |
-| >60 seconds        | Held back, even if aged                                         |
-
-The guard does not reclassify prefetch/extractor ranks; their aging still applies. Without a recently waiting at-risk encoder, buffered sessions can use spare bandwidth normally. This is scheduling policy, not guaranteed stall-free service when aggregate source demand exceeds capacity (`apps/server/src/network/downloadGate.ts`).
-
-The global cap and [subtitle response pacing](playback/subtitles.md#heavy-source-warm-up-and-the-burst-clock) are independent. A locally “unlimited” extractor remains rank 2 under the global gate. Heavy-source warm-up and the delayed fresh-burst clock are playback policy; neither modifies token replenishment, waiter aging or aggregate cap settings (`apps/server/src/playback/extractorSchedule.ts`).
-
-## Read-ahead holds
-
-`ReadAheadWindow` in `apps/server/src/network/readAhead.ts` starts **filling**, changes to **waiting** at the hold threshold, and returns to filling only below the resume threshold or on reset. This hysteresis prevents every advancing segment from toggling the download.
-
-Configured defaults are **180 seconds hold / 120 seconds resume**. Both settings must be positive finite numbers; resume must be strictly below hold. An inconsistent pair resets both to defaults with a warning (`apps/server/src/network/limits.ts`, `apps/server/src/network/readAhead.ts`).
-
-For video, manager lead is `(headSegment+1) × 4 − max(playerPosition, runStart × 4)`. A seek/start/retry opens a fresh window at that run. The source entry closes its main window **4 seconds early**, at `max(1, READ_AHEAD_SEC−4)` (normally **176 seconds**), to allow for FFmpeg's pipeline. Resume requires lead **strictly below 120**, not equal to it (`apps/server/src/playback/manager.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
-
-At a hold, the loopback connection stays open but receives no further bytes, including memory hits. The current upstream response is destroyed if unfinished; releasing the hold resumes from the pump's next byte with a ranged request. Local files bypass these remote-pump holds (`apps/server/src/sourceproxy/serve.ts`).
-
-Progress pings and requested video segments synchronize the window. A paused player can therefore reach the ceiling and stop consuming upstream bandwidth while remaining alive through pings. Merely polling session metadata does not advance the playhead or keep the session active (`apps/server/src/playback/manager.ts`).
-
-### Shared sources and subtitles
-
-For multiple session owners of one exact raw URL, the source entry uses the **minimum registered owner lead**. Reading holds only when all reporting owners are sufficiently ahead; each handle still reports its own lead. The entry's byte-rate meter is shared, so two sessions on the same source can expose the same rate (`apps/server/src/sourceproxy/sourceEntry.ts`, `apps/server/src/sourceproxy/proxy.ts`).
-
-Subtitle workers have their own `ReadAheadWindow` per run. Their head is measured against `max(playerReach, runStart)`; holding one run does not hold video or another run. Requests outside the player's configured subtitle reach do not launch far-ahead extraction. See [subtitles](playback/subtitles.md) for progressive coverage and demand-driven earlier gaps (`apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/manager.ts`).
-
-These holds differ from [disk parking](playback/lifecycle.md), which actually stops the video process. No SIGSTOP/SIGCONT mechanism is used for network backpressure.
-
-## Operational readings
-
-`RateMeter` in `apps/server/src/network/rateMeter.ts` uses **250 ms slots**, retaining 80 slots; proxy and handle callers request a five-second reading. Global numbers come from grants, including warmed head/tail bodies; source numbers come from entry downloads. They measure proxy byte consumption, not packets on a physical NIC (`apps/server/src/network/downloadGate.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`).
-
-The network snapshot includes aggregate rate/cap, configured hold/resume, binding duration and each live session's source rate, lead and filling/waiting state. Binding duration continues across short gaps but resets after **more than 3 seconds** without a limited request. The health check warns only after **more than 30 seconds** binding; otherwise reports OK. It makes no external request (`apps/server/src/network/snapshot.ts`, `apps/server/src/network/check.ts`). See [health](health.md) and [monitoring](../how-to-monitor/index.md).
-
-A separate falling-behind watch reports sessions with positive recent speed **<1× for more than 30 seconds** while filling. Waiting at the configured window, completed/parked/not-running encoders, or unknown zero speed break the streak. This diagnoses slow encoding; it does not stop or rerank the session by itself (`apps/server/src/playback/fallingBehind.ts`, `apps/server/src/playback/manager.ts`).
-
-## Modification and test pointers
-
-Keep token arithmetic pure/clock-driven, reevaluate live priority, preserve guard/aging interaction and abort cleanup. Change limit parsing independently of gate scheduling. Wiring lives in `apps/server/src/app.ts`; defaults and restart requirements are documented in [configuration](../reference/configuration.md).
-
-Measured at `7eb94ba`: **7 source `.ts` / 7 `*.test.ts` / 1 non-test TypeScript helper file** under `apps/server/src/network` and `apps/server/test/network`, test/code file ratio **7/7 = 1.00**. Scoped default-branch history has **1 unique human committer, VeroxAUS**, excluding bots. Proxy transport tests are separate from this count; the ratio is not line or branch coverage.
-
-Fake-clock tests check rate windows, overload/underload priority, guard expiry, aging and aborts. Proxy tests exercise actual loopback sharing/holds. The independent stub-CDN **five-second cap-window measurement is Windows-only** because Linux loopback buffers distort sender-side early windows; deterministic gate tests still cover cap math on all platforms (`apps/server/test/sourceproxy/bandwidthCap.test.ts`, `apps/server/test/network/bandwidthPriority.test.ts`). Tests were inspected, not executed for this documentation.
+Change fairness in `apps/server/src/network/downloadGate.ts`, settings in `apps/server/src/network/limits.ts`, and time holds in `apps/server/src/network/readAhead.ts`. Preserve deterministic fake-clock tests and distinguish intentional holds from slow encoding. See [playback](playback/index.md) and [configuration](../reference/configuration.md).
 
 ## Key source files
 
-| Repository-root path                                   | Role                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------- |
-| `apps/server/src/network/downloadGate.ts`              | Aggregate cap, priority and low-lead guard            |
-| `apps/server/src/network/tokenBucket.ts`               | Chunk overdraft and replenishment                     |
-| `apps/server/src/network/readAhead.ts`                 | Hold/resume state machine                             |
-| `apps/server/src/network/limits.ts`                    | Settings and unit conversion                          |
-| `apps/server/src/network/rateMeter.ts`                 | Sliding download measurements                         |
-| `apps/server/src/network/check.ts`                     | Network warning threshold                             |
-| `apps/server/src/sourceproxy/sourceEntry.ts`           | Shared-owner leads, gate calls and source meter       |
-| `apps/server/src/sourceproxy/serve.ts`                 | Pump holds, cancellation and pacing                   |
-| `apps/server/src/playback/manager.ts`                  | Position/head feedback and network session projection |
-| `apps/server/test/network/downloadGate.test.ts`        | Fake-clock cap/fairness tests                         |
-| `apps/server/test/network/bandwidthPriority.test.ts`   | Low-lead overload regressions                         |
-| `apps/server/test/sourceproxy/readAheadWindow.test.ts` | Live loopback hold/resume tests                       |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/network/downloadGate.ts` | Cap, risk guard and share |
+| `apps/server/src/network/tokenBucket.ts` | Token accounting |
+| `apps/server/src/network/limits.ts` | Settings |
+| `apps/server/src/network/readAhead.ts` | Hysteresis/pipeline allowance |
+| `apps/server/src/network/rateMeter.ts` | Window rates |
+| `apps/server/src/playback/readAheadPacing.ts` | Playback feedback |
+
+## Measured scope
+
+At `5eefa37`, `git ls-files` counts **7 network `.ts` source / 8 matching `*.test.ts` files**, ratio **1.14**. Helpers/proxy/integration files are excluded. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. No bandwidth measurement or live tests were run for this page.

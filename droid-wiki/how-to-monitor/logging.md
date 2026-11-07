@@ -1,67 +1,79 @@
 # Logging
 
-Process logs, domain events and SSE are separate channels. Use process logs for request/error context, `/api/logs` for selected durable events, and SSE for live updates (`apps/server/src/logger.ts`, `apps/server/src/events/record.ts`, `apps/server/src/routes/events.ts`).
+Process logs, selected durable events and SSE are distinct channels. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).
 
-## Process logs
+## Server process log
 
-`createLogger` in `apps/server/src/logger.ts` writes one Pino JSON object per line to stdout and appends to **`server.log` in `DATA_DIR`**. Normal startup passes `LOG_LEVEL` from configuration; supported values are `debug`, `info`, `warn`, `error`, default **info** (`apps/server/src/index.ts`, `apps/server/src/config.ts`). Direct `buildApp` construction without an injected logger uses `createLogger`'s own info default (`apps/server/src/app.ts`).
+`createLogger` in `apps/server/src/logger.ts` emits Pino JSON lines to stdout and appends **`DATA_DIR/server.log`**. Runtime `LOG_LEVEL` defaults to info and supports debug/info/warn/error (`apps/server/src/config.ts`, `apps/server/src/index.ts`). Direct app construction can use an injected logger.
 
-There is no rotation/size retention in the logger module. File-stream errors are swallowed; a running process is not proof that the file is writable. Log writes are stream-based, but serialization/redaction happen at the call site. Avoid per-segment chatter or large objects on playback paths.
+The logger does not implement file rotation or size retention. Stream errors are swallowed, so process liveness alone does not establish that the file is writable. Writes use streams, but serialization/redaction still run at the logging call: avoid oversized payloads and segment-level chatter.
 
-Fastify's automatic access logging is disabled and replaced by `registerRequestObservability` in `apps/server/src/http/observability.ts`. Completed instrumented requests log:
+`registerRequestObservability` in `apps/server/src/http/observability.ts` replaces automatic access logging. Completion fields are `reqId`, method, route template (or `unmatched`), status code and response time rounded to one decimal; it does not log raw queries.
 
-- `reqId`, `method`, route template (or `unmatched`), `statusCode`.
-- `responseTimeMs`, rounded to one decimal.
-
-The line never uses the raw query/URL. `/hls/*`, `/metrics`, `/healthz`, `/readyz` and `/api/events` use debug-level completion logging and are excluded from HTTP metrics. Selecting debug therefore increases high-volume traffic logging; keep production debugging bounded.
+**HLS, `/metrics`, `/healthz`, `/readyz` and `/api/events`** are excluded from HTTP request metrics and use debug-level completion logging. Turning on debug increases high-volume media noise; keep it bounded.
 
 ## Request correlation
 
-`apps/server/src/requestContext.ts` accepts a client `X-Request-ID` only if it is at most **64 characters** of letters, digits, `.`, `_`, `-`; otherwise it creates a UUID. The response echoes the resolved ID, including errors. AsyncLocalStorage carries it into service calls; the base logger mixin adds `reqId` unless a child logger already binds it.
+`resolveRequestId` in `apps/server/src/requestContext.ts` accepts 1–64 letters/digits/dots/underscores/hyphens, otherwise generates a UUID. Responses echo `X-Request-ID`; AsyncLocalStorage carries it into service calls, and the logger mixin adds `reqId` unless already bound.
 
-Find that exact ID in the local process log. For example, in PowerShell, with `DATA_DIR` set to the actual configured directory:
+Search the exact ID in the local file, for example:
 
 ```powershell
 Select-String -Path "$env:DATA_DIR\server.log" -SimpleMatch 'client.req_42-A'
 ```
 
-File-loaded settings do not automatically populate the shell environment, so substitute the configured path when needed. Unexpected HTTP errors also carry `request_id` in optional Sentry reports. A request ID is not an authorization token or an automatically propagated upstream trace; see [tracing](tracing.md).
+Substitute the actual configured data directory if configuration came from a file rather than shell environment. Optional unexpected-error reports use `request_id`. Background work need not retain request scope; IDs are neither credentials nor a guaranteed upstream trace. See [tracing](tracing.md).
 
-## Domain event log
+## Durable event history
 
-`logEvent` in `apps/server/src/events/record.ts` synchronously inserts a redacted SQLite row, then emits a `log` bus event. Levels are `info`, `warn`, `error`; sources are `gateway`, `tmdb`, `torbox`, `ffmpeg`, `session`, `health`, `server`, `prefetch`, `downloads` (`packages/shared/src/schemas.ts`).
+`logEvent` in `apps/server/src/events/record.ts` redacts a message/details, inserts an SQLite `events` row, then emits a `log` bus event. Rows contain ID, epoch timestamp, level, source, message, nullable details and nullable session ID.
 
-`GET /api/logs` returns newest IDs first. Optional `level` and `source` filters are exact enum values; `limit` defaults to **100**, accepts integers **1–1000**, and rejects out-of-range/invalid values rather than clamping (`apps/server/src/routes/health.ts`, `packages/shared/src/health.ts`). Rows are redacted again when queried (`apps/server/src/events/query.ts`).
+Levels are info/warn/error. Sources include gateway, TMDB, TorBox, FFmpeg, session, health, server, prefetch and downloads. Domain events are deliberately selected lifecycle/status information, not copies of every Pino line.
 
-Pruning runs every **200 writes**, removing rows older than **30 days** and retaining the newest **10,000**. These are periodic bounds, not a deletion deadline at exactly 30 days or a hard instantaneous row ceiling. This retention does not rotate the process log or erase watch history.
+Every **200 writes**, pruning removes events older than **30 days** and rows beyond the newest **10,000**. These are periodic write-triggered retention rules, not exact per-insert bounds or a background expiry timer.
 
-## SSE
+`queryEvents` in `apps/server/src/events/query.ts` reads/filter/redacts stored rows. GET `/api/logs` supports level/source/limit (default 100, maximum 1000) through `apps/server/src/routes/health.ts`. REST omits absent optional fields, while direct SSE rows can retain nulls. There is no HTTP route for downloading the raw process file.
 
-`apps/server/src/routes/events.ts` sends `retry: 3000`, an immediate heartbeat and another every **15 seconds**. Named events include `health`, `session.start/update/end`, `log` and download lifecycle events (`apps/server/src/events/bus.ts`). Subscriber failures are isolated and payload strings pass through local redaction.
+## Live SSE
 
-There are no SSE IDs or generic `Last-Event-ID` replay. Reconnect and refetch health/activity/log snapshots. Downloads separately replay unnotified ready items; that is a domain notification mechanism, not event-stream history. The server ends open SSE responses in `preClose` so shutdown can proceed.
+`registerEventRoutes` in `apps/server/src/routes/events.ts` begins with `retry: 3000` and a heartbeat, then repeats heartbeat every **15 seconds**. Application frames contain event name and JSON `event.data`, not the internal bus envelope:
 
-## Browser and desktop logs
+```text
+event: heartbeat
+data: {"ts":1700000000000}
 
-The browser `logger` in `apps/web/src/logger.ts` writes to the development console and buffers at most **50 non-debug entries** until a telemetry sink attaches. Non-debug entries become scrubbed Sentry breadcrumbs when that optional runtime loads; debug remains development-console only. This is not a browser log-file service. Never include user search text or signed URLs in messages, even though outbound breadcrumbs are scrubbed.
+```
 
-`createLogger` in `apps/desktop/src/logger.ts` writes JSON lines through a caller-supplied sink and optional breadcrumb callback. It catches sink failures and scrubs message/direct string/Error fields; callers must not pass arbitrary nested sensitive objects. A file destination, its retention and shell lifecycle wiring are not implemented by this helper. See [desktop](../apps/desktop.md) and [telemetry](../systems/telemetry.md).
+The timestamp is illustrative. Application payloads use their shared schemas.
 
-## Adding logs safely
+Session start/update/end, health, log and download events share the stream. It has no event-ID cursor/Last-Event-ID replay. Opening does not send a health baseline; reconnect consumers need REST reconciliation. Browser health reads are routed through the query cache with cancellation of older answers (`apps/web/src/events/serverEvents.ts`). Unnotified completed downloads have a special persisted replay path, not a general event backlog.
 
-Use structured fixed fields and stable messages. Pino censors token/auth/cookie/url/query paths, and the entire serialized line passes through `redact()` again (`apps/server/src/logger.ts`, `apps/server/src/redact.ts`). The local scrubber knows registered credentials, gateway components and CDN patterns; it does not anonymize every IP, device name or filesystem path. Review output before sharing, and never log request bodies or source URLs.
+Connections unsubscribe/clear timers on close/error; server pre-close ends open streams so shutdown is not blocked waiting on them. See [API event protocol](../api/index.md).
 
-Use a domain event only for something worth persisting/displaying, not every request or segment. See [data models](../reference/data-models.md), [health](../systems/health.md) and the maintained `docs/observability.md`.
+## Browser and desktop
+
+`apps/web/src/logger.ts` provides development-console logging and buffers up to **50 non-debug entries** until an optional telemetry sink attaches. Scrubbed non-debug entries become Sentry breadcrumbs; this is not a browser log-file service.
+
+Desktop `startTelemetry` in `apps/desktop/src/shell/telemetry.ts` wires `apps/desktop/src/logger.ts` to **`DATA_DIR/desktop.log`**, sharing the main scrubber and optional Sentry breadcrumb sink. At startup, an existing log larger than **2 MiB** is renamed to `desktop.log.1`; it is not continuously size-rotated while the process runs. Sink/open failures degrade without taking down the shell.
+
+Main initialization, restart/supervisor events and graceful quit are implemented; desktop logging is no longer an unwired helper. See [desktop](../apps/desktop/index.md).
+
+## Safe changes
+
+Pino censors structured token/auth/cookie/URL/query fields and redacts the full serialized line again (`apps/server/src/logger.ts`, `apps/server/src/redact.ts`). Events scrub before storage, on bus emission and on reads. These layers do not permit raw source URLs, keys, request bodies or user text in logs.
+
+Local logs can still contain operational paths and session/device details. Treat storage/backups as private and review output before sharing. Use fixed messages and small structured fields; persist only events worth keeping/displaying. See [security](../security.md) and [data models](../reference/data-models.md).
 
 ## Key source files
 
-| File                                                 | Purpose                                                   |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| `apps/server/src/logger.ts`                          | Pino destinations, structured redaction and request mixin |
-| `apps/server/src/http/observability.ts`              | Completion lines and excluded paths                       |
-| `apps/server/src/requestContext.ts`                  | Request ID validation and async scope                     |
-| `apps/server/src/events/record.ts`                   | Durable event insertion and pruning                       |
-| `apps/server/src/events/query.ts`                    | Filtered query and read-time redaction                    |
-| `apps/server/src/routes/events.ts`                   | SSE frames, heartbeat and cleanup                         |
-| `apps/server/test/integration/observability.test.ts` | Log fields, request IDs and probe behavior                |
-| `apps/server/test/integration/health-routes.test.ts` | Event query and SSE behavior                              |
+| File | Purpose |
+| --- | --- |
+| `apps/server/src/logger.ts` | Pino destinations, redaction and request mixin |
+| `apps/server/src/http/observability.ts` | Completion fields/exclusions |
+| `apps/server/src/requestContext.ts` | ID validation and async scope |
+| `apps/server/src/events/record.ts` | Durable writes and pruning |
+| `apps/server/src/events/query.ts` | Filtering/read-time redaction |
+| `apps/server/src/routes/events.ts` | SSE framing and lifetime |
+| `apps/desktop/src/shell/telemetry.ts` | Main log sink and startup rollover |
+| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration |
+| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE |

@@ -1,90 +1,51 @@
 # Dependencies
 
-This inventory describes direct manifest declarations at commit `7eb94bafed5e0e046987a81d0cbbff8e6ba999d1`, not installed/transitive package totals or a freshness audit. Four workspace packages are listed in `pnpm-workspace.yaml`; root `package.json` supplies shared tooling rather than a fifth workspace. See [architecture](../overview/architecture.md) and [tooling](../how-to-contribute/tooling.md).
+This inventory counts direct manifest declarations at source commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. It is not a transitive inventory, freshness report, or vulnerability audit. Four workspaces are listed in `pnpm-workspace.yaml`; root `package.json` supplies tooling.
 
-## Counting method and totals
+## Counts
 
-Count each key in `dependencies` and `devDependencies` once per manifest and group. Separate `workspace:*` runtime links from external registry runtime entries. “Unique” means the union of package **names**, ignoring version ranges and repeated declarations. Root tooling is included explicitly; none of these five manifests declares peer or optional dependencies (`package.json`, `apps/server/package.json`, `apps/web/package.json`, `apps/desktop/package.json`, `packages/shared/package.json`).
+Each manifest key is counted once per dependency group. Workspace links are separate from registry runtime dependencies. Unique totals merge names, not version ranges.
 
-| Manifest                       | External runtime | Workspace runtime | Development | All declarations |
-| ------------------------------ | ---------------: | ----------------: | ----------: | ---------------: |
-| `package.json`                 |                0 |                 0 |          17 |               17 |
-| `apps/server/package.json`     |               12 |                 1 |           1 |               14 |
-| `apps/web/package.json`        |                6 |                 1 |          14 |               21 |
-| `apps/desktop/package.json`    |                2 |                 1 |           3 |                6 |
-| `packages/shared/package.json` |                1 |                 0 |           0 |                1 |
-| **Total declarations**         |           **21** |             **3** |      **35** |           **59** |
+| Manifest | External runtime | Workspace runtime | Development | Total |
+| --- | ---: | ---: | ---: | ---: |
+| `package.json` | 0 | 0 | 17 | 17 |
+| `apps/server/package.json` | 12 | 1 | 1 | 14 |
+| `apps/web/package.json` | 7 | 1 | 14 | 22 |
+| `apps/desktop/package.json` | 2 | 1 | 3 | 6 |
+| `packages/shared/package.json` | 1 | 0 | 0 | 1 |
+| **Total declarations** | **22** | **3** | **35** | **60** |
 
-There are **24 runtime declarations** including internal links, **56 external declarations**, **19 unique external runtime names**, and **33 unique development names**. The external runtime/development sets do not overlap, giving **52 unique external names**, or **53 names including `@homestream/shared`**. Repeated external runtime names are Zod (server/shared) and `posthog-node` (server/desktop); `@size-limit/file` and `size-limit` repeat in development (web/desktop). A workspace edge is not a registry download.
+There are 20 unique external runtime names, 33 unique development names, and 53 unique external names overall. The sets do not overlap; including `@homestream/shared` gives 54 names. These totals were recomputed from the five manifests. Repeated runtime names include Zod and `posthog-node`; the lockfile's transitive/platform packages are outside the count (`pnpm-lock.yaml`).
 
-These are reproducible manifest metrics, not vulnerability, license, unused-package or package-age findings. `pnpm-lock.yaml` describes concrete resolutions and platform-specific/transitive packages, which are deliberately excluded from these counts.
+## Runtime libraries
 
-## Production declarations
+| Workspace | Main declarations and requested ranges | Role |
+| --- | --- | --- |
+| Server | Fastify `^5.12.8`, CORS `^11.4.0`, rate-limit `^11.2.2`, static `^10.1.8`, Swagger `~9.9.3`, Swagger UI `~6.1.3` | HTTP and API documentation |
+| Server | Pino `^10.4.0`, `prom-client` `~15.1.3`, Bonjour `^1.4.4` | Logging, metrics, LAN discovery |
+| Server | `@sentry/node` `~11.10.0`, `posthog-node` `~5.61.2`, Zod `^4.6.7` | Optional telemetry and validation |
+| Web | React/React DOM `^19.3.1`, React Router `^8.5.1`, TanStack Query `^5.106.1` | Rendering, navigation and server-state cache |
+| Web | `hls.js` `^1.7.4` | Lazy-loaded browser HLS playback |
+| Web | `@sentry/react` `~11.10.0`, `posthog-js` `~1.446.3` | Optional lazy telemetry |
+| Desktop | `@sentry/electron` `~8.3.0`, `posthog-node` `~5.61.2` | Main-process telemetry |
+| Shared | Zod `^4.6.7` | Runtime contracts and inferred types |
 
-Ranges below are **manifest requests**, not claims about the latest registry release.
+Ranges are manifest requests, not claims about latest releases. Source manifests are `apps/server/package.json`, `apps/web/package.json`, `apps/desktop/package.json`, and `packages/shared/package.json`. Every app also imports internal shared contracts.
 
-### Server
+SQLite, filesystem/process primitives, and server fetch come from Node, not native database/fetch npm modules (`apps/server/src/db/index.ts`, `apps/server/src/app.ts`).
 
-All entries below come from `apps/server/package.json`; the additional internal dependency is `@homestream/shared` `workspace:*`.
+## Toolchain
 
-| Package               | Range      | Responsibility                            |
-| --------------------- | ---------- | ----------------------------------------- |
-| `fastify`             | `^5.12.8`  | HTTP runtime                              |
-| `@fastify/cors`       | `^11.4.0`  | CORS                                      |
-| `@fastify/rate-limit` | `^11.2.2`  | Scoped route rate limiting                |
-| `@fastify/static`     | `^10.1.8`  | Built browser assets                      |
-| `@fastify/swagger`    | `~9.9.3`   | OpenAPI generation                        |
-| `@fastify/swagger-ui` | `~6.1.3`   | Local API reference UI                    |
-| `@sentry/node`        | `~11.10.0` | Optional error reporting/manual telemetry |
-| `bonjour-service`     | `^1.4.4`   | LAN mDNS discovery                        |
-| `pino`                | `^10.4.0`  | Structured logging                        |
-| `posthog-node`        | `~5.61.2`  | Optional analytics/flags                  |
-| `prom-client`         | `~15.1.3`  | Prometheus metrics                        |
-| `zod`                 | `^4.6.7`   | Runtime contracts                         |
+Root tooling includes TypeScript `~6.0.3`, ESLint `^10.14.0`, typescript-eslint `^8.72.1`, Prettier `~3.9.10`, Vitest `^5.1.0`, Turbo `~2.11.10`, Knip `~6.44.1`, dependency-cruiser `~18.7.2`, jscpd `~5.4.2`, Syncpack `~15.3.3`, and Lefthook `~2.2.2` (`package.json`).
 
-The server has no native npm dependency: SQLite uses Node 24's built-in synchronous `node:sqlite`, not `better-sqlite3` or another addon (`apps/server/src/db/index.ts`, `apps/server/package.json`). FFmpeg/NVENC is a separate executable/driver boundary, not a JavaScript codec library. See [server](../apps/server.md) and [data models](data-models.md).
+Web development uses Vite `^8.3.5`, Testing Library, jsdom, Playwright `~1.64.1`, a bundle visualizer and size-limit. Server development adds tsx. Desktop declares Electron `~45.2.3` as a development dependency and uses its binary at runtime (`apps/web/package.json`, `apps/server/package.json`, `apps/desktop/package.json`). Its binary is downloaded separately; tests do not generally start it. See [desktop](../apps/desktop/index.md) and [testing](../how-to-contribute/testing.md).
 
-### Browser, desktop and shared
+## Resolution and host dependencies
 
-| Manifest                       | External runtime declarations                                                                                                                              |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/package.json`        | `react` `^19.3.1`, `react-dom` `^19.3.1`, `react-router` `^8.5.1`, `@tanstack/react-query` `^5.106.1`, `@sentry/react` `~11.10.0`, `posthog-js` `~1.446.3` |
-| `apps/desktop/package.json`    | `@sentry/electron` `~8.3.0`, `posthog-node` `~5.61.2`                                                                                                      |
-| `packages/shared/package.json` | `zod` `^4.6.7`                                                                                                                                             |
+Node `>=24 <25` and pnpm `^12.16.0` are selected by root engine metadata, without a `packageManager` field. CI pins pnpm 12.18.0 (`package.json`, `.github/workflows/ci.yml`).
 
-Both apps also link `@homestream/shared` with `workspace:*`. The browser has real routing/query/screen consumers, while the desktop package currently exports support modules rather than launching Electron (`apps/web/src/App.tsx`, `apps/web/src/api/queries.ts`, `apps/desktop/src/index.ts`). See [web](../apps/web/index.md), [desktop](../apps/desktop.md) and [shared](../packages/shared.md).
+`pnpm-workspace.yaml` permits builds for Electron, esbuild, electron-winstaller and Lefthook, denies the core-js donation script, and overrides older glob/minimatch resolutions. Build approval is not proof that each package is directly declared.
 
-Sentry is **11.10** for server/browser and **8.3** for Electron; those different SDK families are intentional declarations, not evidence of accidental version drift. Runtime transmission remains optional and key-gated; installing a telemetry package does not enable reporting ([telemetry](../systems/telemetry.md)).
+Real playback depends on FFmpeg, ffprobe and NVIDIA drivers; GPU health uses `nvidia-smi`. TMDB, the gateway, upstream CDN, optional TorBox, Sentry/PostHog, and a Prometheus scraper are service dependencies, not npm entries (`apps/server/src/app.ts`, `monitoring/prometheus/prometheus.yml`).
 
-## Development declarations
-
-The root's **17** tooling dependencies are declared in `package.json`:
-
-| Group                            | Packages and manifest ranges                                                                                                       |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Language/types                   | `typescript` `~6.0.3`, `@types/node` `^26.6.6`                                                                                     |
-| Lint                             | `@eslint/js` `^10.0.1`, `eslint` `^10.14.0`, `typescript-eslint` `^8.72.1`, `eslint-plugin-sonarjs` `~4.2.2`, `globals` `^17.14.0` |
-| Tests/coverage                   | `vitest` `^5.1.0`, `@vitest/coverage-v8` `~5.1.0`                                                                                  |
-| Boundaries/dead code/duplication | `dependency-cruiser` `~18.7.2`, `knip` `~6.44.1`, `jscpd` `~5.4.2`                                                                 |
-| Formatting/version consistency   | `prettier` `~3.9.10`, `syncpack` `~15.3.3`                                                                                         |
-| Task graph/hooks/data            | `turbo` `~2.11.10`, `lefthook` `~2.2.2`, `yaml` `^2.9.1`                                                                           |
-
-Workspace-specific development dependencies:
-
-| Manifest                       | Declarations                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/server/package.json`     | `tsx` `^4.23.15`                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `apps/web/package.json`        | `@playwright/test` `~1.64.1`, `@sentry/vite-plugin` `~11.10.0`, `@size-limit/file` `~14.3.0`, `@testing-library/dom` `^10.4.2`, `@testing-library/jest-dom` `^7.0.1`, `@testing-library/react` `^16.3.3`, `@testing-library/user-event` `^14.6.8`, `@types/react` `^19.3.0`, `@types/react-dom` `^19.3.0`, `@vitejs/plugin-react` `^6.2.1`, `jsdom` `^31.0.0`, `rollup-plugin-visualizer` `^7.1.2`, `size-limit` `~14.3.0`, `vite` `^8.3.5` |
-| `apps/desktop/package.json`    | `@size-limit/file` `~14.3.0`, `electron` `~45.2.3`, `size-limit` `~14.3.0`                                                                                                                                                                                                                                                                                                                                                                  |
-| `packages/shared/package.json` | None; uses shared root tools                                                                                                                                                                                                                                                                                                                                                                                                                |
-
-Electron is a development declaration even though the eventual packaged desktop runtime needs its binary. The documented setup downloads that binary separately/lazily using `node apps/desktop/node_modules/electron/install.js`; set `ELECTRON_CACHE` first if its cache must live on another drive. Plain Node desktop tests do not launch or require the binary (`apps/desktop/README.md`). The dependency does not imply an implemented window/tray/supervisor.
-
-## Resolution policy and non-npm dependencies
-
-- `package.json` requires **Node >=24 <25** and selects **pnpm ^12.16.0** through `devEngines.packageManager`. The package-manager document in `pnpm-lock.yaml` resolves pnpm **12.18.0**; that is not an app declaration.
-- `pnpm-workspace.yaml` permits install builds for `electron`, `esbuild`, `electron-winstaller` and `lefthook`, denies the `core-js` donation build, and overrides `glob@<14.0.2` to `14.0.2` and `minimatch@<11.0.1` to `11.0.1`. Build approval is not an inventory of direct dependencies.
-- FFmpeg, ffprobe, NVIDIA drivers and `nvidia-smi` are host requirements, not npm declarations (`apps/server/src/health/checks/ffmpeg.ts`, `apps/server/src/health/checks/gpu.ts`).
-- TMDB, gateway, upstream CDN, optional TorBox/Sentry/PostHog and an optional Prometheus scraper are service dependencies, not additional npm packages (`apps/server/src/app.ts`, `monitoring/prometheus/prometheus.yml`). See [configuration](configuration.md).
-
-Update compatibility is governed by the repository's version-consistency, module-boundary, bundle and test gates, not by this inventory. No registry freshness, vulnerability or unused-dependency scan was performed for this page.
+Use the lockfile and repository gates when updating dependencies. This generation did not query registry freshness or run a vulnerability audit. See [tooling](../how-to-contribute/tooling.md), [architecture](../overview/architecture.md), and [configuration](configuration.md).

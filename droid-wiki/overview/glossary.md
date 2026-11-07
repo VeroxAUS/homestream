@@ -1,30 +1,34 @@
 # Glossary
 
-These terms connect the shared contracts, playback pipeline, and browser UI. Start with [architecture](architecture.md) for the runtime view.
+These terms connect shared contracts, the server pipeline, and client playback. Start with [architecture](architecture.md) for the runtime view.
 
-| Term               | Meaning and source                                                                                                           |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Capability profile | Device codecs, HDR, dimensions, and audio limits, `packages/shared/src/schemas.ts`                                           |
-| Decision           | Server-selected codec, output dimensions, audio, dynamic range, and subtitle burn-in, `apps/server/src/playback/decision.ts` |
-| Gateway            | Configured service for stream discovery, `apps/server/src/gateway/client.ts`                                                 |
-| Stream option      | Parsed source metadata exposed without the raw source URL, `packages/shared/src/streams.ts`                                  |
-| Automatic fallback | Trying ranked sources when a source fails startup, `apps/server/src/playback/manager.ts`                                     |
-| Session            | Playback state with encoder, segment store, tracks, and progress, `apps/server/src/playback/session.ts`                      |
-| Source proxy       | Loopback HTTP server that hides expiring links and shares byte-range caches, `apps/server/src/sourceproxy/proxy.ts`          |
-| Prefetch           | Warming source bytes and probe results without encoding, `apps/server/src/prefetch/service.ts`                               |
-| Download           | Tracking a TorBox caching job upstream, not storing a complete movie locally, `apps/server/src/downloads/service.ts`         |
-| Media key          | Stable movie/episode identity joining progress, plays, and download tracking, `apps/server/src/db/plays.ts`                  |
-| Continue watching  | Resume items and aired next episodes derived from progress, `apps/server/src/progress/service.ts`                            |
-| HLS                | HTTP playlists and media segments, `apps/server/src/playback/playlist.ts`                                                    |
-| WebVTT             | Text subtitles exposed as HLS renditions, `apps/server/src/playback/vtt.ts`                                                  |
-| Burn-in            | Subtitles rendered into encoded video, `apps/server/src/playback/ffmpegArgs.ts`                                              |
-| Encoder lead       | Encoded media time ahead of the player, used to gate source reads, `apps/server/src/network/readAhead.ts`                    |
-| Event bus          | In-process typed fan-out used by SSE, `apps/server/src/events/bus.ts`                                                        |
-| Device id          | Random browser identifier, independent of accounts or analytics, `apps/web/src/device/identity.ts`                           |
-| Install id         | Random local identity for optional server analytics, `apps/server/src/db/settings.ts`                                        |
-| Identity scrubber  | Removes machine and user-name words from reports, `packages/shared/src/identity.ts`                                          |
-| Content mark       | `hs:home-content`, the performance mark that releases deferred browser work, `apps/web/src/lib/startup.ts`                   |
-| Route template     | Analytics-safe path such as `/movie/:id`, without a title identifier, `apps/web/src/telemetry/routes.ts`                     |
-| Migration          | Numbered SQL update tracked by SQLite `user_version`, `apps/server/src/db/index.ts`                                          |
+| Term | Meaning and source |
+| --- | --- |
+| Capability profile | Codecs, HDR, dimensions, and audio limits reported by a device, `packages/shared/src/schemas.ts` |
+| Decision | Server-selected output codec, dimensions, audio, dynamic range, and burn-in, `apps/server/src/playback/decision.ts` |
+| Gateway | Configured source-discovery service, `apps/server/src/gateway/client.ts` |
+| Stream option | Parsed source metadata without its raw URL, `packages/shared/src/streams.ts` |
+| Automatic fallback | Trying ranked candidates after startup failure, `apps/server/src/playback/sessionStart.ts` |
+| Session | Playback state with tracks, encoder, segments, and progress, `apps/server/src/playback/sessionRecord.ts` |
+| Session slot | Resource ownership that is not released while a stopped encoder still runs, `apps/server/src/playback/sessionSlots.ts` |
+| Source proxy | Loopback HTTP service hiding expiring links and sharing ranged bytes, `apps/server/src/sourceproxy/proxy.ts` |
+| Prefetch | Warming bytes and probe results without encoding, `apps/server/src/prefetch/service.ts` |
+| Download | Tracking upstream TorBox caching, not storing the entire title locally, `apps/server/src/downloads/service.ts` |
+| Placeholder | Gateway downloading clip that must not become a playback session, `apps/server/src/playback/placeholder.ts` |
+| Media key | Movie or episode identity joining history and progress, `apps/server/src/db/plays.ts` |
+| Continue watching | Resume items and aired next episodes derived from saved progress, `apps/server/src/progress/service.ts` |
+| HLS | HTTP playlists and media segments, `apps/server/src/playback/playlist.ts` |
+| WebVTT | Text subtitles exposed through HLS, `apps/server/src/playback/vtt.ts` |
+| Burn-in | Subtitles rendered into encoded video, `apps/server/src/playback/ffmpegArgs.ts` |
+| Encoder lead | Encoded time ahead of the player used to gate reads, `apps/server/src/network/readAhead.ts` |
+| Event bus | Typed in-process fan-out backing SSE, `apps/server/src/events/bus.ts` |
+| Device id | Random local client identifier, not an account, `apps/web/src/device/identity.ts` |
+| Install id | Random identity for optional server analytics, `apps/server/src/db/settings.ts` |
+| Content mark | `hs:home-content`, which releases deferred startup work, `apps/web/src/lib/startup.ts` |
+| Route template | Analytics-safe route such as `/movie/:id`, `apps/web/src/telemetry/routes.ts` |
+| Supervisor | Desktop controller that starts or attaches to the server, `apps/desktop/src/supervisor.ts` |
+| Desktop bridge | Typed preload interface between renderer and main process, `packages/shared/src/desktop.ts`, `apps/desktop/src/preload.cts` |
+| Mini player | Separate desktop renderer taking over an existing session, `apps/desktop/src/miniPlayer.ts` |
+| Migration | Numbered SQL change tracked by SQLite `user_version`, `apps/server/src/db/index.ts` |
 
-See [shared contracts](../packages/shared.md) and [viewing progress](../features/viewing-progress.md) for the underlying types and rules.
+See [shared contracts](../packages/shared.md), [playback](../systems/playback/index.md), and [viewing progress](../features/viewing-progress.md).

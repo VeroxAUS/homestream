@@ -1,33 +1,35 @@
 # Monitoring
 
-HomeStream has local JSON logs, persisted domain events, health snapshots, Prometheus metrics and optional Sentry/PostHog clients. The surfaces answer different questions; none is a finished web monitoring dashboard (`apps/server/src/routes/ops.ts`, `apps/server/src/routes/health.ts`, `apps/web/src/App.tsx`).
+HomeStream has local structured logs, durable events, health snapshots, Prometheus metrics and optional Sentry/PostHog telemetry. These answer different questions; dashboard tabs remain placeholders, not a deployed monitoring backend. See [health](../systems/health.md).
 
-## Start with the right signal
+## Choose a signal
 
-| Need                               | Surface                                      | Limits                                                                                      |
-| ---------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Is HTTP answering?                 | `GET /healthz`                               | Liveness only                                                                               |
-| Can local state be used?           | `GET /readyz`                                | SQLite query plus temporary data-directory write/delete; 503 on failure, 300/minute/address |
-| Are dependencies/playback healthy? | `GET /api/health`                            | Nine checks; upstream/GPU checks have scheduling/caching                                    |
-| Follow a request                   | `X-Request-ID` and `DATA_DIR` process log    | Context correlation, not distributed tracing                                                |
-| Find domain failures               | `GET /api/logs?level=error`                  | SQLite events, not full process log                                                         |
-| Watch changes                      | `GET /api/events`                            | SSE heartbeat, health, session, log and download events; not general replay                 |
-| Graph rates/latency                | `GET /metrics`                               | Requires an external scraper/backend                                                        |
-| Inspect live playback              | `GET /api/activity`, `GET /api/sessions/:id` | Session/encoder snapshots, not retained time series                                         |
+| Question | Surface | Boundary |
+| --- | --- | --- |
+| Is HTTP answering? | GET `/healthz` | Liveness only |
+| Can local state be used? | GET `/readyz` | DB query and data-directory write/remove; 503 when unusable, 300/minute/address |
+| Can dependencies/playback work? | GET `/api/health` | Nine checks, scheduled/cached; initial read can be expensive |
+| What happened to a request? | Response `X-Request-ID`, `DATA_DIR/server.log` | Local correlation, not automatic distributed tracing |
+| Which domain events occurred? | GET `/api/logs` | Selected SQLite events, not process log contents |
+| What changed now? | GET `/api/events` | SSE session/health/log/download changes, not general history replay |
+| What rates/latencies exist? | GET `/metrics` | Needs an external scraper/time-series backend |
+| What is playing? | GET `/api/activity`, GET `/api/sessions/:id` | Current session/encoder snapshots |
 
-Probe/metrics routes make no upstream calls (`apps/server/src/routes/ops.ts`). Reading `/api/health` can run all checks before the first snapshot, including an NVENC encode; use the dedicated probes for frequent polling (`apps/server/src/health/service.ts`). Public routes are open on the configured LAN listener; keep them off the internet.
+`registerOpsRoutes` in `apps/server/src/routes/ops.ts` makes no upstream calls. `/healthz` returns `{"status":"ok"}`; successful readiness returns `{"status":"ready"}`. Readiness does not test GPU, transcode writes, source availability or credentials.
 
-`/healthz` returns `{"status":"ok"}` and `/readyz` returns `{"status":"ready"}` on success. Readiness answers **503 `not_ready`** for unusable SQLite or data storage; it does not test transcode writes, external credentials or a playable source (`apps/server/src/routes/ops.ts`). Full health returns a snapshot whose `overall` is the worst check status, not an HTTP failure merely because a dependency is unhealthy (`packages/shared/src/health.ts`, `apps/server/src/routes/health.ts`).
+`HealthService` in `apps/server/src/health/service.ts` can contact services and run an NVENC encode. Use the root probes for frequent polling; a failed dependency changes snapshot status rather than automatically failing HTTP liveness. Do not repeatedly invoke fresh health runs.
 
-The browser's dashboard tabs are placeholders, though the server monitoring APIs are implemented (`apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`). Use API responses and an independently configured monitoring backend rather than assuming the UI already renders these signals.
+`registerEventRoutes` in `apps/server/src/routes/events.ts` sends heartbeat immediately and every 15 seconds, with a three-second retry hint, but no health baseline or general replay cursor. `apps/web/src/events/serverEvents.ts` reconciles health via its query on every open and cancels stale answers. Reconnecting consumers should refetch the snapshots they need.
 
 ## Guides
 
-- [Logging](logging.md): process logs, domain events, SSE and request IDs.
-- [Metrics](metrics.md): labels, buckets, metric families and scrape configuration.
-- [Tracing](tracing.md): actual correlation and the limits of manual Sentry setup.
-- [Alerting](alerting.md): checked-in Prometheus rules and Sentry workflows.
-- [Health](../systems/health.md): check thresholds, scheduling and fresh-run costs.
-- [Telemetry](../systems/telemetry.md): optional outbound data and flag defaults.
+- [Logging](logging.md): process files, retained event rows, SSE and local privacy.
+- [Metrics](metrics.md): literal metric families, labels and scrape exclusions.
+- [Tracing](tracing.md): request IDs and restricted Sentry instrumentation.
+- [Alerting](alerting.md): checked-in thresholds, Sentry workflows and runbooks.
+- [Health](../systems/health.md): check timing, caches, disk setting and failure boundaries.
+- [Telemetry](../systems/telemetry.md): outbound events, opt-outs and flags.
 
-`docs/observability.md`, `docs/alerting.md`, `docs/PRIVACY.md` and `docs/runbooks/README.md` are the maintained operator references. Backend configuration is checked in under `monitoring/prometheus/` and `monitoring/sentry/`; their presence does not prove a backend is deployed or a rule applied.
+`docs/observability.md`, `docs/alerting.md`, `docs/PRIVACY.md` and `docs/runbooks/README.md` are maintained operator references. Configuration under `monitoring/prometheus/` and `monitoring/sentry/` does not prove a scraper, receiver or account rule has been deployed.
+
+These endpoints share the unauthenticated LAN boundary. Keep snapshots/logs private and review before sharing; see [security](../security.md). This documentation refresh did not probe services, apply alerts or execute test suites.

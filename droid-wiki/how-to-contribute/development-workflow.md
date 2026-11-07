@@ -1,18 +1,16 @@
 # Development workflow
 
-Use Node 24 and pnpm 12 from the repository root. Bootstrap once, branch from `main`, update code and its contracts together, then run the gates appropriate to the change (`CONTRIBUTING.md`, `package.json`).
+Bootstrap once, branch from `main`, change code and contracts together, and run the checks appropriate to the change. Commands run from the repository root with Node 24 and pnpm 12 (`CONTRIBUTING.md`, `package.json`).
 
-## Prepare the workspace
+## Prepare
 
 ```powershell
 node scripts/bootstrap.mjs
 ```
 
-`scripts/bootstrap.mjs` checks Node/pnpm, warns about missing FFmpeg/NVENC, installs with the frozen lockfile, installs hooks outside CI, preserves an existing `.env`, and builds shared contracts. `.devcontainer/devcontainer.json` runs the same bootstrap and configures a temporary test root.
+`scripts/bootstrap.mjs` checks tools, installs locked dependencies and hooks, preserves an existing `.env`, and builds shared contracts. A dev container uses the same entry point (`.devcontainer/devcontainer.json`). Larger changes start with an issue; no branch-name pattern is required by `CONTRIBUTING.md`.
 
-Create a focused branch from `main`; there is no required branch-name pattern in `CONTRIBUTING.md`. Discuss larger changes in an issue first. Use [configuration](../reference/configuration.md) for private local settings and writable paths.
-
-Run the server and Vite in separate terminals:
+For source development, run the server and Vite in separate terminals after building shared:
 
 ```powershell
 pnpm --filter @homestream/shared build
@@ -20,17 +18,17 @@ pnpm --filter @homestream/server dev
 pnpm --filter @homestream/web dev
 ```
 
-The server uses tsx watch (`apps/server/package.json`); Vite listens on 8601 and proxies `/api` and `/hls` to 8600 (`apps/web/vite.config.ts`). Its target is fixed, not derived from the server's `PORT`. Runtime imports use the built shared package, so rebuild it after contract changes; tests alias shared source directly.
+The server uses tsx watch. Vite uses 8601 and proxies to server port 8600, not an arbitrary `PORT` override (`apps/server/package.json`, `apps/web/vite.config.ts`). Production Node imports use built shared output; tests alias shared source (`packages/shared/package.json`, `vitest.shared.ts`). See [getting started](../overview/getting-started.md).
 
-## Implement at the right layer
+## Change the owning layer
 
-Keep handlers in `apps/server/src/routes/` thin. Change shared Zod schemas before wiring new HTTP behavior; register documentation in `apps/server/src/docs/routeDocs.ts`, test with injection/stubs, and run `pnpm openapi:export`. Follow `.factory/skills/homestream-add-api-route/SKILL.md`.
+Keep handlers thin and shared schemas authoritative. Route changes follow `.factory/skills/homestream-add-api-route/SKILL.md` and update `apps/server/src/docs/routeDocs.ts`, tests, and `docs/openapi.json`. Append migrations in `apps/server/src/db/migrations.ts`; regenerate `docs/schema.sql` and update `docs/database.md`.
 
-Append database migrations in `apps/server/src/db/migrations.ts`, then run `pnpm db:schema` and update `docs/database.md`. For telemetry, follow `.factory/skills/homestream-telemetry/SKILL.md` and update `docs/PRIVACY.md` in the same change. Timers, subprocesses, sockets and temporary files need an explicit cleanup owner in the [server](../apps/server.md).
+Telemetry changes follow `.factory/skills/homestream-telemetry/SKILL.md` and update `docs/PRIVACY.md` in the same patch. Resource ownership and serialization matter for both server encoders and desktop restart operations; see [conventions](patterns-and-conventions.md).
 
-## Verify before review
+## Verify
 
-The complete code-change gate from `AGENTS.md` and `.factory/skills/homestream-run-checks/SKILL.md` is:
+The full code-change gate is listed in `AGENTS.md` and `.factory/skills/homestream-run-checks/SKILL.md`:
 
 ```powershell
 pnpm format:check
@@ -56,32 +54,30 @@ pnpm docs:check
 pnpm agents:check
 ```
 
-Markdown-only changes need format, docs and agent validators; route/schema/migration changes also need generated-document checks. The bundle checks read `apps/web/.size-limit.json` and `apps/desktop/.size-limit.json`; build before measuring. Coverage thresholds may only rise; `pnpm coverage:ratchet` measures and raises eligible thresholds, rather than being a read-only command. Fix failures instead of widening budgets or complexity limits. [Tooling](tooling.md) explains each gate. Run GPU/live only when the change needs them; `pnpm test` is not the safe offline default ([testing](testing.md)).
+Markdown-only work needs format, docs, and agent checks. Build before measuring bundle size. Coverage and grandfathered complexity/line ceilings may only improve, not be relaxed to pass a change (`scripts/coverage-ratchet.mjs`, `scripts/code-limits.mjs`). GPU/live tiers are separate; root `pnpm test` is not the safe offline default. See [testing](testing.md).
 
-Lefthook checks staged formatting, ESLint, secrets and file sizes, plus documentation links for Markdown and agent instructions when `AGENTS.md` changes (`lefthook.yml`). It does not run the test suite. Review the staged diff and run `pnpm check:secrets`; exclude `.env`, build outputs, reports and coverage.
+Hooks run staged formatting, lint, secret/file-size scans, and relevant docs checks, not the complete test suite (`lefthook.yml`). Review the staged diff yourself. Do not stage `.env`, dependencies, builds, coverage, or reports.
 
-## Commit, PR and CI
+## Commit and review
 
-Use an imperative Conventional Commit subject, usually under 72 characters, without a full stop and with an optional scope: `feat(server): ...`, `fix(web): ...`, or `docs: ...`. Explain why in the body. Other accepted types include `test`, `refactor`, `perf`, `build`, `ci`, `chore` and `revert` (`CONTRIBUTING.md`). Every AI-written commit ends with this trailer, separated by a blank line:
+Use an imperative Conventional Commit subject and explain why in its body. Every AI-written commit ends with:
 
 ```text
 Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>
 ```
 
-Open the PR against `main` using `.github/pull_request_template.md`. Include the exact checks run, relevant hardware/live checks not run, privacy changes and hot-path measurements. Do not rewrite published history or force-push.
+Open the pull request against `main` and fill in `.github/pull_request_template.md`. Report exact checks, skipped tiers, privacy implications, and hot-path measurements. Never rewrite published history or force-push (`CONTRIBUTING.md`).
 
-`.github/workflows/ci.yml` runs full Linux static/documentation/security gates and sequential offline coverage across all four workspaces; Windows runs typechecking and selected path/process-sensitive server unit files. Linux's coverage command executes tests rather than running a separate `test:ci` step. The parallel, non-required `Web e2e` job builds the server, installs Chromium and runs the plain/stub browser suites without playback. `Linux` and `Windows` are the required status names recorded in `AGENTS.md`; the workflow pins pnpm 12.18.0 and Node through `.nvmrc`. GPU and live tiers never run in CI. Generated-wiki-only changes are excluded and handled by their own workflow; see [tooling](tooling.md) and [deployment](../deployment.md).
+Linux runs the broad static/docs/security and sequential coverage gates; Windows runs typechecking and selected path/process-sensitive tests. Web e2e is parallel and advisory. GPU/live never run in CI (`.github/workflows/ci.yml`). Droid review is advisory and timing records for main runs may finish out of order; release planning skips commits already contained in a release tag (`docs/ci.md`, `scripts/next-version.mjs`).
 
 ## Key source files
 
-| File                               | Purpose                                     |
-| ---------------------------------- | ------------------------------------------- |
-| `scripts/bootstrap.mjs`            | Repeatable first-time setup                 |
-| `apps/server/package.json`         | Server development, build and tier commands |
-| `apps/web/vite.config.ts`          | Dev port and API/HLS proxy                  |
-| `lefthook.yml`                     | Staged checks                               |
-| `.github/pull_request_template.md` | PR handoff contract                         |
-| `.github/workflows/ci.yml`         | Linux and Windows validation                |
-| `.github/workflows/docs.yml`       | Regeneration drift checks                   |
+| File | Purpose |
+| --- | --- |
+| `scripts/bootstrap.mjs` | Initial setup |
+| `turbo.json` | Workspace task graph and cache |
+| `lefthook.yml` | Staged checks |
+| `.github/workflows/ci.yml` | Cross-platform validation |
+| `.github/pull_request_template.md` | Review handoff |
 
-PowerShell 5.1 lacks `&&`: run commands separately, or use `;` and check `$LASTEXITCODE`. Use `curl.exe` rather than its PowerShell alias, and judge pnpm by exit status rather than stderr progress (`AGENTS.md`).
+PowerShell 5.1 has no `&&`; run commands separately or use `;` and check `$LASTEXITCODE`. Use `curl.exe` instead of its alias (`AGENTS.md`). See [tooling](tooling.md) and [deployment](../deployment.md).

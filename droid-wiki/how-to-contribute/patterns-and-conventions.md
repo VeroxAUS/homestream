@@ -4,28 +4,32 @@ HomeStream uses strict TypeScript, shared Zod contracts, thin routes, and explic
 
 ## Types and modules
 
-`tsconfig.base.json` enables strict mode, unchecked-index checks, explicit overrides, and switch fallthrough checks. Server imports use `.js` specifiers; web build configuration uses bundler resolution (`apps/server/tsconfig.json`, `apps/web/tsconfig.json`). `eslint.config.mjs` enforces type-only imports, camelCase values, PascalCase types, complexity ceilings of 20, and nesting depth 4. Existing exceptions are debt, not permission to add new ones (`docs/TECH_DEBT.md`).
+`tsconfig.base.json` enables strict mode and unchecked-index checks. Server imports use `.js` specifiers; the browser uses bundler resolution (`apps/server/tsconfig.json`, `apps/web/tsconfig.json`). Type-only imports, camelCase values, PascalCase types, complexity ceilings of 20, and nesting depth 4 are enforced by `eslint.config.mjs`.
 
-Runtime contracts and inferred types live in `packages/shared/src/`. Keep wire field names identical across clients. Parsing, ranking, encoder decisions, playlists, and statistics rules should remain pure and unit-tested (`AGENTS.md`). Apps may import shared contracts but never each other (`.dependency-cruiser.cjs`).
+New source files stay within 400 counted lines and functions within 80; tests are exempt from the function limit. Grandfathered ceilings in `code-limits.baseline.json` may only shrink. Do not add exceptions to work around a failing check (`scripts/code-limits.mjs`, `AGENTS.md`).
+
+Runtime contracts live under `packages/shared/src`; keep wire names consistent across clients. Pure parsing, ranking, decisions, playlists, and statistics rules get offline unit tests. Apps cannot import each other; desktop IPC contracts belong in shared code (`.dependency-cruiser.cjs`, `packages/shared/src/desktop.ts`).
 
 ## HTTP and errors
 
-Server handlers in `apps/server/src/routes/` validate shared schemas and delegate to services. Expected failures use `AppError` from `apps/server/src/errors.ts`. Errors have `{error:{code,message,hint?}}`, with a plain-English hint when the user can act. The app hides unexpected failure details (`apps/server/src/app.ts`).
+Handlers under `apps/server/src/routes` validate shared schemas and call services. Expected failures use `AppError`; errors have `{error:{code,message,hint?}}`, with an actionable plain-English hint. Unexpected failures are redacted by the app (`apps/server/src/errors.ts`, `apps/server/src/app.ts`).
 
-Browser requests use `apiFetch` or schema-validating `apiGet`, which attach `X-Request-ID` and throw `ApiError` (`apps/web/src/api/client.ts`). Do not add direct `/api` fetches. Desktop requests use `withRequestId` from `apps/desktop/src/requestId.ts`.
+Browser API calls use `apiFetch` or schema-validating `apiGet`, which attach `X-Request-ID` and throw `ApiError`. The UUID helper also works on plain-HTTP LAN origins without `crypto.randomUUID` (`apps/web/src/api/client.ts`, `apps/web/src/lib/uuid.ts`). Desktop calls attach request IDs through `apps/desktop/src/requestId.ts`.
 
-Route changes require contracts, OpenAPI entries, tests, and a regenerated export. Follow `.factory/skills/homestream-add-api-route/SKILL.md`; see [API](../api/index.md).
+Route changes require shared contracts, OpenAPI entries, tests, and regenerated exports. Follow `.factory/skills/homestream-add-api-route/SKILL.md`; see [API](../api/index.md).
 
 ## Resource ownership
 
-`apps/server/src/app.ts` provides test seams for network, clocks, encoders, and limits. Its close hook stops workers before closing resources and preserves injected dependencies it does not own. Timers, subprocesses, sockets, and temporary directories need explicit cleanup.
+Services accept test seams for network, clocks, encoders, and limits. The app closes resources it owns and stops workers before database shutdown (`apps/server/src/app.ts`). Timers, sockets, subprocesses, and temporary directories need explicit cleanup.
 
-Append migrations to `apps/server/src/db/migrations.ts`, never rewrite applied ones. Regenerate `docs/schema.sql` and update `docs/database.md` (`apps/server/src/db/index.ts`). Tests use isolated directories and port 0, with no real upstream calls outside the live tier (`AGENTS.md`).
+Playback serializes launches and retains slot ownership until old encoders really exit. Track changes and seeks must not spawn replacements over a still-running process (`apps/server/src/playback/sessionSlots.ts`, `apps/server/src/playback/encoderLifecycle.ts`, `apps/server/src/playback/recovery.ts`). Desktop restart operations also serialize; attached and owned servers have different shutdown obligations (`apps/desktop/src/supervisor.ts`).
+
+Append database migrations, never rewrite applied ones. Regenerate `docs/schema.sql` and update `docs/database.md` (`apps/server/src/db/migrations.ts`, `apps/server/src/db/index.ts`). Tests use isolated temp directories and port 0; real upstream calls stay in the live tier (`AGENTS.md`).
 
 ## Privacy and performance
 
-Never log raw gateway/CDN URLs, credentials, or user text. Server redaction is in `apps/server/src/redact.ts`; browser and desktop logs use their own wrappers (`apps/web/src/logger.ts`, `apps/desktop/src/logger.ts`). Analytics events and property allowlists live in `packages/shared/src/analytics.ts`; new events require a matching `docs/PRIVACY.md` update.
+Never log raw gateway/CDN URLs, credentials, or user text. Use redaction and structured logger wrappers (`apps/server/src/redact.ts`, `apps/web/src/logger.ts`, `apps/desktop/src/logger.ts`). Analytics events and property allowlists live in `packages/shared/src/analytics.ts`; changing them requires updating `docs/PRIVACY.md`.
 
-Browser telemetry keys are baked in at build time. SDK imports stay outside the initial bundle. Device registration, SSE, and telemetry wait until content is visible and the browser is idle (`apps/web/src/telemetry/index.ts`, `apps/web/src/lib/startup.ts`, `apps/web/src/main.tsx`). Preserve the bundle budgets in `apps/web/.size-limit.json`.
+Browser telemetry keys are build-time values. SDK imports stay outside the initial bundle, and registration, SSE, and telemetry wait for rendered content and idle time (`apps/web/src/main.tsx`, `apps/web/src/lib/startup.ts`, `apps/web/src/telemetry/index.ts`). Preserve the limits in `apps/web/.size-limit.json`.
 
-Do not change the product rules: video is re-encoded, clients send `streamId: "auto"`, devices are not accounts, and the listener is LAN-only. Measure hot paths before and after changes (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).
+Do not change product rules: video is always re-encoded, clients request `streamId: "auto"`, devices are not accounts, and deployment is LAN-only. Measure hot paths before and after changes (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).
