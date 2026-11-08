@@ -49,7 +49,12 @@ node apps/desktop/node_modules/electron/install.js    # downloads dist/electron.
 apps/desktop/node_modules/electron/dist/electron.exe --version   # v45.x
 ```
 
-The unit tests never launch it. The `Windows` CI job installs it and runs the launch smoke test (`test/smoke/launch.smoke.ts`): it starts the built app with the built server and web UI in a throw-away user-data and data folder (ports 8616 and 8617), checks the 20-member bridge, the server status line, the tray tooltip, the first-run screen and `desktop-settings.json`, then ends the app with a second launch using `--quit` and checks that the server stopped too.
+The unit tests never launch it. The `Windows` CI job installs it and runs the launch smoke tests (`pnpm smoke`, files in `test/smoke/`, shared helpers in `harness.ts`). Both start the built app with the built server and web UI in a throw-away user-data and data folder under `HOMESTREAM_TEST_ROOT`, and both end the app with a second launch using `--quit`, then check that the exit code is 0, the server port no longer answers and none of the Electron or server processes (by pid) is left.
+
+- `launch.smoke.ts` is the first run (ports 8616 and 8617): the 20-member bridge, the server status line, the tray tooltip, the first-run screen and `desktop-settings.json`.
+- `configured.smoke.ts` is the configured launch (ports 8618 and 8619): an env file with invented keys, TMDB and the gateway served by the e2e stub hub of the web app (`apps/web/e2e/support/hub.mjs`, `redirect-fetch.mjs`, ports from `apps/web/e2e/ports.json`), no real key and no playback session. It waits until Home shows its poster rows (the `hs:home-content` mark, no first-run screen, the Trending Movies row with posters), not only for the window.
+
+The wait condition and the process-table helpers are unit tested in `test/smokeHarness.test.ts`.
 
 ## Telemetry plan for the main process (`@sentry/electron` 8.3)
 

@@ -300,8 +300,9 @@ jobs:
           test/config.test.ts test/redact.test.ts test/playback/playlist.test.ts
           test/playback/decision.test.ts test/playback/ffmpegArgs.test.ts test/db.test.ts
 
-      # The one test that starts the real Electron shell: it launches the built app with the built server and web UI,
-      # drives it over DevTools and quits it with --quit. It needs a desktop session, which this runner has.
+      # The tests that start the real Electron shell (apps/desktop/test/smoke): a first run, and a configured launch that
+      # waits for Home (stub TMDB and gateway, invented keys). Each launches the built app with the built server and web
+      # UI, drives it over DevTools and quits it with --quit. It needs a desktop session, which this runner has.
       - name: Build the app, server and web UI for the Electron smoke test
         shell: bash
         run: |
