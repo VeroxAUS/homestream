@@ -207,7 +207,9 @@ jobs:
           GH_TOKEN: ${{ secrets.FACTORY_WIKI_PR_TOKEN || github.token }}
           PR_NUMBER: ${{ steps.wiki-pr.outputs.pull-request-number }}
           BASE: ${{ github.event.repository.default_branch }}
+          HAS_WIKI_PR_TOKEN: ${{ secrets.FACTORY_WIKI_PR_TOKEN != '' }}
         run: |
+          echo "pushes_start_workflows=$HAS_WIKI_PR_TOKEN" >> "$GITHUB_OUTPUT"
           protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" --jq .protected || echo false)
           flags=--squash
           if [ "$protected" = "true" ]; then
@@ -219,3 +221,37 @@ jobs:
           else
             echo "::warning::Could not merge wiki pull request #$PR_NUMBER ($flags). Merge it by hand or check branch protection and the auto-merge setting."
           fi
+
+      - name: Post the push summary for the wiki merge commit
+        # A merge made with the GITHUB_TOKEN starts no workflow, so droid-review.yml never sees this push. The same
+        # script runs here instead, with the key left out on purpose: the merge only touches droid-wiki/, which the
+        # script excludes, so it posts the short "no reviewable changes" summary and never calls Droid. With the
+        # optional FACTORY_WIKI_PR_TOKEN the merge does start droid-review.yml, so this step stays out of its way.
+        if: >-
+          steps.wiki-merge.outcome == 'success' && steps.wiki-merge.outputs.pushes_start_workflows != 'true' &&
+          steps.wiki-pr.outputs.pull-request-number != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.wiki-pr.outputs.pull-request-number }}
+        run: |
+          # Auto-merge completes some seconds after the request, once the statuses above are seen.
+          state=
+          sha=
+          deadline=$((SECONDS + 180))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            read -r state sha < <(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state,mergeCommit \
+              --jq '.state + " " + (.mergeCommit.oid // "")' || true) || true
+            if [ "${state:-}" = "MERGED" ] && [ -n "${sha:-}" ]; then
+              break
+            fi
+            sleep 10
+          done
+          if [ "${state:-}" != "MERGED" ] || [ -z "${sha:-}" ]; then
+            echo "::warning::Wiki pull request #$PR_NUMBER was not merged within 3 minutes (state: ${state:-unknown}), so the merge commit gets no push summary."
+            exit 0
+          fi
+          git fetch --no-tags --depth=2 origin "$sha"
+          parent=$(git rev-parse "$sha^")
+          GITHUB_SHA="$sha" BEFORE_SHA="$parent" node scripts/droid-push-review.mjs

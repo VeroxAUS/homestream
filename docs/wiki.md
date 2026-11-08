@@ -22,6 +22,8 @@ Branch protection on `main` requires the CI jobs `Linux` and `Windows`. CI ignor
 
 `wiki-publish` does not copy the artifact over the checkout: `scripts/wiki-mirror.mjs` replaces `droid-wiki/` with the artifact, so a page the generator dropped (listed for removal in `page-plan.json`) is deleted in the pull request. It refuses an artifact without `.wiki-meta.json` so a broken download can never empty the wiki.
 
+Because the merge is made with the `GITHUB_TOKEN`, it starts no `Droid review` run either. After the merge step, `wiki-publish` waits for the pull request to be merged and posts the short push summary on the merge commit itself; see [Droid review](ci.md#droid-review).
+
 `droid-wiki/video/` and `droid-wiki/images/` are never committed, and the mirror leaves them alone.
 
 ## Secrets and settings

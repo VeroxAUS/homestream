@@ -12,6 +12,8 @@ interface Step {
   name?: string;
   if?: string;
   with?: Record<string, unknown>;
+  env?: Record<string, string>;
+  'continue-on-error'?: boolean;
 }
 interface Job {
   name?: string;
@@ -182,6 +184,30 @@ describe('workflow hygiene', () => {
     >;
     expect(jobs['wiki-refresh']?.permissions).toEqual({ contents: 'read' });
     expect(jobs['wiki-publish']?.permissions).toMatchObject({ contents: 'write', 'pull-requests': 'write' });
+  });
+
+  it('the wiki merge gets its push summary from the publish job, because a GITHUB_TOKEN merge starts no workflow', () => {
+    const job = workflows.get('droid-wiki-refresh.yml')?.jobs['wiki-publish'];
+    const steps = job?.steps ?? [];
+    const mergeIndex = steps.findIndex((step) => step.name === 'Merge the wiki pull request');
+    const summaryIndex = steps.findIndex((step) => step.run?.includes('scripts/droid-push-review.mjs'));
+    expect(mergeIndex).toBeGreaterThan(-1);
+    expect(summaryIndex).toBeGreaterThan(mergeIndex);
+    const step = steps[summaryIndex];
+    expect(step?.['continue-on-error']).toBe(true);
+    expect(step?.if).toContain('wiki-merge');
+    const run = step?.run ?? '';
+    expect(run).toContain('gh pr view');
+    expect(run).toContain('--json state,mergeCommit');
+    expect(run).toContain('MERGED');
+    expect(run).toContain('--depth=2');
+    expect(run).toContain('::warning');
+    expect(run).toMatch(/GITHUB_SHA="?\$\{?(sha|merge_sha)/);
+    expect(run).toMatch(/BEFORE_SHA="?\$\{?(base|parent|before)/);
+    expect(step?.env?.GITHUB_TOKEN).toBe('${{ github.token }}');
+    // No Droid call: without the key a wiki-only diff gets the short summary and anything else is skipped with a notice.
+    expect(JSON.stringify(step)).not.toContain('FACTORY_API_KEY');
+    expect(job?.permissions).toMatchObject({ contents: 'write' });
   });
 
   it('the CI timing job runs after the required jobs, can never fail the run and is not a required check', () => {
