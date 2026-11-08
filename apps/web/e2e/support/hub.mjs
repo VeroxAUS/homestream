@@ -5,7 +5,8 @@ import { gunzipSync } from 'node:zlib';
 import ports from '../ports.json' with { type: 'json' };
 
 const HOST = '127.0.0.1';
-const IMAGE_BASE = `http://${HOST}:${ports.tmdb}/img/`;
+// Same shape as TMDB's `https://image.tmdb.org/t/p/`: the web UI swaps the `/t/p/<size>/` segment to ask for another size.
+const IMAGE_BASE = `http://${HOST}:${ports.tmdb}/img/t/p/`;
 // 1x1 transparent PNG
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
