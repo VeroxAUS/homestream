@@ -33,7 +33,7 @@ The in-app event log shown on the health page and returned by `GET /api/logs`. E
 
 ### `tmdb_cache`
 
-Cache of TMDB responses (`key` to `json`) with an expiry time. Lets the home screen and detail pages render without a TMDB round trip.
+Cache of TMDB responses (`key` to `json`) with an expiry time. Lets the home screen and detail pages render without a TMDB round trip. Movie and show details are stored under `movie:v2:<id>` and `tv:v2:<id>` for 24 hours, together with their cast and similar titles (one TMDB request with `append_to_response`); bump the version suffix in `apps/server/src/tmdb/service.ts` when the request or the normalized fields change.
 
 ### `gateway_cache`
 

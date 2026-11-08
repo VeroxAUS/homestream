@@ -89,6 +89,29 @@ describe('live TMDB', () => {
     expect((await app.inject('/api/movie/693134')).json().imdbId).toBe('tt15239678');
   });
 
+  it('movie and show details carry cast and similar titles of the same media type', async () => {
+    const movie = (await app.inject('/api/movie/278')).json();
+    expect(movie.cast.length).toBeGreaterThan(0);
+    expect(movie.cast.length).toBeLessThanOrEqual(15);
+    expect(movie.cast[0]).toMatchObject({ name: 'Tim Robbins' });
+    expect(movie.cast[0].character).toContain('Andy');
+    for (const member of movie.cast) {
+      expect(member.profileUrl === null || /^https:\/\/image\.tmdb\.org\/t\/p\/w185\//.test(member.profileUrl)).toBe(
+        true,
+      );
+    }
+    expect(movie.similar.length).toBeGreaterThan(0);
+    expect(movie.similar.length).toBeLessThanOrEqual(20);
+    expect((movie.similar as Item[]).every((item) => item.type === 'movie' && item.tmdbId !== 278)).toBe(true);
+
+    const show = (await app.inject('/api/tv/1396')).json();
+    expect(
+      (show.cast as { name: string; character: string }[]).find((m) => m.name === 'Bryan Cranston')?.character,
+    ).toContain('Walter White');
+    expect((show.similar as Item[]).length).toBeGreaterThan(0);
+    expect((show.similar as Item[]).every((item) => item.type === 'tv' && item.tmdbId !== 1396)).toBe(true);
+  });
+
   it('show details list seasons and the season endpoint lists episodes', async () => {
     const show = (await app.inject('/api/tv/1396')).json();
     expect(show).toMatchObject({ title: 'Breaking Bad', imdbId: 'tt0903747' });
@@ -121,7 +144,7 @@ describe('live TMDB', () => {
     const res = await app.inject('/api/movie/155');
     expect(res.statusCode).toBe(200);
     expect(performance.now() - started).toBeLessThan(50);
-    const row = app.ctx.db.prepare("SELECT expires_at FROM tmdb_cache WHERE key = 'movie:155'").get() as {
+    const row = app.ctx.db.prepare("SELECT expires_at FROM tmdb_cache WHERE key = 'movie:v2:155'").get() as {
       expires_at: number;
     };
     expect(row.expires_at - Date.now()).toBeGreaterThan(23 * 3_600_000);

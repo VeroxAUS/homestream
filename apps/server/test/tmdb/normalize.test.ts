@@ -123,6 +123,62 @@ describe('details', () => {
     ]);
   });
 
+  it('maps movie cast with w185 photos and similar titles without the title itself', () => {
+    const movie = normalizeMovie(MOVIE_DETAILS, images);
+    expect(movie?.cast).toEqual([
+      { name: 'Tim Robbins', character: 'Andy Dufresne', profileUrl: 'https://image.example.test/t/p/w185/tim.jpg' },
+      { name: 'Morgan Freeman', character: "Ellis Boyd 'Red' Redding", profileUrl: null },
+    ]);
+    expect(movie?.similar.map((item) => [item.type, item.tmdbId])).toEqual([
+      ['movie', 238],
+      ['movie', 424],
+    ]);
+    expect(movie?.similar[0]?.posterUrl).toBe('https://image.example.test/t/p/w342/poster238.jpg');
+  });
+
+  it('takes show characters from the first aggregate role and falls back to similar when recommendations are empty', () => {
+    const show = normalizeShow(SHOW_DETAILS, images);
+    expect(show?.cast.map((member) => [member.name, member.character, member.profileUrl])).toEqual([
+      ['Bryan Cranston', 'Walter White', 'https://image.example.test/t/p/w185/bryan.jpg'],
+      ['Aaron Paul', 'Jesse Pinkman', null],
+    ]);
+    expect(show?.similar.map((item) => [item.type, item.tmdbId])).toEqual([['tv', 1398]]);
+  });
+
+  it('uses plain credits for a show without aggregate_credits', () => {
+    const show = normalizeShow(
+      { id: 9, name: 'S', credits: { cast: [{ name: 'A', character: 'B', profile_path: null }] } },
+      images,
+    );
+    expect(show?.cast).toEqual([{ name: 'A', character: 'B', profileUrl: null }]);
+  });
+
+  it('keeps billing order, caps cast at 15 and similar at 20, and skips unnamed or malformed entries', () => {
+    const cast = Array.from({ length: 30 }, (_, i) => ({ name: `Actor ${i}`, character: `Role ${i}`, order: 29 - i }));
+    const results = Array.from({ length: 30 }, (_, i) => ({ id: 1000 + i, title: `M${i}` }));
+    const movie = normalizeMovie(
+      {
+        id: 5,
+        title: 'x',
+        credits: { cast: [{ name: '', character: 'ghost', order: -1 }, null, 'nope', ...cast] },
+        recommendations: { results },
+      },
+      images,
+    );
+    expect(movie?.cast).toHaveLength(15);
+    expect(movie?.cast[0]?.name).toBe('Actor 29');
+    expect(movie?.cast[14]?.name).toBe('Actor 15');
+    expect(movie?.similar).toHaveLength(20);
+  });
+
+  it('returns empty arrays, never missing fields, when TMDB sends no credits or recommendations', () => {
+    expect(normalizeMovie({ id: 5, title: 'x' }, images)).toMatchObject({ cast: [], similar: [] });
+    expect(normalizeShow({ id: 5, name: 'x', credits: 'bad', similar: { results: 7 } }, images)).toMatchObject({
+      cast: [],
+      similar: [],
+    });
+  });
+
   it('maps season episodes in order with w300 stills', () => {
     const season = normalizeSeason(SEASON_ONE, images);
     expect(season?.episodes.map((episode) => episode.episodeNumber)).toEqual([1, 2]);

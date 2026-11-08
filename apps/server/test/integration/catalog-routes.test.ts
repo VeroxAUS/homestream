@@ -85,7 +85,7 @@ describe('catalog routes with a fake TMDB', () => {
     }[];
     const ttl = (key: string) => rows.find((row) => row.key === key)!.expires_at - clock;
     expect(ttl('list:trending:movie')).toBe(3_600_000);
-    expect(ttl('movie:278')).toBe(86_400_000);
+    expect(ttl('movie:v2:278')).toBe(86_400_000);
     expect(ttl('configuration')).toBe(86_400_000);
     expect(ttl('search:breaking bad')).toBe(600_000);
   });
@@ -131,6 +131,53 @@ describe('catalog routes with a fake TMDB', () => {
       runtime: 142,
       genres: ['Drama', 'Crime'],
     });
+  });
+
+  it('movie details carry cast and similar from one TMDB request that is cached', async () => {
+    const body = (await app.inject('/api/movie/278')).json();
+    expect(body.cast[0]).toEqual({
+      name: 'Tim Robbins',
+      character: 'Andy Dufresne',
+      profileUrl: 'https://image.example.test/t/p/w185/tim.jpg',
+    });
+    expect(body.similar.map((item: { tmdbId: number }) => item.tmdbId)).toEqual([238, 424]);
+    const detailCalls = fake.calls.filter((call) => call.startsWith('/3/movie/278'));
+    expect(detailCalls).toHaveLength(1);
+    const params = new URL(`http://x${detailCalls[0]}`).searchParams.get('append_to_response')?.split(',');
+    expect(params).toEqual(['external_ids', 'credits', 'recommendations', 'similar']);
+    expect(fake.calls.some((call) => /\/(credits|recommendations|similar|aggregate_credits)\b/.test(call))).toBe(false);
+
+    const before = fake.calls.length;
+    expect((await app.inject('/api/movie/278')).json()).toEqual(body);
+    expect(fake.calls.length).toBe(before);
+  });
+
+  it('show details request aggregate_credits and carry cast and similar', async () => {
+    const body = (await app.inject('/api/tv/1396')).json();
+    expect(body.cast[0]).toMatchObject({ name: 'Bryan Cranston', character: 'Walter White' });
+    expect(body.similar.map((item: { type: string; tmdbId: number }) => [item.type, item.tmdbId])).toEqual([
+      ['tv', 1398],
+    ]);
+    const call = fake.calls.find((entry) => entry.startsWith('/3/tv/1396?'));
+    expect(new URL(`http://x${call}`).searchParams.get('append_to_response')).toBe(
+      'external_ids,aggregate_credits,recommendations,similar',
+    );
+    expect(fake.calls.filter((entry) => entry.startsWith('/3/tv/1396'))).toHaveLength(1);
+  });
+
+  it('a title TMDB has no credits for still answers with empty cast and similar', async () => {
+    const body = (await app.inject('/api/movie/604')).json();
+    expect(body.cast).toEqual([]);
+    expect(body.similar).toEqual([]);
+  });
+
+  it('does not serve rows cached under the old details key', async () => {
+    app.ctx.db
+      .prepare('INSERT INTO tmdb_cache (key, json, expires_at) VALUES (?, ?, ?)')
+      .run('movie:278', JSON.stringify({ id: 278, title: 'Stale' }), clock + 1_000_000);
+    const body = (await app.inject('/api/movie/278')).json();
+    expect(body.title).toBe('Movie 278');
+    expect(body.cast).toHaveLength(2);
   });
 
   it('show details include seasons and imdbId; season lists episodes', async () => {

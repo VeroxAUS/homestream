@@ -1052,7 +1052,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Movie details, with the TorBox download when one is tracked.",
+            "description": "Movie details with up to 15 cast members and up to 20 similar movies, plus the TorBox download when one is tracked.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1105,6 +1105,85 @@
                     "originalLanguage": {
                       "nullable": true,
                       "type": "string"
+                    },
+                    "cast": {
+                      "default": [],
+                      "maxItems": 15,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "character": {
+                            "type": "string"
+                          },
+                          "profileUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "character",
+                          "profileUrl"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "similar": {
+                      "default": [],
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "movie",
+                              "tv"
+                            ]
+                          },
+                          "tmdbId": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "year": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "overview": {
+                            "type": "string"
+                          },
+                          "posterUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "backdropUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "rating": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "tmdbId",
+                          "title",
+                          "year",
+                          "overview",
+                          "posterUrl",
+                          "backdropUrl",
+                          "rating"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "download": {
                       "type": "object",
@@ -1194,7 +1273,9 @@
                     "runtime",
                     "genres",
                     "imdbId",
-                    "originalLanguage"
+                    "originalLanguage",
+                    "cast",
+                    "similar"
                   ],
                   "additionalProperties": false
                 }
@@ -1273,7 +1354,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Show details, with tracked downloads when there are any.",
+            "description": "Show details with up to 15 cast members and up to 20 similar shows, plus tracked downloads when there are any.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1347,6 +1428,85 @@
                           "name",
                           "episodeCount",
                           "posterUrl"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cast": {
+                      "default": [],
+                      "maxItems": 15,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "character": {
+                            "type": "string"
+                          },
+                          "profileUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "character",
+                          "profileUrl"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "similar": {
+                      "default": [],
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "movie",
+                              "tv"
+                            ]
+                          },
+                          "tmdbId": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "year": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "overview": {
+                            "type": "string"
+                          },
+                          "posterUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "backdropUrl": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "rating": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "tmdbId",
+                          "title",
+                          "year",
+                          "overview",
+                          "posterUrl",
+                          "backdropUrl",
+                          "rating"
                         ],
                         "additionalProperties": false
                       }
@@ -1442,7 +1602,9 @@
                     "genres",
                     "imdbId",
                     "originalLanguage",
-                    "seasons"
+                    "seasons",
+                    "cast",
+                    "similar"
                   ],
                   "additionalProperties": false
                 }

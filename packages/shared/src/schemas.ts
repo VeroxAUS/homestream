@@ -55,6 +55,7 @@ export const ServerInfoSchema = z.object({
   name: z.string(),
   version: z.string(),
   port: z.number().int(),
+  /** IPv4 addresses of physical adapters, best home-LAN address first; never empty while the PC has a network address. */
   lanAddresses: z.array(z.string()),
 });
 export type ServerInfo = z.infer<typeof ServerInfoSchema>;

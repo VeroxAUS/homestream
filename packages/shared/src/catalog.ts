@@ -15,6 +15,26 @@ export const MediaSummarySchema = z.object({
 });
 export type MediaSummary = z.infer<typeof MediaSummarySchema>;
 
+/** One cast entry of the details response. `profileUrl` is a TMDB `w185` image, `character` may be empty. */
+export const CastMemberSchema = z.object({
+  name: z.string().min(1),
+  character: z.string(),
+  profileUrl: z.string().nullable(),
+});
+export type CastMember = z.infer<typeof CastMemberSchema>;
+
+export const MAX_CAST = 15;
+export const MAX_SIMILAR = 20;
+
+/**
+ * `cast` and `similar` are always sent by the server; the defaults let clients parse an older server
+ * that predates them.
+ */
+const DetailsExtras = {
+  cast: z.array(CastMemberSchema).max(MAX_CAST).default([]),
+  similar: z.array(MediaSummarySchema).max(MAX_SIMILAR).default([]),
+};
+
 export const MovieDetailsSchema = MediaSummarySchema.extend({
   type: z.literal('movie'),
   runtime: z.number().int().nullable(),
@@ -22,6 +42,7 @@ export const MovieDetailsSchema = MediaSummarySchema.extend({
   imdbId: z.string().nullable(),
   /** TMDB `original_language` (ISO 639-1); decides the default subtitle when the audio language is undetermined. */
   originalLanguage: z.string().nullable(),
+  ...DetailsExtras,
 });
 export type MovieDetails = z.infer<typeof MovieDetailsSchema>;
 
@@ -39,6 +60,7 @@ export const ShowDetailsSchema = MediaSummarySchema.extend({
   imdbId: z.string().nullable(),
   originalLanguage: z.string().nullable(),
   seasons: z.array(SeasonSummarySchema),
+  ...DetailsExtras,
 });
 export type ShowDetails = z.infer<typeof ShowDetailsSchema>;
 

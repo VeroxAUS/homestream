@@ -41,6 +41,34 @@ describe('catalog schemas', () => {
     ).toBe(true);
   });
 
+  it('carries cast and similar, and defaults both to empty for an older server', () => {
+    const movie = {
+      ...summary,
+      type: 'movie' as const,
+      runtime: 90,
+      genres: [],
+      imdbId: null,
+      originalLanguage: null,
+    };
+    const cast = [{ name: 'Tim Robbins', character: 'Andy Dufresne', profileUrl: null }];
+    const similar = [{ ...summary, type: 'movie' as const, tmdbId: 2 }];
+    expect(MovieDetailsSchema.parse({ ...movie, cast, similar })).toMatchObject({ cast, similar });
+    expect(MovieDetailsSchema.parse(movie)).toMatchObject({ cast: [], similar: [] });
+    const show = { ...summary, type: 'tv' as const, genres: [], imdbId: null, originalLanguage: null, seasons: [] };
+    expect(ShowDetailsSchema.parse(show)).toMatchObject({ cast: [], similar: [] });
+    expect(ShowDetailsSchema.parse({ ...show, cast, similar })).toMatchObject({ cast, similar });
+  });
+
+  it('rejects more than 15 cast members, more than 20 similar titles and a nameless member', () => {
+    const movie = { ...summary, type: 'movie' as const, runtime: 90, genres: [], imdbId: null, originalLanguage: null };
+    const member = { name: 'A', character: '', profileUrl: null };
+    expect(MovieDetailsSchema.safeParse({ ...movie, cast: Array(16).fill(member) }).success).toBe(false);
+    expect(MovieDetailsSchema.safeParse({ ...movie, cast: Array(15).fill(member) }).success).toBe(true);
+    expect(MovieDetailsSchema.safeParse({ ...movie, cast: [{ ...member, name: '' }] }).success).toBe(false);
+    const item = { ...summary, type: 'movie' as const };
+    expect(MovieDetailsSchema.safeParse({ ...movie, similar: Array(21).fill(item) }).success).toBe(false);
+  });
+
   it('rejects a movie typed as tv', () => {
     expect(MovieDetailsSchema.safeParse({ ...summary, type: 'tv', runtime: 1, genres: [], imdbId: null }).success).toBe(
       false,

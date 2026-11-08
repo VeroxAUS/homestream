@@ -1,14 +1,17 @@
-import type {
-  Episode,
-  MediaSummary,
-  MediaType,
-  MovieDetails,
-  Season,
-  SeasonSummary,
-  ShowDetails,
+import {
+  MAX_CAST,
+  MAX_SIMILAR,
+  type CastMember,
+  type Episode,
+  type MediaSummary,
+  type MediaType,
+  type MovieDetails,
+  type Season,
+  type SeasonSummary,
+  type ShowDetails,
 } from '@homestream/shared';
 
-const IMAGE_SIZES = { poster: 'w342', backdrop: 'w1280', still: 'w300' } as const;
+const IMAGE_SIZES = { poster: 'w342', backdrop: 'w1280', still: 'w300', profile: 'w185' } as const;
 
 export interface ImageConfig {
   /** Absolute base such as `https://image.tmdb.org/t/p/`, always ending in `/`. */
@@ -100,6 +103,43 @@ function originalLanguageOf(raw: Json): string | null {
   return language && language !== 'xx' ? language : null;
 }
 
+/** TV `aggregate_credits` lists the roles in `roles[]`; plain `credits` has one `character`. */
+function characterOf(member: Json): string {
+  return str(list(member.roles)[0]?.character) || str(member.character);
+}
+
+/** Billing order, not array order: TMDB's `order` is the credit order (lowest first). Entries without one go last. */
+function byBilling(a: Json, b: Json): number {
+  return (num(a.order) ?? Infinity) - (num(b.order) ?? Infinity) || 0;
+}
+
+function normalizeCast(raw: Json, config: ImageConfig): CastMember[] {
+  const aggregate = list(record(raw.aggregate_credits).cast);
+  return (aggregate.length > 0 ? aggregate : list(record(raw.credits).cast))
+    .filter((member) => str(member.name) !== '')
+    .sort(byBilling)
+    .slice(0, MAX_CAST)
+    .map((member) => ({
+      name: str(member.name),
+      character: characterOf(member),
+      profileUrl: imageUrl(config, IMAGE_SIZES.profile, member.profile_path),
+    }));
+}
+
+function similarTitles(raw: Json, type: MediaType, config: ImageConfig): MediaSummary[] {
+  const own = num(raw.id);
+  const titles = (key: string): MediaSummary[] => {
+    const seen = new Set<number>();
+    return normalizeList(raw[key], type, config).filter((item) => {
+      if (item.tmdbId === own || seen.has(item.tmdbId)) return false;
+      seen.add(item.tmdbId);
+      return true;
+    });
+  };
+  const recommended = titles('recommendations');
+  return (recommended.length > 0 ? recommended : titles('similar')).slice(0, MAX_SIMILAR);
+}
+
 export function normalizeMovie(raw: unknown, config: ImageConfig): MovieDetails | null {
   const item = record(raw);
   const summary = normalizeSummary(item, 'movie', config);
@@ -112,6 +152,8 @@ export function normalizeMovie(raw: unknown, config: ImageConfig): MovieDetails 
     genres: genreNames(item),
     imdbId: imdbIdOf(item),
     originalLanguage: originalLanguageOf(item),
+    cast: normalizeCast(item, config),
+    similar: similarTitles(item, 'movie', config),
   };
 }
 
@@ -142,6 +184,8 @@ export function normalizeShow(raw: unknown, config: ImageConfig): ShowDetails | 
     imdbId: imdbIdOf(item),
     originalLanguage: originalLanguageOf(item),
     seasons,
+    cast: normalizeCast(item, config),
+    similar: similarTitles(item, 'tv', config),
   };
 }
 

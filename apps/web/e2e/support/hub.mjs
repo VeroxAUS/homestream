@@ -20,7 +20,89 @@ const SHOWS = [
   { id: 1399, name: 'Stub Thrones', first_air_date: '2011-04-17', vote_average: 8.4, overview: 'A stub show.' },
 ];
 
+// Titles that only appear in details responses (recommendations and similar), never on Home or in search.
+const RELATED_MOVIES = [
+  { id: 604, title: 'Stub Reloaded', release_date: '2003-05-15', vote_average: 7.1, overview: 'Another stub film.' },
+  { id: 700, title: 'Stub Revolutions', release_date: '2003-11-05', vote_average: 6.7, overview: 'A third stub film.' },
+  {
+    id: 701,
+    title: 'Stub Resurrections',
+    release_date: '2021-12-22',
+    vote_average: 5.7,
+    overview: 'A fourth stub film.',
+  },
+  { id: 702, title: 'Stub Origins', release_date: '1998-01-01', vote_average: 6.1, overview: 'A similar stub film.' },
+];
+const RELATED_SHOWS = [
+  {
+    id: 1400,
+    name: 'Stub Kingdoms',
+    first_air_date: '2013-06-02',
+    vote_average: 8.0,
+    overview: 'A related stub show.',
+  },
+  { id: 1401, name: 'Stub Dragons', first_air_date: '2015-04-12', vote_average: 7.4, overview: 'Another stub show.' },
+  {
+    id: 1402,
+    name: 'Stub Origins TV',
+    first_air_date: '2010-02-02',
+    vote_average: 6.5,
+    overview: 'A similar stub show.',
+  },
+];
+// The second cast member of each title has no photo (profile_path null) to exercise the initials placeholder.
+const MOVIE_CREDITS = {
+  603: {
+    cast: [
+      { id: 1, name: 'Stub Actor One', character: 'Neo Stub', order: 0, profile_path: '/profile.png' },
+      { id: 2, name: 'Stub Actor Two', character: 'Trinity Stub', order: 1, profile_path: null },
+      { id: 3, name: 'Stub Actor Three', character: '', order: 2, profile_path: '/profile.png' },
+    ],
+    recommendations: [RELATED_MOVIES[0], RELATED_MOVIES[1], RELATED_MOVIES[2]],
+    similar: [RELATED_MOVIES[3]],
+  },
+};
+const SHOW_CREDITS = {
+  1399: {
+    cast: [
+      { id: 11, name: 'Stub Lead', order: 0, profile_path: '/profile.png', roles: [{ character: 'Jon Stub' }] },
+      { id: 12, name: 'Stub Support', order: 1, profile_path: null, roles: [{ character: 'Arya Stub' }] },
+    ],
+    recommendations: [RELATED_SHOWS[0], RELATED_SHOWS[1]],
+    similar: [RELATED_SHOWS[2]],
+  },
+};
+const SHOW_SEASONS = {
+  1399: [{ season_number: 1, name: 'Season 1', episode_count: 4, poster_path: '/poster.png' }],
+};
+const SEASON_EPISODES = [
+  {
+    n: 1,
+    name: 'Winter Stub',
+    still: '/still.png',
+    runtime: 58,
+    overview: 'The stub family gathers at the stub castle.',
+  },
+  {
+    n: 2,
+    name: 'The Stub Road',
+    still: '/still.png',
+    runtime: 56,
+    overview: 'A stub journey begins along the stub road.',
+  },
+  {
+    n: 3,
+    name: 'Lord Stub',
+    still: '/still.png',
+    runtime: 55,
+    overview: 'Lord Stub makes a surprising stub decision.',
+  },
+  { n: 4, name: 'The Last Stub', still: null, runtime: 56, overview: 'An episode that has no still image.' },
+];
+
 const captured = { sentry: [], posthog: [], flagRequests: [] };
+// Every TMDB and gateway request (path with query string), for checks that count upstream calls.
+const requestLog = [];
 let featureFlags = {};
 
 function send(response, status, body, headers = {}) {
@@ -63,9 +145,59 @@ function tmdb(url) {
     return [200, { results }];
   }
   const movie = /^\/movie\/(\d+)$/.exec(pathname);
-  const found = movie && MOVIES.find((m) => m.id === Number(movie[1]));
-  if (found) return [200, { ...withArt(found), runtime: 136, genres: [{ id: 1, name: 'Stub' }], imdb_id: 'tt0000603' }];
+  const found = movie && [...MOVIES, ...RELATED_MOVIES].find((m) => m.id === Number(movie[1]));
+  if (found) {
+    return [
+      200,
+      {
+        ...withArt(found),
+        runtime: 136,
+        genres: [{ id: 1, name: 'Stub' }],
+        imdb_id: 'tt0000603',
+        ...related(found.id, MOVIE_CREDITS, 'credits', searchParams),
+      },
+    ];
+  }
+  const show = /^\/tv\/(\d+)$/.exec(pathname);
+  const foundShow = show && SHOWS.find((s) => s.id === Number(show[1]));
+  if (foundShow) {
+    const seasons = SHOW_SEASONS[foundShow.id] ?? [];
+    return [
+      200,
+      {
+        ...withArt(foundShow),
+        genres: [{ id: 1, name: 'Stub' }],
+        external_ids: { imdb_id: 'tt0001399' },
+        seasons,
+        ...related(foundShow.id, SHOW_CREDITS, 'aggregate_credits', searchParams),
+      },
+    ];
+  }
+  const season = /^\/tv\/(\d+)\/season\/(\d+)$/.exec(pathname);
+  if (season && SHOWS.some((s) => s.id === Number(season[1])) && Number(season[2]) === 1) {
+    const episodes = SEASON_EPISODES.map((e) => ({
+      episode_number: e.n,
+      name: e.name,
+      overview: e.overview,
+      still_path: e.still,
+      runtime: e.runtime,
+      air_date: `2011-04-${16 + e.n}`,
+    }));
+    return [200, { season_number: 1, name: 'Season 1', episodes }];
+  }
   return [404, { status_message: 'The resource you requested could not be found.' }];
+}
+
+/** Like TMDB's append_to_response: only the sections the request asked for are included; titles without data get empty ones. */
+function related(id, table, creditsKey, searchParams) {
+  const asked = (searchParams.get('append_to_response') ?? '').split(',');
+  const data = table[id] ?? { cast: [], recommendations: [], similar: [] };
+  const art = (list) => ({ results: list.map(withArt) });
+  return {
+    ...(asked.includes(creditsKey) ? { [creditsKey]: { cast: data.cast } } : {}),
+    ...(asked.includes('recommendations') ? { recommendations: art(data.recommendations) } : {}),
+    ...(asked.includes('similar') ? { similar: art(data.similar) } : {}),
+  };
 }
 
 function listen(port, handler) {
@@ -79,14 +211,27 @@ function listen(port, handler) {
   });
 }
 
+/** `GET /__requests` lists the logged upstream requests, `DELETE /__requests` clears them. Returns true when handled. */
+function requestLogEndpoint(url, request, response) {
+  if (url.pathname !== '/__requests') return false;
+  if (request.method === 'DELETE') requestLog.length = 0;
+  send(response, 200, request.method === 'DELETE' ? { ok: true } : { requests: requestLog });
+  return true;
+}
+
 async function tmdbHandler(request, response) {
   const url = new URL(request.url ?? '/', `http://${HOST}`);
+  if (requestLogEndpoint(url, request, response)) return;
   if (url.pathname.startsWith('/img/')) return send(response, 200, PNG);
+  requestLog.push({ upstream: 'tmdb', method: request.method, path: `${url.pathname}${url.search}` });
   const [status, body] = tmdb(url);
   return send(response, status, body);
 }
 
 function gatewayHandler(request, response) {
+  const url = new URL(request.url ?? '/', `http://${HOST}`);
+  if (requestLogEndpoint(url, request, response)) return;
+  requestLog.push({ upstream: 'gateway', method: request.method, path: `${url.pathname}${url.search}` });
   if ((request.url ?? '').includes('manifest.json')) {
     return send(response, 200, {
       id: 'e2e.stub',

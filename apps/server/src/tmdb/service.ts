@@ -17,6 +17,8 @@ import {
 const API_BASE = 'https://api.themoviedb.org/3';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_MS = 300;
+/** Bump when the details request or its normalized fields change, so rows cached in the old shape are not served. */
+const DETAILS_CACHE_VERSION = 'v2';
 
 export type FetchLike = (
   url: string,
@@ -105,9 +107,12 @@ export class TmdbService {
 
   async movie(tmdbId: number): Promise<MovieDetails> {
     const images = await this.images();
-    const raw = await this.cachedOrNotFound(`movie:${tmdbId}`, `Movie ${tmdbId}`, `/movie/${tmdbId}`, {
-      append_to_response: 'external_ids',
-    });
+    const raw = await this.cachedOrNotFound(
+      `movie:${DETAILS_CACHE_VERSION}:${tmdbId}`,
+      `Movie ${tmdbId}`,
+      `/movie/${tmdbId}`,
+      { append_to_response: 'external_ids,credits,recommendations,similar' },
+    );
     const movie = normalizeMovie(raw, images);
     if (!movie) throw this.notFound(`Movie ${tmdbId}`);
     return movie;
@@ -115,9 +120,12 @@ export class TmdbService {
 
   async show(tmdbId: number): Promise<ShowDetails> {
     const images = await this.images();
-    const raw = await this.cachedOrNotFound(`tv:${tmdbId}`, `Show ${tmdbId}`, `/tv/${tmdbId}`, {
-      append_to_response: 'external_ids',
-    });
+    const raw = await this.cachedOrNotFound(
+      `tv:${DETAILS_CACHE_VERSION}:${tmdbId}`,
+      `Show ${tmdbId}`,
+      `/tv/${tmdbId}`,
+      { append_to_response: 'external_ids,aggregate_credits,recommendations,similar' },
+    );
     const show = normalizeShow(raw, images);
     if (!show) throw this.notFound(`Show ${tmdbId}`);
     return show;

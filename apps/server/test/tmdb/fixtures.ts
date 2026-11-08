@@ -31,6 +31,14 @@ export const MOVIE_DETAILS = {
     { id: 80, name: 'Crime' },
   ],
   external_ids: { imdb_id: 'tt0111161' },
+  credits: {
+    cast: [
+      { id: 504, name: 'Tim Robbins', character: 'Andy Dufresne', order: 0, profile_path: '/tim.jpg' },
+      { id: 192, name: 'Morgan Freeman', character: "Ellis Boyd 'Red' Redding", order: 1, profile_path: null },
+    ],
+  },
+  recommendations: { results: [movieRow(238), movieRow(278), movieRow(424)] },
+  similar: { results: [movieRow(11), movieRow(12)] },
 };
 
 export const SHOW_DETAILS = {
@@ -38,6 +46,20 @@ export const SHOW_DETAILS = {
   genres: [{ id: 18, name: 'Drama' }],
   original_language: 'en',
   external_ids: { imdb_id: 'tt0903747' },
+  aggregate_credits: {
+    cast: [
+      {
+        id: 17419,
+        name: 'Bryan Cranston',
+        order: 0,
+        profile_path: '/bryan.jpg',
+        roles: [{ character: 'Walter White', episode_count: 62 }],
+      },
+      { id: 84497, name: 'Aaron Paul', order: 1, profile_path: null, roles: [{ character: 'Jesse Pinkman' }] },
+    ],
+  },
+  recommendations: { results: [] },
+  similar: { results: [tvRow(1398), tvRow(1396)] },
   seasons: [
     { season_number: 2, name: 'Season 2', episode_count: 13, poster_path: '/s2.jpg' },
     { season_number: 0, name: 'Specials', episode_count: 9, poster_path: null },
@@ -96,6 +118,7 @@ export function makeFakeTmdb(): FakeTmdb {
       if (path === '/trending/tv/week' || path === '/tv/popular') return list(tvRow);
       if (path === '/search/multi') return json(SEARCH_MULTI);
       if (path === '/movie/278') return json(MOVIE_DETAILS);
+      if (path === '/movie/604') return json(movieRow(604));
       if (path === '/tv/1396') return json(SHOW_DETAILS);
       if (path === '/tv/1396/season/1') return json(SEASON_ONE);
       return json({ status_code: 34 }, 404);

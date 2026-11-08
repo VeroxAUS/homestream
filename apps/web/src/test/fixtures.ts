@@ -95,6 +95,8 @@ export function movieDetails(overrides: Partial<MovieDetailsWithDownload> = {}):
     genres: ['Drama', 'Crime'],
     imdbId: 'tt0111161',
     originalLanguage: 'en',
+    cast: [],
+    similar: [],
     ...overrides,
   };
 }
@@ -117,6 +119,8 @@ export function showDetails(overrides: Partial<ShowDetailsWithDownloads> = {}): 
       { seasonNumber: 1, name: 'Season 1', episodeCount: 3, posterUrl: null },
       { seasonNumber: 2, name: 'Season 2', episodeCount: 2, posterUrl: null },
     ],
+    cast: [],
+    similar: [],
     ...overrides,
   };
 }

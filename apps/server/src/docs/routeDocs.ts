@@ -95,11 +95,17 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
   ),
   'GET /api/movie/:tmdbId': doc(
     { summary: 'Movie details', tag: 'catalog', params: TMDB_ID, errors: [400, 404, 502, 503] },
-    ok(MovieDetailsWithDownloadSchema, 'Movie details, with the TorBox download when one is tracked.'),
+    ok(
+      MovieDetailsWithDownloadSchema,
+      'Movie details with up to 15 cast members and up to 20 similar movies, plus the TorBox download when one is tracked.',
+    ),
   ),
   'GET /api/tv/:tmdbId': doc(
     { summary: 'Show details', tag: 'catalog', params: TMDB_ID, errors: [400, 404, 502, 503] },
-    ok(ShowDetailsWithDownloadsSchema, 'Show details, with tracked downloads when there are any.'),
+    ok(
+      ShowDetailsWithDownloadsSchema,
+      'Show details with up to 15 cast members and up to 20 similar shows, plus tracked downloads when there are any.',
+    ),
   ),
   'GET /api/tv/:tmdbId/season/:n': doc(
     {
