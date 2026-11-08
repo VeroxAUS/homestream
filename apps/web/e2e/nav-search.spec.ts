@@ -11,6 +11,9 @@ const field = (page: Page) => page.getByRole('textbox', { name: 'Search movies a
 const mainNav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const bar = (page: Page) => mainNav(page).locator('xpath=ancestor::header');
 const sleep = (page: Page, ms: number) => page.waitForTimeout(ms);
+// Home and the movie page have cards of their own, so a result is only looked for inside the results region.
+const result = (page: Page, name: RegExp) =>
+  page.getByRole('region', { name: 'Search results' }).getByRole('link', { name });
 
 /** The `q` of every `/api/search` request the page sends from now on. */
 function watchSearch(page: Page): string[] {
@@ -70,8 +73,8 @@ test.describe('nav search field', () => {
     expect(await page.evaluate(() => history.length)).toBe(before + 1);
     await expect(field(page)).toHaveValue('stub th');
     await expect(field(page)).toBeFocused();
-    await expect(page.getByRole('link', { name: /Stub Thrones/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Stub Thrones/ })).toContainText('Show');
+    await expect(result(page, /Stub Thrones/)).toBeVisible();
+    await expect(result(page, /Stub Thrones/)).toContainText('Show');
 
     await page.goBack();
     await expect(page).toHaveURL(/\/movie\/603$/);
@@ -94,8 +97,8 @@ test.describe('nav search field', () => {
       const last = Math.max(...pressed.filter((key) => key.t <= request.start).map((key) => key.t));
       expect(request.start - last).toBeGreaterThanOrEqual(250);
     }
-    await expect(page.getByRole('link', { name: /Stub Thrones/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toHaveCount(0);
+    await expect(result(page, /Stub Thrones/)).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toHaveCount(0);
   });
 
   test('sends no request for fewer than 2 characters, and shows the prompt again when the text gets short', async ({
@@ -111,12 +114,12 @@ test.describe('nav search field', () => {
     await expect(page.getByText(/No results/)).toHaveCount(0);
 
     await page.keyboard.type('t');
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toBeVisible();
     expect(queries).toEqual(['st']);
 
     await page.keyboard.press('Backspace');
     await expect(page.getByText('Search for movies and shows')).toBeVisible({ timeout: 500 });
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toHaveCount(0);
+    await expect(result(page, /The Stub Matrix/)).toHaveCount(0);
     await sleep(page, 600);
     expect(queries).toEqual(['st']);
   });
@@ -148,12 +151,12 @@ test.describe('nav search field', () => {
       await sleep(page, 600);
       await field(page).fill(fast);
 
-      await expect(page.getByRole('link', { name: /Stub Reloaded/ })).toBeVisible();
+      await expect(result(page, /Stub Reloaded/)).toBeVisible();
       await expect.poll(() => aborted.some((entry) => entry.startsWith(`${slow}|net::ERR_ABORTED`))).toBe(true);
 
       for (let sample = 0; sample < 35; sample++) {
         await sleep(page, 100);
-        await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toHaveCount(0);
+        await expect(result(page, /The Stub Matrix/)).toHaveCount(0);
       }
       await expect(page.getByRole('alert')).toHaveCount(0);
       expect(errors).toEqual([]);
@@ -173,7 +176,7 @@ test.describe('nav search field', () => {
 
     await page.keyboard.type('stub');
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toBeVisible();
     await sleep(page, 1000);
     expect(queries).toEqual(['stub']);
     const pressed = await keys(page);
@@ -186,7 +189,7 @@ test.describe('nav search field', () => {
     await expect(field(page)).toBeFocused();
     expect(new URL(page.url()).searchParams.get('q') ?? '').toBe('');
     await expect(page.getByText('Search for movies and shows')).toBeVisible();
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toHaveCount(0);
+    await expect(result(page, /The Stub Matrix/)).toHaveCount(0);
     await sleep(page, 600);
     expect(queries).toEqual(['stub']);
   });
@@ -194,13 +197,13 @@ test.describe('nav search field', () => {
   test('shows q on /search and is empty everywhere else, also after Back and Forward', async ({ page }) => {
     await page.goto('/search?q=stub');
     await expect(field(page)).toHaveValue('stub');
-    await page.getByRole('link', { name: /The Stub Matrix/ }).click();
+    await result(page, /The Stub Matrix/).click();
     await expect(page).toHaveURL(/\/movie\/603$/);
     await expect(field(page)).toHaveValue('');
     await page.goBack();
     await expect(page).toHaveURL(/\/search\?q=stub$/);
     await expect(field(page)).toHaveValue('stub');
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(/\/movie\/603$/);
     await expect(field(page)).toHaveValue('');
@@ -227,7 +230,7 @@ test.describe('nav search field', () => {
     await page.goto('/');
     await field(page).click();
     await page.keyboard.type('stub');
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toBeVisible();
     expect((await hubSearches(page)).every((query) => query === 'stub')).toBe(true);
     const log = (await (await request.get(`${HUB}/__requests`)).json()) as { requests: Array<{ path: string }> };
     expect(log.requests.filter((entry) => /\/stream\//.test(entry.path))).toEqual([]);
@@ -246,7 +249,7 @@ test.describe('nav search field', () => {
 
     await field(page).click();
     await page.keyboard.type('stub');
-    await expect(page.getByRole('link', { name: /The Stub Matrix/ })).toBeVisible();
+    await expect(result(page, /The Stub Matrix/)).toBeVisible();
     const added = scripts.slice(loaded);
     expect(added.some((script) => /SearchPage/.test(script))).toBe(true);
     for (const script of added)
@@ -320,7 +323,7 @@ test.describe('on a phone', () => {
 
     await page.keyboard.type('stub th');
     await expect(page).toHaveURL(/\/search\?q=stub%20th$/);
-    await expect(page.getByRole('link', { name: /Stub Thrones/ })).toBeVisible();
+    await expect(result(page, /Stub Thrones/)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('textbox')).toHaveCount(0);
     await expect(icon).toBeVisible();
@@ -413,17 +416,17 @@ test.describe('in a browser and in the desktop window', () => {
     });
 
     test('Ctrl+F and / focus the field on any page, and ? typed into it is text', async ({ page }) => {
-      await page.goto('/settings');
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+      await page.goto('/dashboard/health');
+      await expect(page.getByRole('navigation', { name: 'Dashboard sections' })).toBeVisible();
       await page.keyboard.press('/');
       await expect(field(page)).toBeFocused();
-      expect(new URL(page.url()).pathname).toBe('/settings');
+      expect(new URL(page.url()).pathname).toBe('/dashboard/health');
 
       await page.locator('body').click({ position: { x: 5, y: 300 } });
       await expect(field(page)).not.toBeFocused();
       await page.keyboard.press('Control+f');
       await expect(field(page)).toBeFocused();
-      expect(new URL(page.url()).pathname).toBe('/settings');
+      expect(new URL(page.url()).pathname).toBe('/dashboard/health');
 
       await page.keyboard.type('a?');
       await expect(field(page)).toHaveValue('a?');
