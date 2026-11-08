@@ -94,6 +94,10 @@
   -webkit-box-orient: vertical;
 }
 
+.overview.withheld {
+  font-style: italic;
+}
+
 .runtime {
   flex: none;
   min-width: 52px;

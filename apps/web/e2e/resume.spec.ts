@@ -1,34 +1,11 @@
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
+import type { DatabaseSync } from 'node:sqlite';
 import { expect, test } from '@playwright/test';
 import ports from './ports.json' with { type: 'json' };
+import { seed } from './support/seed';
 
-const dbFile = path.join(
-  fileURLToPath(new URL('..', import.meta.url)),
-  'reports',
-  'e2e-run',
-  'plain',
-  'data',
-  'homestream.db',
-);
 const ART = `http://127.0.0.1:${ports.tmdb}/img/t/p/w1280/backdrop.png`;
 const DURATION_SEC = 8160;
 const POSITION_SEC = 3722;
-
-/** The server owns this database; the test writes the rows a played session would have left behind. */
-function seed(rows: (db: DatabaseSync) => void): void {
-  mkdirSync(path.dirname(dbFile), { recursive: true });
-  const db = new DatabaseSync(dbFile);
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    db.exec('DELETE FROM progress; DELETE FROM plays;');
-    rows(db);
-  } finally {
-    db.close();
-  }
-}
 
 function saveMovie(db: DatabaseSync, positionSec: number, completed = false): void {
   const meta = JSON.stringify({ title: 'The Stub Matrix', posterUrl: ART, backdropUrl: ART });

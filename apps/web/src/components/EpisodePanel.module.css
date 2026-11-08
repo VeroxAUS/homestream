@@ -55,6 +55,12 @@
   line-height: 1.55;
 }
 
+.overview.withheld {
+  color: var(--mut);
+  font-size: 15px;
+  font-style: italic;
+}
+
 .actions {
   margin-top: 18px;
 }

@@ -103,6 +103,41 @@ describe('SettingsPage', () => {
     expect(input).toHaveValue('Web browser');
   });
 
+  it('offers Hide episode spoilers under This device, on by default', () => {
+    mockApi({ 'GET /api/info': INFO });
+    renderWithProviders(<SettingsPage />);
+    const device = screen.getByRole('region', { name: 'This device' });
+    expect(
+      within(device).getByText("Blurs stills and hides descriptions of episodes you haven't finished"),
+    ).toBeInTheDocument();
+    expect(within(device).getByRole('switch', { name: 'Hide episode spoilers' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('turns spoiler hiding off and on on this device only, without a server call', async () => {
+    const { calls } = mockApi({ 'GET /api/info': INFO });
+    renderWithProviders(<SettingsPage />);
+    const toggle = screen.getByRole('switch', { name: 'Hide episode spoilers' });
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(localStorage.getItem('homestream.hideSpoilers')).toBe('off');
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(localStorage.getItem('homestream.hideSpoilers')).toBeNull();
+    expect(calls.filter((call) => call.method !== 'GET')).toEqual([]);
+  });
+
+  it('shows the switch off when the device stored off', () => {
+    localStorage.setItem('homestream.hideSpoilers', 'off');
+    mockApi({ 'GET /api/info': INFO });
+    renderWithProviders(<SettingsPage />);
+    expect(screen.getByRole('switch', { name: 'Hide episode spoilers' })).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('labels the device type for the desktop shell', () => {
     installBridge();
     mockApi({ 'GET /api/info': INFO });

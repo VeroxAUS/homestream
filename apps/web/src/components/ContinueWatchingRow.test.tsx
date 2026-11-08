@@ -1,5 +1,6 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setHideSpoilers } from '../lib/spoilers';
 import { continueWatching, home } from '../test/fixtures';
 import { mockApi, renderWithProviders, testQueryClient } from '../test/render';
 import { ContinueWatchingRow } from './ContinueWatchingRow';
@@ -35,6 +36,7 @@ function card(title: string | RegExp) {
 }
 
 describe('ContinueWatchingRow', () => {
+  beforeEach(() => localStorage.clear());
   afterEach(() => vi.unstubAllGlobals());
 
   it('shows a wide card per item with its title, sub-line, link and image size', () => {
@@ -50,11 +52,45 @@ describe('ContinueWatchingRow', () => {
     const episode = card(/And the Bag/);
     expect(episode).toHaveAttribute('href', '/tv/1396?season=1&episode=3');
     expect(within(episode).getByText('S1E3 · And the Bag')).toBeInTheDocument();
-    expect(episode.querySelector('img')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w300/still.jpg');
+    expect(episode.querySelector('img')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w92/still.jpg');
 
     const next = card(/Cancer Man/);
     expect(within(next).getAllByText('Up next').length).toBeGreaterThan(0);
     expect(within(next).queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('asks for the w92 still of an Up next episode, and keeps a movie backdrop or a show backdrop as it is', () => {
+    const showBackdrop = continueWatching({
+      mediaKey: 'tv:1396:1:5',
+      type: 'tv',
+      tmdbId: 1396,
+      season: 1,
+      episode: 5,
+      title: 'Breaking Bad',
+      episodeTitle: 'Gray Matter',
+      backdropUrl: 'https://image.tmdb.org/t/p/w1280/show-backdrop.jpg',
+    });
+    const upNextStill = continueWatching({ ...UP_NEXT, backdropUrl: 'https://image.tmdb.org/t/p/w300/next.jpg' });
+    renderWithProviders(<ContinueWatchingRow items={[MOVIE, upNextStill, showBackdrop]} />);
+    expect(card(/Cancer Man/).querySelector('img')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w92/next.jpg');
+    expect(card(/Gray Matter/).querySelector('img')).toHaveAttribute(
+      'src',
+      'https://image.tmdb.org/t/p/w780/show-backdrop.jpg',
+    );
+    expect(card(/The Shawshank Redemption/).querySelector('img')).toHaveAttribute(
+      'src',
+      'https://image.tmdb.org/t/p/w780/backdrop.jpg',
+    );
+  });
+
+  it('shows the w300 episode still again as soon as the spoiler setting is turned off, and w92 when it is back on', () => {
+    renderWithProviders(<ContinueWatchingRow items={[EPISODE]} />);
+    const image = () => card(/And the Bag/).querySelector('img');
+    expect(image()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w92/still.jpg');
+    act(() => setHideSpoilers(false));
+    expect(image()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w300/still.jpg');
+    act(() => setHideSpoilers(true));
+    expect(image()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w92/still.jpg');
   });
 
   it('draws the progress bar and the remaining time from the saved position', () => {

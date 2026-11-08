@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { apiFetch } from '../api/client';
 import { formatEpisodeCode, formatRemaining, watchedFraction } from '../lib/format';
 import { tmdbImage } from '../lib/images';
+import { useHideSpoilers } from '../lib/spoilers';
 import { Badge } from './Badge';
 import { Icon } from './Icon';
 import { ProgressBar } from './ProgressBar';
@@ -27,9 +28,13 @@ function subLine(item: ContinueWatchingItem): string {
   return [item.upNext ? 'Up next' : '', code, item.episodeTitle ?? ''].filter(Boolean).join(' · ');
 }
 
-/** Episode stills are already w300; anything else (a movie or show backdrop) is fetched at w780. */
-function cardImage(url: string | null): string | null {
-  return tmdbImage(url, url?.includes('/w300/') ? 'w300' : 'w780');
+/**
+ * Episode stills are already w300; anything else (a movie or show backdrop) is fetched at w780. A card is never for a
+ * finished episode, so while spoilers are hidden an episode still is fetched at w92 and the browser scales it up.
+ */
+function cardImage(url: string | null, hideSpoilers: boolean): string | null {
+  if (!url?.includes('/w300/')) return tmdbImage(url, 'w780');
+  return tmdbImage(url, hideSpoilers ? 'w92' : 'w300');
 }
 
 interface WideCardProps {
@@ -40,7 +45,8 @@ interface WideCardProps {
 
 const WideCard = memo(function WideCard({ item, eager, onRemove }: WideCardProps) {
   const [broken, setBroken] = useState(false);
-  const image = broken ? null : cardImage(item.backdropUrl);
+  const hideSpoilers = useHideSpoilers();
+  const image = broken ? null : cardImage(item.backdropUrl, hideSpoilers && item.type === 'tv');
   const fraction = watchedFraction(item.positionSec, item.durationSec);
   return (
     <div className={styles.card}>

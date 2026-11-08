@@ -49,7 +49,9 @@ function row(name: RegExp) {
 }
 
 describe('ShowDetailsPage', () => {
+  beforeEach(() => localStorage.setItem('homestream.hideSpoilers', 'off'));
   afterEach(() => {
+    localStorage.removeItem('homestream.hideSpoilers');
     vi.unstubAllGlobals();
     clearDownloadProgress('tv:1396:1:1');
   });

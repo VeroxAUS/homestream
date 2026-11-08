@@ -3,7 +3,9 @@ import { useState, type FormEvent } from 'react';
 import { infoQuery } from '../api/queries';
 import { Badge } from '../components/Badge';
 import { ErrorPanel } from '../components/ErrorPanel';
+import { Toggle } from '../components/Toggle';
 import { describePlaybackProfile, deviceKind, getDeviceName, registerDevice, setDeviceName } from '../device/identity';
+import { setHideSpoilers, useHideSpoilers } from '../lib/spoilers';
 import { useContentShown } from '../lib/useContentShown';
 import { AboutDesktopRow, DesktopSettings } from '../desktop/DesktopSettings';
 import { Row } from './SettingsRow';
@@ -14,6 +16,7 @@ type SaveState = 'idle' | 'saved' | 'local-only';
 function ThisDevice() {
   const [name, setName] = useState(getDeviceName);
   const [state, setState] = useState<SaveState>('idle');
+  const hideSpoilers = useHideSpoilers();
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -45,6 +48,9 @@ function ThisDevice() {
             </button>
           </Row>
         </form>
+        <Row label="Hide episode spoilers" help="Blurs stills and hides descriptions of episodes you haven't finished">
+          <Toggle label="Hide episode spoilers" checked={hideSpoilers} onChange={setHideSpoilers} />
+        </Row>
         <Row label="Device type">
           <Badge>{deviceKind() === 'desktop' ? 'Desktop app' : 'Web browser'}</Badge>
         </Row>

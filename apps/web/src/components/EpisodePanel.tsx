@@ -3,6 +3,7 @@ import { downloadKey } from '../events/downloadProgress';
 import { usePendingDownload } from '../events/usePendingDownload';
 import { formatEpisodeRuntime } from '../lib/format';
 import { tmdbImage } from '../lib/images';
+import { isEpisodeHidden, SPOILER_TEXT, useHideSpoilers } from '../lib/spoilers';
 import { PlayActions } from './PlayActions';
 import styles from './EpisodePanel.module.css';
 
@@ -19,7 +20,8 @@ interface EpisodePanelProps {
 /** The selected episode: a bigger still, its facts, and Play or Resume. */
 export function EpisodePanel({ tmdbId, season, episode, fallbackStill, progress, download }: EpisodePanelProps) {
   const pending = usePendingDownload(downloadKey('tv', tmdbId, season, episode.episodeNumber), download);
-  const still = tmdbImage(episode.stillUrl ?? fallbackStill, 'w300');
+  const withheld = isEpisodeHidden(useHideSpoilers(), progress);
+  const still = tmdbImage(episode.stillUrl ?? fallbackStill, withheld && episode.stillUrl ? 'w92' : 'w300');
   return (
     <aside className={styles.panel} aria-label="Selected episode">
       <div className={styles.still}>
@@ -36,7 +38,8 @@ export function EpisodePanel({ tmdbId, season, episode, fallbackStill, progress,
             .filter(Boolean)
             .join(' · ')}
         </p>
-        {episode.overview ? <p className={styles.overview}>{episode.overview}</p> : null}
+        {withheld ? <p className={`${styles.overview} ${styles.withheld}`}>{SPOILER_TEXT}</p> : null}
+        {!withheld && episode.overview ? <p className={styles.overview}>{episode.overview}</p> : null}
         <div className={styles.actions}>
           <PlayActions
             playPath={`/play/tv/${tmdbId}/${season}/${episode.episodeNumber}`}

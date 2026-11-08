@@ -1,24 +1,10 @@
 import { CLOSE_BEHAVIOURS } from '@homestream/shared';
+import { Toggle } from '../components/Toggle';
 import { Row } from '../pages/SettingsRow';
 import settingsStyles from '../pages/SettingsPage.module.css';
 import { desktopBridge } from './bridge';
 import styles from './DesktopSettings.module.css';
 import { useDesktopSettings } from './useDesktopSettings';
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className={styles.toggle}
-      onClick={() => onChange(!checked)}
-    >
-      <span className={styles.knob} />
-    </button>
-  );
-}
 
 const CLOSE_LABELS: Record<(typeof CLOSE_BEHAVIOURS)[number], string> = { tray: 'Keep running in tray', quit: 'Quit' };
 

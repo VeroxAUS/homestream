@@ -3,6 +3,7 @@ import { memo, useState } from 'react';
 import { Link } from 'react-router';
 import { formatEpisodeRuntime, watchedFraction } from '../lib/format';
 import { tmdbImage } from '../lib/images';
+import { isEpisodeHidden, SPOILER_TEXT, useHideSpoilers } from '../lib/spoilers';
 import { Badge } from './Badge';
 import { Icon } from './Icon';
 import { ProgressBar } from './ProgressBar';
@@ -30,7 +31,8 @@ export const EpisodeRow = memo(function EpisodeRow({
 }: EpisodeRowProps) {
   const [broken, setBroken] = useState(false);
   const hasStill = episode.stillUrl !== null;
-  const still = broken ? null : tmdbImage(episode.stillUrl ?? fallbackStill, 'w300');
+  const withheld = isEpisodeHidden(useHideSpoilers(), progress);
+  const still = broken ? null : tmdbImage(episode.stillUrl ?? fallbackStill, withheld && hasStill ? 'w92' : 'w300');
   const inProgress = progress?.resumable === true;
   const percent = progress ? Math.round(watchedFraction(progress.positionSec, progress.durationSec) * 100) : 0;
   return (
@@ -69,7 +71,8 @@ export const EpisodeRow = memo(function EpisodeRow({
             {progress?.completed ? <Badge tone="ok">Watched</Badge> : null}
             {inProgress ? <Badge tone="accent">{percent}%</Badge> : null}
           </span>
-          {episode.overview ? <span className={styles.overview}>{episode.overview}</span> : null}
+          {withheld ? <span className={`${styles.overview} ${styles.withheld}`}>{SPOILER_TEXT}</span> : null}
+          {!withheld && episode.overview ? <span className={styles.overview}>{episode.overview}</span> : null}
         </span>
         <span className={`${styles.runtime} tabular`}>
           {episode.runtime ? formatEpisodeRuntime(episode.runtime) : ''}
