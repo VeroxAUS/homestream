@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { clearDownloadProgress, setDownloadProgress } from '../events/downloadProgress';
 import { resetPrefetchMemory } from '../player/sessionApi';
-import { download, episode, health, season, showDetails } from '../test/fixtures';
+import { castMember, download, episode, health, season, show, showDetails } from '../test/fixtures';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
 
 const NO_PROGRESS = { items: [] };
@@ -257,6 +257,47 @@ describe('ShowDetailsPage', () => {
     const alert = await screen.findByRole('alert');
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Breaking Bad' })).toBeInTheDocument();
+  });
+});
+
+describe('ShowDetailsPage cast and similar titles', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const withExtras = () =>
+    showDetails({
+      cast: [castMember({ name: 'Bryan Cranston', character: 'Walter White' })],
+      similar: [show({ tmdbId: 1398, title: 'Better Call Saul' })],
+    });
+
+  it('puts Cast and "More like this" after the episode list and panel', async () => {
+    open({ 'GET /api/tv/1396': withExtras() });
+    const list = await screen.findByRole('list', { name: 'Season 1 episodes' });
+    const panel = screen.getByRole('complementary', { name: 'Selected episode' });
+    const cast = screen.getByRole('heading', { level: 2, name: 'Cast' });
+    const similar = screen.getByRole('heading', { level: 2, name: 'More like this' });
+    for (const before of [list, panel]) {
+      expect(before.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(cast.compareDocumentPosition(similar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Walter White')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Better Call Saul/ })).toHaveAttribute('href', '/tv/1398');
+  });
+
+  it('keeps both rows as they are, without another show request, when the season changes', async () => {
+    const { calls } = open({ 'GET /api/tv/1396': withExtras() });
+    await screen.findByRole('heading', { level: 2, name: 'Cast' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
+    await screen.findByRole('list', { name: 'Season 2 episodes' });
+    expect(screen.getByText('Bryan Cranston')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Better Call Saul/ })).toBeInTheDocument();
+    expect(calls.filter((call) => call.path === '/api/tv/1396')).toHaveLength(1);
+  });
+
+  it('shows neither row when the show has no cast and no similar titles', async () => {
+    open({});
+    await screen.findByRole('list', { name: 'Season 1 episodes' });
+    expect(screen.queryByRole('heading', { name: 'Cast' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'More like this' })).not.toBeInTheDocument();
   });
 });
 

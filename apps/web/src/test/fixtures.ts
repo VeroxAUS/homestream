@@ -1,4 +1,5 @@
 import type {
+  CastMember,
   ContinueWatchingItem,
   Download,
   Episode,
@@ -28,6 +29,15 @@ export function media(overrides: Partial<MediaSummary> = {}): MediaSummary {
     posterUrl: POSTER,
     backdropUrl: BACKDROP,
     rating: 8.7,
+    ...overrides,
+  };
+}
+
+export function castMember(overrides: Partial<CastMember> = {}): CastMember {
+  return {
+    name: 'Tim Robbins',
+    character: 'Andy Dufresne',
+    profileUrl: 'https://image.tmdb.org/t/p/w185/tim.jpg',
     ...overrides,
   };
 }

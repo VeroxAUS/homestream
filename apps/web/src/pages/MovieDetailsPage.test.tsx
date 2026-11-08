@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { clearDownloadProgress, setDownloadProgress } from '../events/downloadProgress';
 import { resetPrefetchMemory } from '../player/sessionApi';
-import { download, health, home, movieDetails, progress } from '../test/fixtures';
+import { castMember, download, health, home, media, movieDetails, progress } from '../test/fixtures';
 import { apiError, mockApi, renderWithProviders } from '../test/render';
 
 const NO_PROGRESS = apiError(404, 'not_found', 'Nothing saved.');
@@ -176,6 +176,59 @@ describe('MovieDetailsPage', () => {
     open({ 'GET /api/movie/278': movieDetails(), 'GET /api/progress/movie:278': NO_PROGRESS, 'GET /api/home': home() });
     fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('heading', { name: 'Trending Movies' })).toBeInTheDocument();
+  });
+});
+
+describe('MovieDetailsPage cast and similar titles', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows Cast and then "More like this" after the hero', async () => {
+    open({
+      'GET /api/movie/278': movieDetails({
+        cast: [castMember(), castMember({ name: 'Morgan Freeman', character: 'Red' })],
+        similar: [media({ tmdbId: 389, title: '12 Angry Men' })],
+      }),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+    });
+    const hero = (await screen.findByRole('heading', { level: 1 })).closest('header') as HTMLElement;
+    const cast = screen.getByRole('heading', { level: 2, name: 'Cast' });
+    const similar = screen.getByRole('heading', { level: 2, name: 'More like this' });
+    expect(hero.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hero).not.toContainElement(cast);
+    expect(cast.compareDocumentPosition(similar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Morgan Freeman')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /12 Angry Men/ })).toHaveAttribute('href', '/movie/389');
+  });
+
+  it('shows neither row, and no gap container, when the movie has no cast and no similar titles', async () => {
+    const { container } = open({
+      'GET /api/movie/278': movieDetails(),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+    });
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('main > *')).toHaveLength(1);
+  });
+
+  it('renders the hero without an error when an older server sends neither field', async () => {
+    const older: Record<string, unknown> = { ...movieDetails() };
+    delete older.cast;
+    delete older.similar;
+    open({ 'GET /api/movie/278': older, 'GET /api/progress/movie:278': NO_PROGRESS });
+    expect(await screen.findByRole('heading', { level: 1, name: 'The Shawshank Redemption' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+  });
+
+  it('opens the details of a similar title when its poster is clicked', async () => {
+    open({
+      'GET /api/movie/278': movieDetails({ similar: [media({ tmdbId: 389, title: '12 Angry Men' })] }),
+      'GET /api/movie/389': movieDetails({ tmdbId: 389, title: '12 Angry Men', year: 1957 }),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+      'GET /api/progress/movie:389': NO_PROGRESS,
+    });
+    fireEvent.click(await screen.findByRole('link', { name: /12 Angry Men/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: '12 Angry Men' })).toBeInTheDocument();
   });
 });
 

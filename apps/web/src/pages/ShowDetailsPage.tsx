@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { seasonQuery, showProgressQuery, showQuery } from '../api/queries';
 import { DetailsError } from '../components/DetailsError';
+import { DetailsExtras } from '../components/DetailsExtras';
 import { DetailsHero, GenreChips, MetaLine } from '../components/DetailsHero';
 import { DetailsSkeleton } from '../components/DetailsSkeleton';
 import { EpisodePanel } from '../components/EpisodePanel';
@@ -163,6 +164,7 @@ function ShowDetails({ tmdbId }: { tmdbId: number }) {
           />
         ) : null}
       </div>
+      <DetailsExtras cast={data.cast} similar={data.similar} />
     </main>
   );
 }

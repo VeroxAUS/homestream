@@ -2,11 +2,6 @@
   margin-top: 34px;
 }
 
-.belowFold {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 340px;
-}
-
 .heading {
   font-size: 22px;
   font-weight: 700;
@@ -22,6 +17,17 @@
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: #2a2a35 transparent;
+}
+
+/* Only the list is skipped, so the heading keeps its place in the layout while the images stay unrequested. */
+.belowFold {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 336px;
+}
+
+.belowFoldCompact {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
 }
 
 .item {

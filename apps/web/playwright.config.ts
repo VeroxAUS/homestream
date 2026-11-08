@@ -66,6 +66,7 @@ export default defineConfig({
         'resume.spec.ts',
         'player-input.spec.ts',
         'details-api.spec.ts',
+        'details-cast.spec.ts',
         'nav-search.spec.ts',
       ],
       use: { baseURL: `http://127.0.0.1:${ports.serverPlain}` },

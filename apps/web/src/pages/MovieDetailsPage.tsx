@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { movieProgressQuery, movieQuery } from '../api/queries';
 import { DetailsError } from '../components/DetailsError';
+import { DetailsExtras } from '../components/DetailsExtras';
 import { DetailsHero, GenreChips, MetaLine } from '../components/DetailsHero';
 import { DetailsSkeleton } from '../components/DetailsSkeleton';
 import { NotFound } from '../components/NotFound';
@@ -40,6 +41,7 @@ function MovieDetails({ tmdbId }: { tmdbId: number }) {
           />
         </div>
       </DetailsHero>
+      <DetailsExtras cast={data.cast} similar={data.similar} />
     </main>
   );
 }

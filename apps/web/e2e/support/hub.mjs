@@ -161,7 +161,7 @@ function tmdb(url) {
     ];
   }
   const show = /^\/tv\/(\d+)$/.exec(pathname);
-  const foundShow = show && SHOWS.find((s) => s.id === Number(show[1]));
+  const foundShow = show && [...SHOWS, ...RELATED_SHOWS].find((s) => s.id === Number(show[1]));
   if (foundShow) {
     const seasons = SHOW_SEASONS[foundShow.id] ?? [];
     return [
