@@ -10,7 +10,7 @@ import {
   quitShell,
   repoRoot,
   startShell,
-  stopShell,
+  teardownSmoke,
   until,
   type HomeSnapshot,
   type Shell,
@@ -69,10 +69,7 @@ describe('Electron launch smoke test: configured', () => {
     });
   }, 180_000);
 
-  afterAll(() => {
-    if (shell) stopShell(shell);
-    if (hub?.pid && hub.exitCode === null) hub.kill();
-  });
+  afterAll(() => teardownSmoke({ shell, pids: [hub?.pid] }));
 
   it('renders Home with poster rows, not the first-run screen', async () => {
     let last = undefined as HomeSnapshot | undefined;

@@ -1,6 +1,15 @@
 import vm from 'node:vm';
-import { describe, expect, it } from 'vitest';
-import { HOME_PROBE, descendantsOf, isHomeRendered, parseProcessTable, type HomeSnapshot } from './smoke/harness.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  HOME_PROBE,
+  descendantsOf,
+  isHomeRendered,
+  parseProcessTable,
+  stopShell,
+  teardownSmoke,
+  type HomeSnapshot,
+  type TeardownOps,
+} from './smoke/harness.js';
 
 const home = (patch: Partial<HomeSnapshot> = {}): HomeSnapshot => ({
   marked: true,
@@ -119,5 +128,125 @@ describe('process table helpers (leftover process check)', () => {
 
   it('gives an empty table for empty output', () => {
     expect(parseProcessTable('')).toEqual([]);
+  });
+});
+
+describe('smoke teardown (nothing may be left running on the gaming PC)', () => {
+  const LAUNCHER = 100;
+  const ELECTRON = 101;
+  const SERVER = 102;
+  const HUB = 200;
+  const UNRELATED = 999;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  interface Fake {
+    ops: TeardownOps;
+    alive: Set<number>;
+    calls: string[];
+  }
+
+  /** `stubborn` ignores the gentle stop, `immortal` ignores the forced kill too. */
+  function fake(
+    alive: number[],
+    options: {
+      stubborn?: number[];
+      immortal?: number[];
+      below?: Record<number, number[]>;
+      removeDir?: (dir: string) => void;
+    } = {},
+  ): Fake {
+    const live = new Set(alive);
+    const calls: string[] = [];
+    const ops: TeardownOps = {
+      isAlive: (pid) => live.has(pid),
+      stop: (pid) => {
+        calls.push(`stop ${pid}`);
+        if (!options.stubborn?.includes(pid) && !options.immortal?.includes(pid)) live.delete(pid);
+      },
+      kill: (pid) => {
+        calls.push(`kill ${pid}`);
+        if (!options.immortal?.includes(pid)) live.delete(pid);
+      },
+      descendants: (pid) => options.below?.[pid] ?? [],
+      wait: () => Promise.resolve(),
+      removeDir: (dir) => {
+        calls.push(`remove ${dir}`);
+        options.removeDir?.(dir);
+      },
+    };
+    return { ops, alive: live, calls };
+  }
+
+  const shellRecord = (owned: number[]) => ({
+    app: { pid: LAUNCHER },
+    root: 'smoke-root',
+    exitCode: () => 0 as number | null | undefined,
+    owned: new Set(owned),
+  });
+
+  it('stops an owned child that outlived the launcher, even though the launcher has already exited', async () => {
+    const world = fake([ELECTRON, SERVER, UNRELATED]);
+    await stopShell(shellRecord([LAUNCHER, ELECTRON, SERVER]), world.ops);
+    expect([...world.alive]).toEqual([UNRELATED]);
+  });
+
+  it('stops gently first and kills by pid only what ignored the gentle stop', async () => {
+    const world = fake([ELECTRON, SERVER], { stubborn: [ELECTRON] });
+    await stopShell(shellRecord([ELECTRON, SERVER]), world.ops);
+    expect(world.alive.size).toBe(0);
+    expect(world.calls.indexOf(`stop ${ELECTRON}`)).toBeLessThan(world.calls.indexOf(`kill ${ELECTRON}`));
+    expect(world.calls).not.toContain(`kill ${SERVER}`);
+  });
+
+  it('picks up children that appeared below a launcher that is still running', async () => {
+    const world = fake([LAUNCHER, ELECTRON, SERVER], { below: { [LAUNCHER]: [ELECTRON, SERVER] } });
+    const shell = { ...shellRecord([]), exitCode: () => undefined as number | null | undefined };
+    await stopShell(shell, world.ops);
+    expect(world.alive.size).toBe(0);
+    expect(shell.owned).toEqual(new Set([LAUNCHER, ELECTRON, SERVER]));
+  });
+
+  it('reports a process that survives the forced kill, still removes the folder and names the pid', async () => {
+    const world = fake([ELECTRON], { immortal: [ELECTRON] });
+    await expect(stopShell(shellRecord([ELECTRON]), world.ops)).rejects.toThrow(String(ELECTRON));
+    expect(world.calls.at(-1)).toBe('remove smoke-root');
+  });
+
+  it('does not fail when the folder cannot be removed, and removes it only after the processes are gone', async () => {
+    const world = fake([ELECTRON], {
+      removeDir: () => {
+        throw new Error('EBUSY: resource busy or locked');
+      },
+    });
+    await expect(stopShell(shellRecord([ELECTRON]), world.ops)).resolves.toBeUndefined();
+    expect(world.alive.size).toBe(0);
+    expect(world.calls.at(-1)).toBe('remove smoke-root');
+  });
+
+  it('still stops the stub hub when removing the temp folder throws', async () => {
+    const world = fake([ELECTRON, HUB], {
+      removeDir: () => {
+        throw new Error('EBUSY: resource busy or locked');
+      },
+    });
+    await teardownSmoke({ shell: shellRecord([ELECTRON]), pids: [HUB] }, world.ops);
+    expect(world.alive.size).toBe(0);
+  });
+
+  it('still stops the stub hub when the shell cannot be stopped, then reports the failure', async () => {
+    const world = fake([ELECTRON, HUB], { immortal: [ELECTRON] });
+    await expect(teardownSmoke({ shell: shellRecord([ELECTRON]), pids: [HUB] }, world.ops)).rejects.toThrow(
+      String(ELECTRON),
+    );
+    expect(world.alive.has(HUB)).toBe(false);
+  });
+
+  it('ignores a hub that never started and a pid that is already gone', async () => {
+    const world = fake([]);
+    await teardownSmoke({ pids: [undefined, HUB] }, world.ops);
+    expect(world.calls).toEqual([]);
   });
 });

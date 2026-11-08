@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { evaluate } from './cdp.js';
-import { quitShell, startShell, stopShell, until, type Shell } from './harness.js';
+import { quitShell, startShell, teardownSmoke, until, type Shell } from './harness.js';
 
 // Starts the real Electron shell with the built server and web UI, in a throw-away user-data and data folder, and
 // drives it over DevTools. Needs: pnpm build (shared, server, web), pnpm --filter @homestream/desktop build, and the
@@ -46,9 +46,7 @@ describe('Electron launch smoke test: first run', () => {
     });
   }, 150_000);
 
-  afterAll(() => {
-    if (shell) stopShell(shell);
-  });
+  afterAll(() => teardownSmoke({ shell }));
 
   it('shows the web UI in the window with exactly the 20 bridge members', async () => {
     const keys = (await evaluate(shell.page, 'Object.keys(window.homestream).sort()')) as string[];

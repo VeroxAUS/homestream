@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listTargets, type CdpTarget } from './cdp.js';
+import { removeFolder, runCleanups, stopPids, type TeardownOps } from './teardown.js';
+
+export type { TeardownOps } from './teardown.js';
 
 export const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const repoRoot = path.resolve(desktopDir, '..', '..');
@@ -161,6 +164,8 @@ export interface Shell {
   app: ChildProcess;
   /** `undefined` while the launcher is still running. */
   exitCode(): number | null | undefined;
+  /** Every pid the shell is known to have started (launcher, Electron and its children, the server), kept for teardown. */
+  owned: Set<number>;
   page: CdpTarget;
 }
 
@@ -202,7 +207,15 @@ export async function startShell(options: ShellOptions): Promise<Shell> {
   app.on('exit', (code) => {
     exitCode = code;
   });
-  const shell = { root, serverPort: options.serverPort, debugPort: options.debugPort, app, exitCode: () => exitCode };
+  const owned = new Set<number>(app.pid ? [app.pid] : []);
+  const shell = {
+    root,
+    serverPort: options.serverPort,
+    debugPort: options.debugPort,
+    app,
+    owned,
+    exitCode: () => exitCode,
+  };
   try {
     await until('the server to answer', 60_000, () => serverUp(options.serverPort));
     const page = await until('the app window', 60_000, async () =>
@@ -210,9 +223,10 @@ export async function startShell(options: ShellOptions): Promise<Shell> {
         (target) => target.type === 'page' && target.url.includes(`:${options.serverPort}/`),
       ),
     );
+    recordOwned(shell, realOps);
     return { ...shell, page };
   } catch (error) {
-    stopShell(shell);
+    await stopShell(shell).catch(() => undefined);
     throw error;
   }
 }
@@ -227,8 +241,9 @@ export interface QuitResult {
 
 /** A second launch with --quit ends the app and the server it started; reports what is left afterwards. */
 export async function quitShell(shell: Shell, extraPids: number[] = []): Promise<QuitResult> {
-  const launcherPid = shell.app.pid;
-  const tracked = [...(launcherPid ? [launcherPid, ...descendantsOf(processTable(), launcherPid)] : []), ...extraPids];
+  recordOwned(shell, realOps);
+  for (const pid of extraPids) shell.owned.add(pid);
+  const tracked = [...shell.owned];
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   const second = spawnSync('node', [...launchArgs(shell.root, shell.debugPort), '--quit'], {
@@ -249,10 +264,64 @@ export async function quitShell(shell: Shell, extraPids: number[] = []): Promise
   };
 }
 
-/** Test cleanup: ends a shell that is still running (and every process below it), then removes its folder. */
-export function stopShell(shell: Pick<Shell, 'app' | 'root' | 'exitCode'>): void {
-  if (shell.app.pid && shell.exitCode() === undefined) {
-    spawnSync('taskkill', ['/PID', String(shell.app.pid), '/T', '/F'], { stdio: 'ignore' });
-  }
-  rmSync(shell.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+const realOps: TeardownOps = {
+  isAlive,
+  stop: (pid) => {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid)], { stdio: 'ignore' });
+    else process.kill(pid, 'SIGTERM');
+  },
+  kill: (pid) => {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    else process.kill(pid, 'SIGKILL');
+  },
+  descendants: (pid) => descendantsOf(processTable(), pid),
+  wait: sleep,
+  removeDir: (dir) => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }),
+};
+
+interface ShellRecord {
+  app: { pid?: number };
+  root: string;
+  owned: Set<number>;
 }
+
+/** Adds the launcher and everything below it, if the launcher still runs, to the pids kept for teardown. */
+function recordOwned(shell: ShellRecord, ops: TeardownOps): void {
+  const launcherPid = shell.app.pid;
+  if (!launcherPid || !ops.isAlive(launcherPid)) return;
+  shell.owned.add(launcherPid);
+  for (const pid of ops.descendants(launcherPid)) shell.owned.add(pid);
+}
+
+async function stopShellProcesses(shell: ShellRecord, ops: TeardownOps): Promise<void> {
+  recordOwned(shell, ops);
+  // Whether the launcher exited does not matter: Electron, its helpers or the server can outlive it.
+  const survivors = await stopPids([...shell.owned], ops);
+  if (survivors.length > 0) throw new Error(`Could not stop the shell's own processes: pids ${survivors.join(', ')}`);
+}
+
+/**
+ * Test cleanup. The shell's processes, any other pids (the stub hub) and the temp folder are separate steps: each runs
+ * even when an earlier one throws, and the folder goes last so a locked file never leaves a process running.
+ */
+export async function teardownSmoke(
+  targets: { shell?: ShellRecord; pids?: ReadonlyArray<number | undefined> },
+  ops: TeardownOps = realOps,
+): Promise<void> {
+  const { shell, pids = [] } = targets;
+  await runCleanups([
+    () => (shell ? stopShellProcesses(shell, ops) : undefined),
+    async () => {
+      const survivors = await stopPids(
+        pids.filter((pid): pid is number => pid !== undefined),
+        ops,
+      );
+      if (survivors.length > 0) throw new Error(`Could not stop pids ${survivors.join(', ')}`);
+    },
+    () => (shell ? removeFolder(shell.root, ops) : undefined),
+  ]);
+}
+
+/** Ends a shell and every process it owns (also when the launcher already exited), then removes its folder. */
+export const stopShell = (shell: ShellRecord, ops: TeardownOps = realOps): Promise<void> =>
+  teardownSmoke({ shell }, ops);

@@ -54,7 +54,9 @@ The unit tests never launch it. The `Windows` CI job installs it and runs the la
 - `launch.smoke.ts` is the first run (ports 8616 and 8617): the 20-member bridge, the server status line, the tray tooltip, the first-run screen and `desktop-settings.json`.
 - `configured.smoke.ts` is the configured launch (ports 8618 and 8619): an env file with invented keys, TMDB and the gateway served by the e2e stub hub of the web app (`apps/web/e2e/support/hub.mjs`, `redirect-fetch.mjs`, ports from `apps/web/e2e/ports.json`), no real key and no playback session. It waits until Home shows its poster rows (the `hs:home-content` mark, no first-run screen, the Trending Movies row with posters), not only for the window.
 
-The wait condition and the process-table helpers are unit tested in `test/smokeHarness.test.ts`.
+Teardown (`teardownSmoke` in `harness.ts`, logic in `teardown.ts`) keeps the pids of the launcher, Electron, its children and the server, and stops the survivors by pid (a gentle stop, then a kill) even when the launcher already exited. The stub hub stop, the shell stop and the temp-folder removal are independent steps: each runs when an earlier one throws, and a folder that cannot be removed never fails the run.
+
+The wait condition, the process-table helpers and the teardown (with fake processes) are unit tested in `test/smokeHarness.test.ts`.
 
 ## Telemetry plan for the main process (`@sentry/electron` 8.3)
 
