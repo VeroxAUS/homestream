@@ -2,26 +2,30 @@
 
 Active contributors: VeroxAUS
 
+## Purpose
+
 The web routes implement browsing, search, title details, playback and Settings. This page covers presentation and notices; [player](player.md) and [desktop integration](desktop-integration.md) explain session and shell behavior.
 
 ## Layout and routes
 
 `App` in `apps/web/src/App.tsx` lazy-loads route components. `Layout` in `apps/web/src/components/Layout.tsx` provides navigation, route Suspense/error boundaries, shortcut handling and notices. Navigation and the unreachable banner are omitted on `/play` and `/play/*`; the player supplies its own top bar.
 
-| Route | Implemented behavior |
-| --- | --- |
-| `/` | Home rows, featured banner or desktop first-run setup |
-| `/search?q=...` | Debounced mixed-media search with local type filters |
-| `/movie/:id` | Metadata, progress, download state and Play/Resume |
-| `/tv/:id?season=...&episode=...` | Show details, season tabs and selected-episode panel |
-| `/play/movie/:id` | Real movie player, optional `?start=<seconds>` |
-| `/play/tv/:id/:season/:episode` | Real episode player |
-| `/dashboard` | Redirect to `/dashboard/health` |
-| `/dashboard/{health,activity,history,graphs,stats}` | Named tabs with explicit placeholder content |
-| `/settings` | Device naming, server facts and desktop-only shell settings |
-| Other paths | Not-found screen |
+| Route                                               | Implemented behavior                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `/`                                                 | Home rows, featured banner or desktop first-run setup                                |
+| `/search?q=...`                                     | Results driven by the navigation field, with local type filters                      |
+| `/movie/:id`                                        | Metadata, progress, download state, Play/Resume, cast and related titles             |
+| `/tv/:id?season=...&episode=...`                    | Show details, season tabs, spoiler-aware episode rows/panel, cast and related titles |
+| `/play/movie/:id`                                   | Real movie player, optional `?start=<seconds>`                                       |
+| `/play/tv/:id/:season/:episode`                     | Real episode player                                                                  |
+| `/dashboard`                                        | Redirect to `/dashboard/health`                                                      |
+| `/dashboard/{health,activity,history,graphs,stats}` | Named tabs with explicit placeholder content                                         |
+| `/settings`, `/settings#about`                      | Settings controls and a separate read-only About tab                                 |
+| Other paths                                         | Not-found screen                                                                     |
 
-`Nav` in `apps/web/src/components/Nav.tsx` offers Home, Search, Dashboards and Settings. Its dropdown closes on outside pointer input or Escape. `HealthPill` in `apps/web/src/components/HealthPill.tsx` displays real checks and request failures even though its dashboard destination is a placeholder. See [data and startup](data-and-startup.md#health-reconciliation) for health concurrency.
+`Nav` in `apps/web/src/components/Nav.tsx` has Home, one Dashboard link, Settings, the search field and health pill. Dashboard goes to Health and remains active on every dashboard route; there is no dashboard dropdown or separate Search link. `NavSearch` in `apps/web/src/components/NavSearch.tsx` is part of the initial shell, while results remain lazy. See [navigation search](search.md) for debounce, history, keyboard and phone behavior.
+
+`HealthPill` in `apps/web/src/components/HealthPill.tsx` displays real checks and request failures even though its dashboard destination is a placeholder. See [data and startup](data-and-startup.md#health-reconciliation) for health concurrency.
 
 ## Home and search
 
@@ -31,7 +35,7 @@ The web routes implement browsing, search, title details, playback and Settings.
 
 `ContinueWatchingRow` in `apps/web/src/components/ContinueWatchingRow.tsx` opens details, including episode parameters for shows. It displays saved fraction/time or Up next. Removal immediately filters the Home cache, sends DELETE, and invalidates Home on failure. Playback exit invalidates Home and progress so revisiting does not retain pre-playback data; see [viewing progress](../../features/viewing-progress.md).
 
-`SearchPage` in `apps/web/src/pages/SearchPage.tsx` trims input, debounces **300 ms**, limits input to **200 characters** and makes no blank query. URL edits replace `q`; Escape clears it. All/Movies/Shows filtering uses received results without fetching again. Empty and failed requests have distinct states.
+`SearchPage` in `apps/web/src/pages/SearchPage.tsx` has no input of its own. It searches trimmed URL text after **300 ms** and at least **2 characters**, or immediately on Enter. All/Movies/Shows filtering uses received results without fetching again. Empty and failed requests have distinct states; [navigation search](search.md) owns the full interaction model.
 
 ## Details and actions
 
@@ -43,9 +47,19 @@ The web routes implement browsing, search, title details, playback and Settings.
 
 Shows put nonempty numbered seasons before Specials, fall back to available selections, replace season/episode URL parameters and render episodes in **100-item** increments. Episode rows/panels share saved progress; missing artwork falls back to dimmed show art.
 
+Episode spoiler protection is **on by default**, including while progress is unknown or an episode is in progress. Rows and the selected panel omit unfinished episode overviews from the DOM and request **w92** stills drawn in the normal-sized slot. Completed episodes use **w300** stills and real overviews; no CSS blur/filter is applied (`apps/web/src/components/EpisodeRow.tsx`, `apps/web/src/components/EpisodePanel.tsx`). Continue Watching applies the small-still rule to episode cards, including Up next, but leaves movie/show fallback backdrops unchanged (`apps/web/src/components/ContinueWatchingRow.tsx`). See [Settings and spoilers](settings-and-spoilers.md#episode-spoiler-policy) for persistence and edge cases.
+
+## Cast and related titles
+
+Both details pages pass their existing metadata response to `DetailsExtras` in `apps/web/src/components/DetailsExtras.tsx`. Movies place the rows below the hero; shows place them after episodes. Cast comes first, then More like this; an empty row is omitted, and two empty arrays produce no extras container. The client preserves response order and makes no separate credits/recommendations request. Server aggregation and bounded/defaulted shared fields are described in [catalog](../../features/catalog.md) and [shared contracts](../../packages/shared.md).
+
+`CastRow` in `apps/web/src/components/CastRow.tsx` uses lazy, async **w185** headshots in **96×96** slots. Missing or failed photos use first/last initials; an empty character name omits that line. Cast entries are plain text, not actor navigation. More like this uses normal poster cards linking to movie/show details (`apps/web/src/components/PosterCard.tsx`).
+
+`RowSection` in `apps/web/src/components/RowSection.tsx` shares heading/list structure between cast and poster rows. Its CSS applies `content-visibility: auto` to below-fold lists, with separate compact/poster reserved heights, without skipping their headings (`apps/web/src/components/RowSection.module.css`).
+
 ## Settings and styling
 
-`SettingsPage` in `apps/web/src/pages/SettingsPage.tsx` stores a trimmed device name locally and registers it, distinguishing accepted from local-only saves. About shows server identity/version/port, origin, LAN addresses, a redacted stream-source label and conservative playback capabilities. It never exposes upstream credentials. Electron adds settings and version controls through [desktop integration](desktop-integration.md); update checking is explicitly not configured.
+`SettingsPage` in `apps/web/src/pages/SettingsPage.tsx` has accessible Settings/About tabs. Settings contains This device and, in Electron, Desktop controls; About contains read-only application/server/network/playback facts. Tab selection uses the URL hash without adding history entries. Details and modification points are in [Settings and spoilers](settings-and-spoilers.md).
 
 `apps/web/src/styles/tokens.css` owns design tokens; `apps/web/src/styles/global.css` supplies global focus/loading rules and local Inter. Components use CSS modules and inline icons. Posters use lazy `w342` images, details `w500` posters and `w1280` backdrops. Below-fold rows use `content-visibility: auto`. Desktop navigation is draggable with no-drag controls and caption-button clearance; the shell owns the actual buttons.
 
@@ -59,16 +73,22 @@ Shows put nonempty numbered seasons before Specials, fall back to available sele
 
 Change route/chrome composition centrally; reuse shared action and error components rather than implementing parallel progress policy. Add notice behavior through the outcome subscription and store, not a second EventSource.
 
-| File | Purpose |
-| --- | --- |
-| `apps/web/src/App.tsx` | Route table |
-| `apps/web/src/components/Layout.tsx` | Chrome, boundaries and notice hosts |
-| `apps/web/src/pages/HomePage.tsx` | Home and setup composition |
-| `apps/web/src/components/Banner.tsx` | Rotation, accessibility and image scheduling |
-| `apps/web/src/pages/ShowDetailsPage.tsx` | Season/episode state and pagination |
-| `apps/web/src/components/PlayActions.tsx` | Play, resume and download precedence |
-| `apps/web/src/notices/DownloadNotices.tsx` | Ready/failure actions |
-| `apps/web/src/pages/ResumeFlow.test.tsx` | Home/progress refresh after playback |
-| `apps/web/src/notices/notices.test.tsx` | Notice rendering and actions |
+| File                                                   | Purpose                                         |
+| ------------------------------------------------------ | ----------------------------------------------- |
+| `apps/web/src/App.tsx`                                 | Route table                                     |
+| `apps/web/src/components/Layout.tsx`                   | Chrome, boundaries and notice hosts             |
+| `apps/web/src/pages/HomePage.tsx`                      | Home and setup composition                      |
+| `apps/web/src/components/Banner.tsx`                   | Rotation, accessibility and image scheduling    |
+| `apps/web/src/pages/ShowDetailsPage.tsx`               | Season/episode state and pagination             |
+| `apps/web/src/components/DetailsExtras.tsx`            | Conditional cast and More like this composition |
+| `apps/web/src/components/CastRow.tsx`                  | Cast text, headshots and initials               |
+| `apps/web/src/components/RowSection.tsx`               | Shared horizontal rows                          |
+| `apps/web/src/components/EpisodePanel.tsx`             | Selected episode and spoiler-aware presentation |
+| `apps/web/src/components/PlayActions.tsx`              | Play, resume and download precedence            |
+| `apps/web/src/notices/DownloadNotices.tsx`             | Ready/failure actions                           |
+| `apps/web/src/pages/ResumeFlow.test.tsx`               | Home/progress refresh after playback            |
+| `apps/web/src/components/DetailsExtras.test.tsx`       | Ordering, empty rows and image failures         |
+| `apps/web/src/pages/ShowDetailsPage.spoilers.test.tsx` | Completion/loading/local preference rules       |
+| `apps/web/src/notices/notices.test.tsx`                | Notice rendering and actions                    |
 
-Measured committed scope: `src/pages/`, `src/components/`, `src/notices/` contain **34 production files**, **15 tests**, **15/34 = 0.44** test-to-source file ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).
+Measured tracked scope: `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/notices/` contain **45 production files**, **18 unit/component tests**, **18/45 = 0.40** test-to-source file ratio. Browser specs are excluded from this narrower ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).

@@ -8,11 +8,11 @@ HomeStream optionally reports scrubbed Sentry errors, typed PostHog events and f
 
 `createTelemetry` in `apps/server/src/telemetry/index.ts` independently enables errors for `SENTRY_DSN_SERVER` and analytics for `POSTHOG_API_KEY`. No matching keys, or the master disable, returns `createNoopTelemetry`: captures do nothing and flags resolve local defaults. Failed client startup stays disabled instead of breaking the server.
 
-| Runtime | Configuration and startup |
-| --- | --- |
-| Server | Runtime config from `apps/server/src/config.ts`; `HOMESTREAM_TELEMETRY=off` overrides keys |
-| Browser/desktop renderer | Build-time `SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, host/release/environment in `apps/web/src/telemetry/buildEnv.ts`; no runtime key fetch |
-| Electron main | `startTelemetry` in `apps/desktop/src/shell/telemetry.ts`, called before app readiness by `apps/desktop/src/main.ts`; uses `SENTRY_DSN_WEB` |
+| Runtime                  | Configuration and startup                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server                   | Runtime config from `apps/server/src/config.ts`; `HOMESTREAM_TELEMETRY=off` overrides keys                                                  |
+| Browser/desktop renderer | Build-time `SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, host/release/environment in `apps/web/src/telemetry/buildEnv.ts`; no runtime key fetch      |
+| Electron main            | `startTelemetry` in `apps/desktop/src/shell/telemetry.ts`, called before app readiness by `apps/desktop/src/main.ts`; uses `SENTRY_DSN_WEB` |
 
 Browser `localStorage['homestream.telemetry']='off'` disables its runtime on reload. An already-built UI does not change when server environment variables change.
 
@@ -42,6 +42,8 @@ Server shutdown is idempotent, flushing clients concurrently with **2-second** b
 
 Page views use route templates from `apps/web/src/telemetry/routes.ts`, never real ID-bearing paths, search strings or resume parameters. `usePageView` in `apps/web/src/telemetry/usePageView.ts` tracks pathname changes. The deliberate query-trigger error is honored only in stub builds. Player/render errors and breadcrumbs still pass the shared scrubber. See [web build and tests](../apps/web/build-and-tests.md).
 
+The navigation search text and browser-local spoiler preference are not catalog events. Settings/About tab selection stays on the same pathname and adds no distinct analytics route (`packages/shared/src/analytics.ts`, `apps/web/src/pages/SettingsPage.tsx`). Do not infer a new event from the presence of a UI control.
+
 ## Sentry behavior, not automatic tracing
 
 `initSentry` in `apps/server/src/telemetry/sentry.ts` retains error-oriented integrations, excluding automatic HTTP/framework/database instrumentation, console capture and sessions. The configured **5%** sampler excludes HLS, metrics, probes and SSE, but does not create automatic request traces. Browser and Electron main sampling are **zero**. See [tracing](../how-to-monitor/tracing.md).
@@ -65,15 +67,15 @@ The empty geo prevents ingestion-side fallback location lookup; do not remove it
 
 `ANALYTICS_EVENTS` and `sanitizeEventProperties` in `packages/shared/src/analytics.ts` define seven permitted event names. Unknown events are dropped; unknown/invalid properties are omitted individually.
 
-| Event | Allowed information |
-| --- | --- |
-| `server_started` | Version, OS enum, packaged status, Node major |
-| `playback_started` | Media type/TMDB ID/title, optional episode identity, device kind, codec/HDR/tone-map/resolution and startup duration |
-| `playback_ended` | Media identity/title, device kind, end reason, watched time and optional speed |
-| `playback_failed` | Media identity, optional title, device kind, stage and short error code |
-| `page_viewed` | Route template and device kind |
-| `desktop_started` | Version, OS enum, packaged/hidden status |
-| `prefetch_requested` | Media type/TMDB ID, device kind and flag outcome |
+| Event                | Allowed information                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `server_started`     | Version, OS enum, packaged status, Node major                                                                        |
+| `playback_started`   | Media type/TMDB ID/title, optional episode identity, device kind, codec/HDR/tone-map/resolution and startup duration |
+| `playback_ended`     | Media identity/title, device kind, end reason, watched time and optional speed                                       |
+| `playback_failed`    | Media identity, optional title, device kind, stage and short error code                                              |
+| `page_viewed`        | Route template and device kind                                                                                       |
+| `desktop_started`    | Version, OS enum, packaged/hidden status                                                                             |
+| `prefetch_requested` | Media type/TMDB ID, device kind and flag outcome                                                                     |
 
 **A TMDB media title is the only permitted free-text property**, bounded to 200 characters and scrubbed. It is not user-entered text. Unlike other strings changed by sanitization, titles retain their cleaned value. Media IDs/titles still reveal viewing-related information; “anonymous” does not mean content-free. Do not send search text, names, paths, addresses, URLs or keys.
 
@@ -85,9 +87,9 @@ Browser `apps/web/src/telemetry/posthog.ts` uses the slim SDK and flags extensio
 
 `FlagService` in `apps/server/src/telemetry/flags.ts` returns stale cached values immediately after **five minutes**, deduplicates refreshes and bounds a first cold read to **250 ms**. The server prewarms registry keys asynchronously. Missing/failed analytics resolves defaults rather than blocking indefinitely.
 
-| Registry key | Default and consumer |
-| --- | --- |
-| `prefetch-on-details` | `true`, server warm-up gate in `apps/server/src/prefetch/service.ts` |
+| Registry key               | Default and consumer                                                 |
+| -------------------------- | -------------------------------------------------------------------- |
+| `prefetch-on-details`      | `true`, server warm-up gate in `apps/server/src/prefetch/service.ts` |
 | `banner-rotation-interval` | `9s`, alternate `12s`; renderer lazy runtime updates banner interval |
 
 `packages/shared/src/flags.ts` owns defaults/coercion. Renderer `watchFlag` suppresses evaluation events. Actual detail/player prefetch wiring belongs to [prefetch](../features/prefetch.md), not an inference from the flag's existence.
@@ -100,19 +102,19 @@ Server stub tests, shared sanitizer tests, renderer unit/e2e collectors and desk
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/telemetry/index.ts` | Safe front/no-op, flags and shutdown |
-| `apps/server/src/telemetry/sentry.ts` | Restricted error integrations and sampler |
-| `apps/server/src/telemetry/posthog.ts` | Queue and flag transport |
-| `apps/server/src/telemetry/playbackObserver.ts` | Lifecycle metrics/events/breadcrumb bridge |
-| `apps/web/src/telemetry/index.ts` | Initial SDK-free gate |
-| `apps/web/src/telemetry/runtime.ts` | Deferred clients and route/flag wiring |
-| `apps/desktop/src/shell/telemetry.ts` | Executed main setup, log sink, identity and flush |
-| `apps/desktop/src/telemetry/sentry.ts` | Main options and tags |
-| `packages/shared/src/analytics.ts` | Typed event/property catalog |
-| `packages/shared/src/sanitize.ts` | Shared scrubber and inference controls |
+| File                                            | Purpose                                           |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `apps/server/src/telemetry/index.ts`            | Safe front/no-op, flags and shutdown              |
+| `apps/server/src/telemetry/sentry.ts`           | Restricted error integrations and sampler         |
+| `apps/server/src/telemetry/posthog.ts`          | Queue and flag transport                          |
+| `apps/server/src/telemetry/playbackObserver.ts` | Lifecycle metrics/events/breadcrumb bridge        |
+| `apps/web/src/telemetry/index.ts`               | Initial SDK-free gate                             |
+| `apps/web/src/telemetry/runtime.ts`             | Deferred clients and route/flag wiring            |
+| `apps/desktop/src/shell/telemetry.ts`           | Executed main setup, log sink, identity and flush |
+| `apps/desktop/src/telemetry/sentry.ts`          | Main options and tags                             |
+| `packages/shared/src/analytics.ts`              | Typed event/property catalog                      |
+| `packages/shared/src/sanitize.ts`               | Shared scrubber and inference controls            |
 
 ## Measured scope
 
-At `5eefa37`, **9 production `.ts` files** under `apps/server/src/telemetry/` and **5 `.test.ts` files** under `apps/server/test/telemetry/` yield a **0.56 test/source file ratio**. Stub helpers, integration tests, flag registry outside the folder, browser/desktop/shared source and tests are excluded. Scoped default-branch history has **1 unique human author**, VeroxAUS. These are inventory counts, not coverage.
+At `0a8f04f`, **9 production `.ts` files** under `apps/server/src/telemetry/` and **5 `.test.ts` files** under `apps/server/test/telemetry/` yield a **0.56 test/source file ratio**. Stub helpers, integration tests, flag registry outside the folder, browser/desktop/shared source and tests are excluded. Scoped default-branch history has **1 unique human author**, VeroxAUS. These are inventory counts, not coverage.

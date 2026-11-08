@@ -1,12 +1,14 @@
 # Metrics
 
-`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes a per-server Prometheus registry through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/metrics/serverMetrics.ts`, `apps/server/src/routes/ops.ts`).
+`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes **19 HomeStream metric families** through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/routes/ops.ts`).
 
 ## Collection model
 
 `ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` receives HTTP observations and playback lifecycle counters. `apps/server/src/app.ts` attaches callbacks for playback activity, gateway/TMDB totals and source-cache counters. Scrapes read those service totals and increment pulled counters only by growth; gauges read current values. No upstream request or FFmpeg subprocess is started by a scrape.
 
 The first render starts prom-client default collection once. Families include CPU, resident memory, event-loop lag and GC (`process_*`, `nodejs_*`). The response has the registry's text content type and `Cache-Control: no-store` (`apps/server/src/routes/ops.ts`).
+
+Counters and gauges belong to the current process; they are not stored in SQLite and reset when it restarts. Pulled counters ignore a lower service total until it catches up with the previous observed total; do not replace a service's totals in-place and assume the registry handles that as a reset (`apps/server/src/metrics/serverMetrics.ts`). Historical rates/retention belong to the external metrics backend, not [data models](../reference/data-models.md).
 
 ```mermaid
 graph LR
@@ -67,7 +69,7 @@ For a latency chart, the checked-in alert uses `histogram_quantile(0.95, sum by 
 
 To add a metric, declare it in `apps/server/src/metrics/serverMetrics.ts`, attach a service source in `apps/server/src/app.ts` or a lifecycle observation, and extend `apps/server/test/integration/observability.test.ts`. Preserve scrape-time reads instead of adding work per media segment.
 
-This refresh inspected the registry and rule sources; it did not scrape a running server, run tests or benchmark collectors.
+This **2026-11-08** refresh inspected the registry and rule sources at **`0a8f04f`**; it did not scrape a running server, run tests or benchmark collectors. See [configuration](../reference/configuration.md) for the server port and [telemetry](../systems/telemetry.md) for the separate optional outbound clients.
 
 ## Key source files
 

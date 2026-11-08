@@ -2,6 +2,16 @@
 
 Bootstrap once, branch from `main`, change code and contracts together, and run the checks appropriate to the change. Commands run from the repository root with Node 24 and pnpm 12 (`CONTRIBUTING.md`, `package.json`).
 
+```mermaid
+graph LR
+  Setup["Bootstrap the checkout"] --> Branch["Branch from main"]
+  Branch --> Change["Change the owning layer"]
+  Change --> Companion["Update contracts, tests and docs"]
+  Companion --> Check["Run scope-appropriate gates"]
+  Check --> Review["Review diff and open PR"]
+  Review --> CI["Required Linux and Windows checks"]
+```
+
 ## Prepare
 
 ```powershell
@@ -54,7 +64,7 @@ pnpm docs:check
 pnpm agents:check
 ```
 
-Markdown-only work needs format, docs, and agent checks. Build before measuring bundle size. Coverage and grandfathered complexity/line ceilings may only improve, not be relaxed to pass a change (`scripts/coverage-ratchet.mjs`, `scripts/code-limits.mjs`). GPU/live tiers are separate; root `pnpm test` is not the safe offline default. See [testing](testing.md).
+Markdown-only work needs format, docs, and agent checks. Generated `droid-wiki/` is excluded from normal formatting/link checks; wiki generation needs its own audit, and lasting corrections belong in source or maintained docs (`.prettierignore`, `scripts/check-docs.mjs`, `docs/wiki.md`). Build before measuring bundle size. Coverage and grandfathered complexity/line ceilings may only improve, not be relaxed to pass a change (`scripts/coverage-ratchet.mjs`, `scripts/code-limits.mjs`). GPU/live tiers are separate; root `pnpm test` is not the safe offline default. See [testing](testing.md).
 
 Hooks run staged formatting, lint, secret/file-size scans, and relevant docs checks, not the complete test suite (`lefthook.yml`). Review the staged diff yourself. Do not stage `.env`, dependencies, builds, coverage, or reports.
 
@@ -68,16 +78,18 @@ Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.g
 
 Open the pull request against `main` and fill in `.github/pull_request_template.md`. Report exact checks, skipped tiers, privacy implications, and hot-path measurements. Never rewrite published history or force-push (`CONTRIBUTING.md`).
 
-Linux runs the broad static/docs/security and sequential coverage gates; Windows runs typechecking and selected path/process-sensitive tests. Web e2e is parallel and advisory. GPU/live never run in CI (`.github/workflows/ci.yml`). Droid review is advisory and timing records for main runs may finish out of order; release planning skips commits already contained in a release tag (`docs/ci.md`, `scripts/next-version.mjs`).
+Linux runs the broad static/docs/security and sequential coverage gates. Windows runs typechecking, selected path/process-sensitive server unit tests, and a real Electron launch smoke against built server/web/desktop outputs. That smoke is separate from the desktop Node tests and coverage; it is not optional within the required Windows job (`.github/workflows/ci.yml`, `apps/desktop/vitest.smoke.config.ts`).
+
+Web e2e runs in a parallel, non-required job with stub upstreams and no real playback session. GPU/live never run in CI. Droid review is advisory and timing records for main runs may finish out of order; release planning skips commits already contained in a release tag (`docs/ci.md`, `scripts/next-version.mjs`). See [tooling](tooling.md#generated-wiki-lifecycle) for the special wiki-only merge and push-summary path.
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `scripts/bootstrap.mjs` | Initial setup |
-| `turbo.json` | Workspace task graph and cache |
-| `lefthook.yml` | Staged checks |
-| `.github/workflows/ci.yml` | Cross-platform validation |
-| `.github/pull_request_template.md` | Review handoff |
+| File                               | Purpose                        |
+| ---------------------------------- | ------------------------------ |
+| `scripts/bootstrap.mjs`            | Initial setup                  |
+| `turbo.json`                       | Workspace task graph and cache |
+| `lefthook.yml`                     | Staged checks                  |
+| `.github/workflows/ci.yml`         | Cross-platform validation      |
+| `.github/pull_request_template.md` | Review handoff                 |
 
 PowerShell 5.1 has no `&&`; run commands separately or use `;` and check `$LASTEXITCODE`. Use `curl.exe` instead of its alias (`AGENTS.md`). See [tooling](tooling.md) and [deployment](../deployment.md).

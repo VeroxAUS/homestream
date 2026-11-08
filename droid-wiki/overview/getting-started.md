@@ -21,7 +21,7 @@ pnpm build
 pnpm --filter @homestream/server start
 ```
 
-Open `http://localhost:8600/` for the UI and `http://localhost:8600/api/docs` for Swagger. Browsing, search, details, playback, and Settings exist; dashboard tabs are still placeholders (`apps/web/src/App.tsx`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`).
+Open `http://localhost:8600/` for the UI and `http://localhost:8600/api/docs` for Swagger. Use the navigation search field to find a title. Settings has Settings and About tabs; device preferences include spoiler hiding, which is on by default. Dashboard tabs are still placeholders (`apps/web/src/App.tsx`, `apps/web/src/components/NavSearch.tsx`, `apps/web/src/pages/SettingsPage.tsx`, `apps/web/src/lib/spoilers.ts`, `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`).
 
 For development, start these in separate terminals:
 

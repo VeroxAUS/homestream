@@ -6,13 +6,13 @@ Active contributors: VeroxAUS
 
 The desktop shell loads the ordinary web renderer with a narrow capability bridge, rather than enabling Node in pages. Playback ownership moves between windows without starting another server session. See [desktop overview](index.md) and the renderer-side [desktop integration](../web/desktop-integration.md).
 
-| Boundary | Source | Role |
-| --- | --- | --- |
+| Boundary                                | Source                              | Role                                                |
+| --------------------------------------- | ----------------------------------- | --------------------------------------------------- |
 | `createMainWindow` / `createMiniWindow` | `apps/desktop/src/shell/windows.ts` | Electron windows, preferences and navigation guards |
-| `MiniPlayerState` | `apps/desktop/src/miniPlayer.ts` | One open mini player and one-shot pending handover |
-| `HomestreamBridge` | `packages/shared/src/desktop.ts` | Typed renderer capability surface |
-| `createHandlers` / `registerIpc` | `apps/desktop/src/ipc.ts` | Argument validation and trusted-frame URL checks |
-| Preload exposure | `apps/desktop/src/preload.cts` | Named invocations exposed through context isolation |
+| `MiniPlayerState`                       | `apps/desktop/src/miniPlayer.ts`    | One open mini player and one-shot pending handover  |
+| `HomestreamBridge`                      | `packages/shared/src/desktop.ts`    | Typed renderer capability surface                   |
+| `createHandlers` / `registerIpc`        | `apps/desktop/src/ipc.ts`           | Argument validation and trusted-frame URL checks    |
+| Preload exposure                        | `apps/desktop/src/preload.cts`      | Named invocations exposed through context isolation |
 
 ## Main and mini windows
 
@@ -35,6 +35,8 @@ The state machine itself starts or ends no playback session. The renderer perfor
 
 The pending handover is one shared one-shot slot, not a queue or durable store. Current IPC claiming is not restricted by sender ID; the shell relies on its trusted page set rather than implementing per-window authorization.
 
+Volume and mute belong to the renderer's player state and travel in the existing handover. The new mini-player slider does not add a bridge method or start another session (`apps/web/src/desktop/MiniVolume.tsx`, `packages/shared/src/desktop.ts`). Native window placement and always-on-top behavior remain main-process responsibilities.
+
 ## IPC and origin trust
 
 The sandboxed preload exposes exactly **20 members**: three markers/version fields and 17 methods (`apps/desktop/src/preload.cts`). There is no generic send/invoke channel or arbitrary filesystem/network API.
@@ -51,11 +53,11 @@ Both window types use context isolation, sandboxing, disabled Node integration a
 
 `KeepAwake` in `apps/desktop/src/keepAwake.ts` holds at most one blocker:
 
-| Input | Mode |
-| --- | --- |
-| Any local renderer actively playing | Prevent display sleep |
+| Input                                            | Mode                   |
+| ------------------------------------------------ | ---------------------- |
+| Any local renderer actively playing              | Prevent display sleep  |
 | No local playback, but any active server session | Prevent app suspension |
-| Neither | None |
+| Neither                                          | None                   |
 
 `apps/desktop/src/shell/shell.ts` tracks local playback per web-contents ID, clearing it on main-frame document navigation and window close. Paused/remote sessions can retain only the weaker server-session mode. Errored/stopped sessions are excluded by [monitoring](supervisor.md).
 
@@ -69,17 +71,17 @@ Change bridge shape in shared, update both the IPC allowlist and preload channel
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/desktop/src/shell/windows.ts` | Window configuration and navigation |
-| `apps/desktop/src/windowState.ts` | Geometry validation and persistence rules |
-| `apps/desktop/src/miniPlayer.ts` | Handoff state and attach routes |
-| `apps/desktop/src/ipc.ts` | Trusted URLs and validated named handlers |
-| `apps/desktop/src/preload.cts` | Sandboxed capability exposure |
-| `packages/shared/src/desktop.ts` | Bridge, handover and diagnostic contracts |
-| `apps/desktop/src/keepAwake.ts` | Pure power-blocker policy |
-| `apps/desktop/src/notifications.ts` | Notification planning and escaping |
+| File                                | Purpose                                   |
+| ----------------------------------- | ----------------------------------------- |
+| `apps/desktop/src/shell/windows.ts` | Window configuration and navigation       |
+| `apps/desktop/src/windowState.ts`   | Geometry validation and persistence rules |
+| `apps/desktop/src/miniPlayer.ts`    | Handoff state and attach routes           |
+| `apps/desktop/src/ipc.ts`           | Trusted URLs and validated named handlers |
+| `apps/desktop/src/preload.cts`      | Sandboxed capability exposure             |
+| `packages/shared/src/desktop.ts`    | Bridge, handover and diagnostic contracts |
+| `apps/desktop/src/keepAwake.ts`     | Pure power-blocker policy                 |
+| `apps/desktop/src/notifications.ts` | Notification planning and escaping        |
 
 ## Measured scope
 
-Desktop-wide committed inventory at `5eefa37`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. See the [overview](index.md) for the committed-path count method; these are app-wide counts, not coverage.
+Desktop-wide committed inventory at `0a8f04f`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. See the [overview](index.md) for the committed-path count method; these are app-wide counts, not coverage.

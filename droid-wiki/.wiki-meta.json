@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-11-07T20:52:46.554Z",
-  "commitHash": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
+  "generatedAt": "2026-11-08T07:33:33.715Z",
+  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
   "branch": "main",
-  "pageCount": 54,
+  "pageCount": 56,
   "topLevelSections": [
     "overview",
     "by-the-numbers",
@@ -36,6 +36,8 @@
     "apps/server.md",
     "apps/web/index.md",
     "apps/web/screens.md",
+    "apps/web/search.md",
+    "apps/web/settings-and-spoilers.md",
     "apps/web/player.md",
     "apps/web/data-and-startup.md",
     "apps/web/desktop-integration.md",
@@ -78,14 +80,14 @@
   "sourceSnapshot": {
     "includesUncommittedSourceChanges": false
   },
+  "warnings": [
+    "Phase 3.5 requires a QA skill. Run /install-qa to set one up, then re-run wiki generation.",
+    "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Both required checks failed despite exit 0; rendering was skipped in non-interactive mode. No prior playable video was available."
+  ],
   "videoOverview": {
     "status": "failed",
     "warnings": [
-      "HyperFrames doctor reported missing FFmpeg and FFprobe. The command exited 0 but both required checks failed; no video was rendered. No prior playable video was available."
+      "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Both required checks failed despite exit 0; rendering was skipped in non-interactive mode. No prior playable video was available."
     ]
-  },
-  "warnings": [
-    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa to enable screenshots.",
-    "HyperFrames doctor reported missing FFmpeg and FFprobe. The command exited 0 but both required checks failed; no video was rendered. No prior playable video was available."
-  ]
+  }
 }

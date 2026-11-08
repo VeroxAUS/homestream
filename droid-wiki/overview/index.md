@@ -1,6 +1,6 @@
 # HomeStream
 
-HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, search, title details, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).
+HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, navigation search, cast and similar titles, spoiler protection, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).
 
 ## Start here
 
@@ -24,6 +24,8 @@ TMDB supplies metadata, an AIOStreams gateway supplies source candidates, and To
 
 ## Implementation status
 
-Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared` (`pnpm-workspace.yaml`). The TV app is planned, with no `apps/tv` implementation. Dashboard tabs remain placeholders, but the browser player and desktop shell are implemented (`apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/desktop/src/shell/shell.ts`). The status table in `README.md` lags these implementations.
+Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/shared` (`pnpm-workspace.yaml`). The TV app is planned, with no implementation directory. Dashboard tabs remain placeholders, but the browser player and desktop shell are implemented (`apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`, `apps/web/src/pages/PlayerPage.tsx`, `apps/desktop/src/shell/shell.ts`). The status table in `README.md` lags these implementations.
 
-This wiki describes commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. [Statistics](../by-the-numbers.md) defines its measurement scope, and [lore](../lore.md) follows git timestamps. Maintained docs and runbooks live under `docs/`; automated refresh is explained in `docs/wiki.md`.
+Settings now separates device and desktop preferences from an About tab. Spoiler hiding is a browser-local choice, enabled by default, not a server setting (`apps/web/src/pages/SettingsPage.tsx`, `apps/web/src/lib/spoilers.ts`). These screens share the same implementation in the browser and desktop renderer.
+
+This wiki describes commit `0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`. [Statistics](../by-the-numbers.md) defines its measurement scope, and [lore](../lore.md) follows git timestamps. Maintained docs and runbooks live under `docs/`; automated refresh is explained in `docs/wiki.md`.

@@ -57,14 +57,18 @@ The session request can instead return `202` with download tracking when no cach
 
 ## Workspaces and languages
 
-| Workspace | Responsibility |
-| --- | --- |
-| `apps/server` | API, persistence, upstream services, encoding, and monitoring |
-| `apps/web` | React routes, HLS playback, Query cache, SSE, and desktop renderer views |
-| `apps/desktop` | Electron windows, tray, server supervisor, IPC, and mini player |
-| `packages/shared` | Zod contracts, desktop bridge, analytics catalog, flags, and sanitizers |
+| Workspace         | Responsibility                                                           |
+| ----------------- | ------------------------------------------------------------------------ |
+| `apps/server`     | API, persistence, upstream services, encoding, and monitoring            |
+| `apps/web`        | React routes, HLS playback, Query cache, SSE, and desktop renderer views |
+| `apps/desktop`    | Electron windows, tray, server supervisor, IPC, and mini player          |
+| `packages/shared` | Zod contracts, desktop bridge, analytics catalog, flags, and sanitizers  |
 
-TypeScript and TSX implement the runtimes, JavaScript ESM implements repository scripts, CSS styles the UI, and YAML configures automation. The committed inventory has 60,820 physical TypeScript lines, 8,007 TSX lines, 5,734 JavaScript lines, and 3,133 CSS lines, including tests, blanks, and comments. [By the numbers](../by-the-numbers.md#size) defines the exclusions and distinguishes these counts from code-only LOC. Workspace membership comes from `pnpm-workspace.yaml`; apps must not import each other (`.dependency-cruiser.cjs`). Desktop and web communicate through shared bridge types rather than cross-app imports (`packages/shared/src/desktop.ts`).
+TypeScript and TSX implement the runtimes, JavaScript ESM implements repository scripts, CSS styles the UI, and YAML configures automation. The committed inventory has 63,072 physical TypeScript lines, 9,645 TSX lines, 5,903 JavaScript lines, and 3,419 CSS lines, including tests, blanks, and comments. [By the numbers](../by-the-numbers.md#size) defines exclusions and distinguishes physical lines from code-only LOC. Workspace membership comes from `pnpm-workspace.yaml`; apps must not import each other (`.dependency-cruiser.cjs`). Desktop and web communicate through shared bridge types rather than cross-app imports (`packages/shared/src/desktop.ts`).
+
+At `0a8f04f`, the committed inventory contains 423 source files (38,097 physical lines) and 272 test/support files (43,758 lines), including root scripts. The four workspaces contribute 149 server, 164 web, 35 desktop, and 15 shared source files. This broad inventory includes CSS and development scripts; it is not a count of TypeScript modules or a test-coverage measurement. The linked statistics page defines exact exclusions.
+
+Catalog details include bounded cast and recommendation arrays in the shared contract. The server normalizes the extra TMDB payload into the existing details response, rather than requiring an extra client request (`packages/shared/src/catalog.ts`, `apps/server/src/tmdb/normalize.ts`). Browser-only choices such as hiding unfinished episode spoilers live outside SQLite (`apps/web/src/lib/spoilers.ts`).
 
 ## Startup and shutdown
 
