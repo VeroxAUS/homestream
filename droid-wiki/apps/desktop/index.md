@@ -10,15 +10,15 @@ The player and shell are implemented; dashboard tabs remain limited/placeholder 
 
 ## Layout and key abstractions
 
-| Boundary | Source | Responsibility |
-| --- | --- | --- |
-| Bootstrap | `apps/desktop/src/main.ts` | Single-instance lock, environment, pre-ready settings, telemetry and lifecycle |
-| `Shell` | `apps/desktop/src/shell/shell.ts` | Windows, tray, IPC, monitoring and graceful quit composition |
-| `Supervisor` | `apps/desktop/src/supervisor.ts` | Owned child versus external attachment, readiness, retries and shutdown |
-| `ServerMonitor` | `apps/desktop/src/monitor.ts` | SSE, activity reconciliation and health |
-| `SettingsStore` | `apps/desktop/src/settings.ts` | Validated, atomic desktop preferences |
-| `MiniPlayerState` | `apps/desktop/src/miniPlayer.ts` | One-session renderer handoff |
-| `KeepAwake` | `apps/desktop/src/keepAwake.ts` | At most one power-save blocker |
+| Boundary          | Source                            | Responsibility                                                                 |
+| ----------------- | --------------------------------- | ------------------------------------------------------------------------------ |
+| Bootstrap         | `apps/desktop/src/main.ts`        | Single-instance lock, environment, pre-ready settings, telemetry and lifecycle |
+| `Shell`           | `apps/desktop/src/shell/shell.ts` | Windows, tray, IPC, monitoring and graceful quit composition                   |
+| `Supervisor`      | `apps/desktop/src/supervisor.ts`  | Owned child versus external attachment, readiness, retries and shutdown        |
+| `ServerMonitor`   | `apps/desktop/src/monitor.ts`     | SSE, activity reconciliation and health                                        |
+| `SettingsStore`   | `apps/desktop/src/settings.ts`    | Validated, atomic desktop preferences                                          |
+| `MiniPlayerState` | `apps/desktop/src/miniPlayer.ts`  | One-session renderer handoff                                                   |
+| `KeepAwake`       | `apps/desktop/src/keepAwake.ts`   | At most one power-save blocker                                                 |
 
 `apps/desktop/src/shell/` contains Electron adapters; sibling source modules hold injectable policy, file and process seams. Telemetry support lives in `apps/desktop/src/telemetry/`; outbound SDK behavior belongs to [telemetry](../../systems/telemetry.md).
 
@@ -37,6 +37,8 @@ Read [server supervision](supervisor.md) for ownership, crash recovery and activ
 Updates accept only five renderer-editable keys with the correct value type. The one-time close-notice marker is shell-only. `apps/desktop/src/jsonFile.ts` writes a temporary file and renames it; preferences change in memory and notify listeners only after a successful write. `desktop-settings.json`, `window-state.json` and the random telemetry installation ID are stored under Electron user data.
 
 Windows autostart uses Electron login-item settings, not a JSON preference. Its arguments include `--hidden` only when minimized startup is selected; changing that setting rewrites an already-enabled login item (`apps/desktop/src/shell/shell.ts`). Hardware acceleration is applied on the next process launch.
+
+Renderer settings are now grouped inside the Settings tab, while About shows app/server information. Browser-only spoiler protection is separate from the persisted desktop preference store. Mini-player volume and mute controls also live in the web renderer, not in Electron IPC (`apps/web/src/pages/SettingsPage.tsx`, `apps/web/src/lib/spoilers.ts`, `apps/web/src/desktop/MiniVolume.tsx`). See [desktop integration](../web/desktop-integration.md).
 
 `apps/desktop/src/envFile.ts` resolves an explicit environment-file override first, then packaged `%APPDATA%/HomeStream/config.env`; development prefers the repository `.env`, falling back to the AppData file when appropriate. The shell loads only its port, data and telemetry keys, without overwriting nonblank environment values. The server reads the same file itself.
 
@@ -62,19 +64,19 @@ Start policy changes in the injectable module, add its unit regression, then cha
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/desktop/src/main.ts` | Executed bootstrap |
-| `apps/desktop/src/shell/shell.ts` | Application composition and shutdown |
-| `apps/desktop/src/settings.ts` | Field recovery and validated updates |
-| `apps/desktop/src/envFile.ts` | Environment resolution and missing-file template |
-| `apps/desktop/src/jsonFile.ts` | Atomic JSON persistence |
-| `apps/desktop/src/logger.ts` | Injected structured, scrubbed logging |
-| `apps/desktop/src/requestId.ts` | Request correlation |
-| `apps/desktop/test/settingsFile.test.ts` | Preference and write-failure regressions |
-| `apps/desktop/test/launchAndEnv.test.ts` | Launch/environment/startup-page cases |
-| `apps/desktop/test/smoke/launch.smoke.ts` | Real-runtime launch validation |
+| File                                      | Purpose                                          |
+| ----------------------------------------- | ------------------------------------------------ |
+| `apps/desktop/src/main.ts`                | Executed bootstrap                               |
+| `apps/desktop/src/shell/shell.ts`         | Application composition and shutdown             |
+| `apps/desktop/src/settings.ts`            | Field recovery and validated updates             |
+| `apps/desktop/src/envFile.ts`             | Environment resolution and missing-file template |
+| `apps/desktop/src/jsonFile.ts`            | Atomic JSON persistence                          |
+| `apps/desktop/src/logger.ts`              | Injected structured, scrubbed logging            |
+| `apps/desktop/src/requestId.ts`           | Request correlation                              |
+| `apps/desktop/test/settingsFile.test.ts`  | Preference and write-failure regressions         |
+| `apps/desktop/test/launchAndEnv.test.ts`  | Launch/environment/startup-page cases            |
+| `apps/desktop/test/smoke/launch.smoke.ts` | Real-runtime launch validation                   |
 
 ## Measured scope
 
-At `5eefa37`, committed `apps/desktop/src/` has **31 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **17 test files** (16 `.test.ts`, one `.smoke.ts`), plus one excluded CDP helper. Test/source file ratio: **0.55**. Counts use `git ls-tree -r --name-only origin/main`, excluding configs/assets/build outputs. Scoped default-branch history has **1 unique human author**, VeroxAUS, matching CODEOWNERS. These are inventory counts, not coverage or a claim that tests were run for this documentation.
+At `0a8f04f`, committed `apps/desktop/src/` has **31 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **17 test files** (16 `.test.ts`, one `.smoke.ts`), plus one excluded CDP helper. Test/source file ratio: **0.55**. Counts use `git ls-tree -r --name-only HEAD`, excluding configs/assets/build outputs. Scoped default-branch history has **1 unique human author**, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage or a claim that tests were run for this documentation.

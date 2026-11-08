@@ -2,19 +2,21 @@
 
 Active contributors: VeroxAUS
 
+A session cannot replace its video encoder until the previous child has actually exited. `SessionSlots` in `apps/server/src/playback/sessionSlots.ts` retains capacity across opening, live, failed-but-running and draining work; `Recovery` in `apps/server/src/playback/recovery.ts` serializes replacements.
+
 ## Purpose
 
-Playback must not start a replacement encoder until the previous one has exited. `SessionSlots` in `apps/server/src/playback/sessionSlots.ts` accounts for opening, live, failed-but-running and draining work; `Recovery` in `apps/server/src/playback/recovery.ts` serializes restart operations.
+Keep public session state, GPU/process ownership and temporary output consistent during seeks, failures and shutdown. A resolved stop call and a removed API record do not prove a child is gone. Return to [playback](index.md) for admission/startup.
 
 ## State and ownership
 
-`SessionRecord` in `apps/server/src/playback/session.ts` keeps public starting/ready/playing/paused/buffering/error/stopped state separate from generation, opening, parked and restart flags. Failed encodes disappear from active activity while their record can remain available for inspection.
+`SessionRecord` in `apps/server/src/playback/session.ts` stores public starting/ready/playing/paused/buffering/error/stopped state separately from opening, parked, restart and generation flags.
 
 ```mermaid
 stateDiagram-v2
     [*] --> starting
-    starting --> ready: first segment
-    ready --> playing: ping
+    starting --> ready: first finished segment
+    ready --> playing: progress ping
     playing --> paused: paused ping
     paused --> playing: playing ping
     playing --> buffering: buffering ping
@@ -26,60 +28,68 @@ stateDiagram-v2
     stopped --> [*]
 ```
 
-This diagram abbreviates transitions: stop applies to every state, and any nonfailed ready/ping state may adopt the next ping state (`apps/server/src/playback/manager.ts`).
+This is abbreviated: stop applies to every state, and any ready/ping state can adopt the next ping state. Failed records leave active activity but can remain inspectable.
 
-## Admission and stuck encoders
+Admission defaults to **two video-session places**. Reservations count before metadata/proxy work; opening records are not counted twice. Ending removes the public record but holds a draining place while stopping. If a child survives, that place remains until its exit promise settles, and directory deletion is deferred. Failed-but-running records consume capacity too. An abandoned opening encoder can therefore block both a new start and automatic fallback.
 
-`apps/server/src/playback/sessionSlots.ts` defaults to **two video-session slots**. A reservation counts before metadata/proxy work. Opening records count through reservations rather than double-counting as live.
+## Checked stops and serialized replacement
 
-Ending a session removes its public record, but holds a draining place during stop. If the child survives bounded kill retries, the place stays taken until its actual exit promise resolves. Session directory deletion is deferred to that exit. Failed-but-running records also continue consuming a place. An abandoned opening attempt with a surviving encoder blocks unsafe fallback instead of launching another video process.
+`EncoderProcess` in `apps/server/src/playback/encoderProcess.ts` first sends q. Ordinary end, shutdown and disk parking use **3000 ms grace**; discarded-output seek/track/abandon operations use **1000 ms** and cut input before q. `killUntilExited` in `apps/server/src/playback/killUntilExited.ts` retries at most **three kills**, each with a **5000 ms exit wait**. These child bounds are distinct from the server's overall [shutdown deadline](../../apps/server.md#startup-and-shutdown).
 
-`recordStuckStop` in `apps/server/src/playback/stuckStop.ts` records one error per process/reason and a later exit event, without URLs or paths. A bounded stop resolving is not proof the process exited.
+`stopDiscarded` in `apps/server/src/playback/discardStop.ts` checks `running` after stop. A survivor produces **503 `encoder_not_stopped`**, not a replacement. `InputCuts` in `apps/server/src/sourceproxy/inputCuts.ts` destroys only that owner's main-reader responses and refuses reconnects until launch reset; extractor readers and other sessions are unaffected.
 
-## Stop and replacement ordering
+`recordStuckStop` in `apps/server/src/playback/stuckStop.ts` emits one error per process/reason and a later exit event with session/reason/timing, not secret inputs or file paths.
 
-`EncoderProcess` in `apps/server/src/playback/encoderProcess.ts` sends q, waits a grace interval, then uses bounded kill retries from `apps/server/src/playback/killUntilExited.ts`. Ordinary end/shutdown grace is **3000 ms**. Discarded-output operations use **1000 ms** and cut the encoder's proxy input before q.
+Seek, retry and track changes share the record's restart promise. Generation checks ignore stale exit/progress callbacks. Failure retry includes its source-refresh wait inside the serialized operation, preventing a concurrent HLS request from launching beside it. Stop notification abandons that wait without requiring the remote lookup itself to cancel.
 
-`stopDiscarded` in `apps/server/src/playback/discardStop.ts` checks the child's running flag after stop. A survivor yields **503 `encoder_not_stopped`** and no replacement. `InputCuts` in `apps/server/src/sourceproxy/inputCuts.ts` destroys that owner's main reads and rejects reconnects until the next successful launch reopens input. Other sessions and subtitle readers are not cut.
+## HLS, seeks and tracks
 
-Seek, retry and track operations share the record's restart promise (`apps/server/src/playback/recovery.ts`). Generation checks ignore stale progress/exit callbacks. Retry includes the link-refresh wait inside that serialized operation, preventing a segment request from launching beside it. Shutdown races refresh waiting against stop notification.
+`HlsServing` in `apps/server/src/playback/hlsServing.ts` serves finished files immediately. Missing distant/evicted segments trigger recovery at their requested index. A running encoder is considered able to produce indexes from **head−1 through head+5**, at/after its run start. Default file waits are **30 seconds**; lost-segment handling allows up to three serve attempts.
 
-## Segments, seeks and track changes
+A backward request more than two segments before the last requested segment updates position immediately, avoiding a stale forward ping. Seek recovery aligns position and notifies subtitle scheduling.
 
-`HlsServing` in `apps/server/src/playback/hlsServing.ts` serves existing finished files; missing distant/lost segments trigger recovery at the requested index. A running encoder can satisfy indexes from head−1 through head+5, provided they are at/after its start. File waits default to 30 seconds with bounded lost-segment serving attempts.
+Audio changes and bitmap burn-target changes discard incompatible segments/init and restart at the reported position; text-only changes do not restart video. `PlaybackManager.patch` in `apps/server/src/playback/manager.ts` restores audio, subtitle, default provenance and stored decision if restart is refused.
 
-A backward segment jump more than two segments updates position immediately instead of retaining an old forward ping. Recovery also aligns position at seek and notifies subtitle scheduling.
+`masterAudioChannels` in `apps/server/src/playback/decision.ts` advertises the maximum device-compatible channel count across source audio tracks, rather than the selected track. Audio-only switches therefore keep master bytes stable, while encoded AAC still follows the selected track. This is not a guarantee that explicit subtitle changes leave master defaults unchanged.
 
-Audio or bitmap burn-target changes discard incompatible segments and the ready init copy, then restart at reported position. Text-only selection does not restart video. A refused restart restores audio/subtitle/default provenance and stored decision (`apps/server/src/playback/manager.ts`).
-
-The master advertises the maximum device-compatible audio channels across all source tracks through `masterAudioChannels` in `apps/server/src/playback/decision.ts`, rather than the selected track's channel count. Thus audio switches do not change master bytes. The encoded AAC output still follows the selected track. Complete fMP4 init is copied atomically only after a run's first finished segment and checked against generation (`apps/server/src/playback/hlsServing.ts`).
+For fMP4, the server copies init only after a run finishes its first segment, verifies generation, then atomically renames the copy. It never serves a half-written encoder init. See [encoding](encoding.md).
 
 ## Recovery and safeguards
 
-First unexpected encoder failure refreshes the source and retries once; second failure becomes terminal. Early libplacebo failure switches color filters. An RSS watchdog hit fails the whole session and stops video/subtitles without ordinary retry (`apps/server/src/playback/recovery.ts`, `apps/server/src/playback/memoryWatchdog.ts`).
+| Control                  | Behavior                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Unexpected video exit    | Refresh source and retry once; another failure is terminal                                                                 |
+| Early libplacebo failure | Select alternate color filters and remember for later sessions                                                             |
+| Per-process RSS watchdog | Default **4096 MiB**, sampled every second; a hit fails the whole session and stops video/subtitles without ordinary retry |
+| Idle cleanup             | Default **120 seconds** inactivity; monitor every **two seconds**                                                          |
+| Disk planning            | Evict, park/resume, and if needed stop older idle sessions                                                                 |
 
-`SessionMonitor` in `apps/server/src/playback/monitor.ts` applies idle cleanup and the pure plan in `apps/server/src/playback/diskCap.ts`. Default idle timeout is **120 seconds**, housekeeping interval **2 seconds**. Activity includes paused progress pings and media/subtitle requests.
+`MemoryWatchdog` in `apps/server/src/playback/memoryWatchdog.ts` samples tracked children together; `lowerPriority` in `apps/server/src/playback/priority.ts` best-effort lowers FFmpeg/ffprobe priority. Neither is a CPU/GPU quota.
 
-Disk planning evicts older watched segments above 80% of cap toward 65%, retains three behind-player segments where possible, and parks sufficiently-ahead encoders if pressure remains. Above cap it can drop old idle sessions, never the final remaining session, then evict unprotected segments. Resume needs usage below 60% and limited remaining lead. Parking and network read-ahead holds are different controls.
+`SessionMonitor` in `apps/server/src/playback/monitor.ts` refreshes `SegmentStore` in `apps/server/src/playback/segmentStore.ts`, derives bitrate from finished segments, applies disk policy and publishes updates. Pings, including paused pings, plus media/subtitle requests count as activity.
 
-`PidRegistry` in `apps/server/src/playback/pidRegistry.ts` supports crash cleanup through command-line matching before killing recorded children and clearing stale transcode child directories. Extractor registration uses its exact opaque input URL (`apps/server/src/playback/subtitleRun.ts`), not a generic WebVTT marker.
+`planDiskCap` in `apps/server/src/playback/diskCap.ts` starts trimming above **80%** toward **65%**, retaining three behind-player segments where possible. If pressure remains it parks encoders at least eight segments ahead. Above cap it may stop sessions idle for 30 seconds, but never the final remaining session, then trim unprotected segments. Resume requires usage below **60%** and lead below 30 segments. This finished-segment policy is not a strict limit on every temporary file, nor the same as a [network read hold](../network.md).
+
+`PidRegistry` in `apps/server/src/playback/pidRegistry.ts` records children for next-start crash recovery. Cleanup verifies the recorded session/custom marker in the live command line before killing a PID and clears stale transcode child directories. Extractors use their exact opaque input URL as marker in `apps/server/src/playback/subtitleRun.ts`, not the generic WebVTT output format.
 
 ## Modification entry points
 
-Preserve stop/exit distinctions when changing slots or process wrappers. Put replacement ordering in `apps/server/src/playback/recovery.ts`, HLS timing in `apps/server/src/playback/hlsServing.ts`, and pure disk policy in `apps/server/src/playback/diskCap.ts`. See [startup](index.md), [network](../network.md) and [subtitles](subtitles.md).
+Keep stop/exit distinctions in slot and process code, replacement ordering in `apps/server/src/playback/recovery.ts`, safe publication in `apps/server/src/playback/hlsServing.ts`, and pure disk planning in `apps/server/src/playback/diskCap.ts`. Coordinate changes with [subtitles](subtitles.md) and [source proxy](../source-proxy.md).
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/playback/sessionSlots.ts` | Capacity and teardown |
-| `apps/server/src/playback/discardStop.ts` | Checked stops |
-| `apps/server/src/playback/stuckStop.ts` | Stuck-stop events |
-| `apps/server/src/playback/recovery.ts` | Serialized replacement |
-| `apps/server/src/playback/hlsServing.ts` | HLS readiness/init |
-| `apps/server/src/playback/encoderLifecycle.ts` | Launch/park/resume |
-| `apps/server/src/playback/pidRegistry.ts` | Orphan ownership |
+| File                                                               | Purpose                                            |
+| ------------------------------------------------------------------ | -------------------------------------------------- |
+| `apps/server/src/playback/sessionSlots.ts`                         | Admission, draining and deferred deletion          |
+| `apps/server/src/playback/discardStop.ts`                          | Checked replacement stops                          |
+| `apps/server/src/playback/recovery.ts`                             | Serialized retry/seek/track operations             |
+| `apps/server/src/playback/hlsServing.ts`                           | File readiness and safe init                       |
+| `apps/server/src/playback/encoderLifecycle.ts`                     | Generation-aware launch/park/resume                |
+| `apps/server/src/playback/pidRegistry.ts`                          | Crash ownership registry                           |
+| `apps/server/test/integration/playback-manager-stuck-stop.test.ts` | Deleted/abandoned/restarted survivors retain slots |
+| `apps/server/test/integration/playback-manager-recovery.test.ts`   | Retry serialization, filters, memory and disk      |
+| `apps/server/test/integration/playback-manager-restart.test.ts`    | Grace/cut ordering and shutdown during refresh     |
 
 ## Measured scope
 
-At `5eefa37`, scoped `git ls-files` counts **42 playback `.ts` source files / 35 playback-plus-encode `*.test.ts` files**, ratio **0.83**. Helpers and integration elsewhere are excluded; counts overlap other playback pages. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. No encoders or tests were launched for this documentation.
+At **`0a8f04f`**, scoped `git ls-tree` counts **42 playback `.ts` source / 35 playback-plus-encode `*.test.ts` files**, ratio **0.83**. Helpers and integration elsewhere are excluded; this playback-wide scope overlaps other playback pages. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. No application tests or encoders were launched.

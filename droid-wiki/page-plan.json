@@ -1,23 +1,15 @@
 {
   "mode": "full",
-  "commitHash": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
-  "reason": "33558 changed lines exceed the 10000-line full-refresh threshold.",
-  "pagesToRemove": [
-    "apps/desktop.md"
-  ],
-  "pagesToCreate": [
-    "apps/web/player.md",
-    "apps/web/desktop-integration.md",
-    "apps/desktop/index.md",
-    "apps/desktop/supervisor.md",
-    "apps/desktop/windows-and-ipc.md"
-  ],
+  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
+  "reason": "Required comparison includes generated wiki changes: 157 files, 9578 insertions and 4346 deletions, 13924 changed lines, above the 10000-line full-refresh threshold. Full history is available and upload access is allowed.",
+  "pagesToRemove": [],
+  "pagesToCreate": ["apps/web/search.md", "apps/web/settings-and-spoilers.md"],
   "pages": [
     {
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "contentBrief": "HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, search, title details, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).",
+      "contentBrief": "HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, navigation search, cast and similar titles, spoiler protection, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).",
       "relevantSourcePaths": [
         "apps/server/src/app.ts",
         "apps/web/src/App.tsx",
@@ -27,7 +19,6 @@
         "apps/web",
         "apps/desktop",
         "packages/shared",
-        "apps/tv",
         "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx",
         "apps/web/src/pages/PlayerPage.tsx",
         "apps/desktop/src/shell/shell.ts"
@@ -47,7 +38,8 @@
         "packages/index.md",
         "reference/index.md",
         "cleanup-opportunities.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "overview/architecture.md",
@@ -75,7 +67,8 @@
         "by-the-numbers.md",
         "apps/desktop/index.md",
         "systems/network.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "overview/getting-started.md",
@@ -101,7 +94,8 @@
         "how-to-contribute/testing.md",
         "reference/configuration.md",
         "how-to-contribute/debugging.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "overview/glossary.md",
@@ -127,13 +121,14 @@
         "packages/shared.md",
         "systems/playback/index.md",
         "features/viewing-progress.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "contentBrief": "Collected on **2026-11-07** (the supplied collection date), from committed tree **`5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`**, the supplied `origin/main` snapshot. Uncommitted wiki generation is not measured. These are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).",
+      "contentBrief": "Collected **2026-11-08**, from committed tree **`0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`**. Working-tree wiki edits are excluded. HomeStream has four workspaces and 38,097 physical source lines under the rules below; these are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).",
       "relevantSourcePaths": [
         "docs/openapi.json",
         "docs/schema.sql",
@@ -153,13 +148,14 @@
         "lore.md",
         "systems/playback/index.md",
         "how-to-contribute/testing.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "lore.md",
       "title": "Lore",
       "criticality": "normal",
-      "contentBrief": "HomeStream's complete available history contains **97 commits**, from `c0781bd` on **2026-11-05** to **`5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`** on **2026-11-08**. In about 62 recorded hours, a server foundation grows into a playback pipeline, a browser player, and an Electron shell. See [architecture](overview/architecture.md) for the current system and [by the numbers](by-the-numbers.md) for measurement rules.",
+      "contentBrief": "HomeStream's complete available history contains **109 commits**, from `c0781bd` on **2026-11-05** to **`0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`** on **2026-11-08**. In about 79 recorded hours, a server foundation grows into a media pipeline, browser player, Electron shell, and richer browsing/settings UI. See [architecture](overview/architecture.md) for the current system and [by the numbers](by-the-numbers.md) for measurement rules.",
       "relevantSourcePaths": [
         "apps/server/package.json",
         "apps/web/package.json",
@@ -188,7 +184,8 @@
         "systems/playback/lifecycle.md",
         "apps/web/index.md",
         "apps/desktop/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/index.md",
@@ -217,7 +214,8 @@
         "how-to-contribute/testing.md",
         "how-to-contribute/debugging.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/development-workflow.md",
@@ -244,7 +242,8 @@
         "how-to-contribute/testing.md",
         "how-to-contribute/tooling.md",
         "deployment.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/testing.md",
@@ -271,7 +270,8 @@
         "by-the-numbers.md",
         "how-to-contribute/debugging.md",
         "systems/playback/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/debugging.md",
@@ -301,7 +301,8 @@
         "how-to-contribute/testing.md",
         "reference/configuration.md",
         "security.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/patterns-and-conventions.md",
@@ -327,7 +328,8 @@
         "how-to-contribute/testing.md",
         "security.md",
         "how-to-contribute/development-workflow.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-contribute/tooling.md",
@@ -354,7 +356,8 @@
         "deployment.md",
         "reference/dependencies.md",
         "how-to-contribute/debugging.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/index.md",
@@ -379,13 +382,14 @@
         "packages/shared.md",
         "overview/architecture.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/server.md",
       "title": "Server",
       "criticality": "normal",
-      "contentBrief": "The server is the LAN runtime for HTTP, SSE, HLS, persistence, upstream access and encoding. `buildApp` in `apps/server/src/app.ts` constructs the dependency graph; process startup in `apps/server/src/index.ts` owns listener and worker activation.",
+      "contentBrief": "The Node 24/Fastify 5 server owns LAN HTTP, SSE, HLS, SQLite and media-tool processes. `buildApp` in `apps/server/src/app.ts` composes services; `main` in `apps/server/src/index.ts` activates listeners and background work.",
       "relevantSourcePaths": [
         "apps/server/src/app.ts",
         "apps/server/src/index.ts",
@@ -407,13 +411,14 @@
         "apps/web/index.md",
         "api/index.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/web/index.md",
       "title": "Web app",
       "criticality": "critical",
-      "contentBrief": "HomeStream's React 19/Vite client implements catalog browsing, saved-progress actions, HLS playback, notifications and the Electron renderer. Only the five dashboard tabs remain placeholders. The server chooses sources, persists progress and encodes video; the client always requests automatic stream selection (`apps/web/src/App.tsx`, `apps/web/src/player/sessionApi.ts`).",
+      "contentBrief": "HomeStream's React 19/Vite client implements catalog browsing, navigation search, details with cast and related titles, saved-progress actions, HLS playback, local spoiler preferences, Settings/About and the Electron renderer. The five dashboard tabs remain placeholders. The server chooses sources, persists progress and encodes video; the client always requests automatic stream selection (`apps/web/src/App.tsx`, `apps/web/src/player/sessionApi.ts`).",
       "relevantSourcePaths": [
         "apps/web/src/App.tsx",
         "apps/web/src/player/sessionApi.ts",
@@ -437,7 +442,8 @@
         "apps/web/build-and-tests.md",
         "apps/desktop/index.md",
         "packages/shared.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/web/screens.md",
@@ -466,7 +472,36 @@
         "features/viewing-progress.md",
         "features/prefetch.md",
         "apps/web/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
+    },
+    {
+      "path": "apps/web/search.md",
+      "title": "Navigation search",
+      "criticality": "normal",
+      "contentBrief": "One field in the navigation bar drives mixed movie/show search. The field stays in the initial shell; the results page loads lazily and does not duplicate the input. URL state, local typing and the debounced server request are deliberately separate (`apps/web/src/components/NavSearch.tsx`, `apps/web/src/components/useNavSearch.ts`, `apps/web/src/pages/SearchPage.tsx`).",
+      "relevantSourcePaths": [
+        "apps/web/src/components/NavSearch.tsx",
+        "apps/web/src/components/useNavSearch.ts",
+        "apps/web/src/lib/searchUrl.ts",
+        "apps/web/src/pages/SearchPage.tsx"
+      ],
+      "relatedPages": ["apps/web/screens.md", "apps/web/data-and-startup.md", "features/catalog.md"],
+      "action": "create"
+    },
+    {
+      "path": "apps/web/settings-and-spoilers.md",
+      "title": "Settings and spoilers",
+      "criticality": "normal",
+      "contentBrief": "Settings separates device/shell controls from read-only About information. Episode spoiler protection is a default-on browser-local preference, not a server setting or progress mutation. Tabs and device controls live in `apps/web/src/pages/settings/`; the reactive preference lives in `apps/web/src/lib/spoilers.ts`.",
+      "relevantSourcePaths": [
+        "apps/web/src/pages/SettingsPage.tsx",
+        "apps/web/src/pages/settings",
+        "apps/web/src/lib/spoilers.ts",
+        "apps/web/src/components/ContinueWatchingRow.tsx"
+      ],
+      "relatedPages": ["apps/web/screens.md", "apps/web/desktop-integration.md", "features/viewing-progress.md"],
+      "action": "create"
     },
     {
       "path": "apps/web/player.md",
@@ -493,7 +528,8 @@
         "features/viewing-progress.md",
         "apps/web/index.md",
         "apps/web/build-and-tests.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/web/data-and-startup.md",
@@ -514,12 +550,8 @@
         "apps/web/vite.config.ts",
         "apps/web/src/events/serverEvents.ts"
       ],
-      "relatedPages": [
-        "packages/shared.md",
-        "systems/telemetry.md",
-        "apps/web/screens.md",
-        "apps/web/index.md"
-      ]
+      "relatedPages": ["packages/shared.md", "systems/telemetry.md", "apps/web/screens.md", "apps/web/index.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/web/desktop-integration.md",
@@ -546,7 +578,8 @@
         "apps/web/data-and-startup.md",
         "packages/shared.md",
         "apps/web/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/web/build-and-tests.md",
@@ -572,7 +605,8 @@
         "systems/telemetry.md",
         "how-to-contribute/testing.md",
         "apps/web/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/desktop/index.md",
@@ -601,7 +635,8 @@
         "overview/getting-started.md",
         "apps/web/desktop-integration.md",
         "packages/shared.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/desktop/supervisor.md",
@@ -622,11 +657,8 @@
         "packages/shared/src/downloads.ts",
         "apps/desktop/src/shell/shell.ts"
       ],
-      "relatedPages": [
-        "apps/desktop/index.md",
-        "apps/web/desktop-integration.md",
-        "apps/server.md"
-      ]
+      "relatedPages": ["apps/desktop/index.md", "apps/web/desktop-integration.md", "apps/server.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "apps/desktop/windows-and-ipc.md",
@@ -647,17 +679,14 @@
         "apps/desktop/src/notifications.ts",
         "apps/desktop/src/shell/toasts.ts"
       ],
-      "relatedPages": [
-        "apps/desktop/index.md",
-        "apps/web/desktop-integration.md",
-        "apps/desktop/supervisor.md"
-      ]
+      "relatedPages": ["apps/desktop/index.md", "apps/web/desktop-integration.md", "apps/desktop/supervisor.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/index.md",
       "title": "Systems",
       "criticality": "normal",
-      "contentBrief": "These systems separate process ownership, source-byte delivery and operational feedback. The composition root is `apps/server/src/app.ts`; clients receive HLS while media tools read opaque loopback source handles.",
+      "contentBrief": "HomeStream separates session/process ownership, shared media-byte delivery and operational feedback. The composition root is `buildApp` in `apps/server/src/app.ts`.",
       "relevantSourcePaths": [
         "apps/server/src/app.ts",
         "apps/server/src/playback/manager.ts",
@@ -675,13 +704,14 @@
         "systems/telemetry.md",
         "features/index.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/playback/index.md",
       "title": "Playback",
       "criticality": "critical",
-      "contentBrief": "Playback turns an automatic title request into device-compatible HLS, with a first-segment readiness gate and bounded source fallback. `PlaybackManager` in `apps/server/src/playback/manager.ts` exposes the route-facing facade while focused modules own startup, processes, recovery, serving and subtitles.",
+      "contentBrief": "`PlaybackManager` in `apps/server/src/playback/manager.ts` turns a title request into device-compatible HLS. It is a facade: focused modules handle admission, source attempts, encoding, recovery, serving and subtitles.",
       "relevantSourcePaths": [
         "apps/server/src/playback/manager.ts",
         "apps/server/src/playback/context.ts",
@@ -703,13 +733,14 @@
         "systems/playback/subtitles.md",
         "features/viewing-progress.md",
         "packages/shared.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/playback/encoding.md",
       "title": "Encoding",
       "criticality": "normal",
-      "contentBrief": "HomeStream always re-encodes video with NVENC. `decide` in `apps/server/src/playback/decision.ts` chooses device output; `buildFfmpegArgs` in `apps/server/src/playback/ffmpegArgs.ts` constructs decoding, color conversion, audio and HLS arguments.",
+      "contentBrief": "HomeStream always re-encodes video with NVENC. `decide` in `apps/server/src/playback/decision.ts` chooses compatible output; `buildFfmpegArgs` in `apps/server/src/playback/ffmpegArgs.ts` implements decode, filters, audio and HLS muxing.",
       "relevantSourcePaths": [
         "apps/server/src/playback/decision.ts",
         "apps/server/src/playback/ffmpegArgs.ts",
@@ -719,16 +750,14 @@
         "apps/server/src/playback/playlist.ts",
         "apps/server/src/config.ts"
       ],
-      "relatedPages": [
-        "systems/playback/subtitles.md",
-        "systems/playback/lifecycle.md"
-      ]
+      "relatedPages": ["systems/playback/subtitles.md", "systems/playback/lifecycle.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/playback/lifecycle.md",
       "title": "Playback lifecycle",
       "criticality": "normal",
-      "contentBrief": "Playback must not start a replacement encoder until the previous one has exited. `SessionSlots` in `apps/server/src/playback/sessionSlots.ts` accounts for opening, live, failed-but-running and draining work; `Recovery` in `apps/server/src/playback/recovery.ts` serializes restart operations.",
+      "contentBrief": "A session cannot replace its video encoder until the previous child has actually exited. `SessionSlots` in `apps/server/src/playback/sessionSlots.ts` retains capacity across opening, live, failed-but-running and draining work; `Recovery` in `apps/server/src/playback/recovery.ts` serializes replacements.",
       "relevantSourcePaths": [
         "apps/server/src/playback/sessionSlots.ts",
         "apps/server/src/playback/recovery.ts",
@@ -743,17 +772,14 @@
         "apps/server/src/playback/decision.ts",
         "apps/server/src/playback/memoryWatchdog.ts"
       ],
-      "relatedPages": [
-        "systems/playback/index.md",
-        "systems/network.md",
-        "systems/playback/subtitles.md"
-      ]
+      "relatedPages": ["systems/playback/index.md", "systems/network.md", "systems/playback/subtitles.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/playback/subtitles.md",
       "title": "Subtitles",
       "criticality": "normal",
-      "contentBrief": "Text tracks become progressive WebVTT renditions; bitmap tracks burn into video. `SubtitleHandoff` in `apps/server/src/playback/subtitleHandoff.ts` connects HTTP readiness to `SubtitleExtractor` in `apps/server/src/playback/subtitleExtractor.ts`, with session-owned cues in `SubtitleStore` in `apps/server/src/playback/subtitleStore.ts`.",
+      "contentBrief": "Text tracks become progressive WebVTT renditions; bitmap tracks burn into video. `SubtitleHandoff` in `apps/server/src/playback/subtitleHandoff.ts` connects HTTP readiness to `SubtitleExtractor` in `apps/server/src/playback/subtitleExtractor.ts` and session-owned `SubtitleStore` in `apps/server/src/playback/subtitleStore.ts`.",
       "relevantSourcePaths": [
         "apps/server/src/playback/subtitleHandoff.ts",
         "apps/server/src/playback/subtitleExtractor.ts",
@@ -772,13 +798,14 @@
         "systems/network.md",
         "systems/playback/encoding.md",
         "systems/playback/lifecycle.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/source-proxy.md",
       "title": "Source proxy",
       "criticality": "normal",
-      "contentBrief": "The loopback proxy hides expiring upstream URLs and shares ranged bytes/probes between prefetch, encoders and subtitle workers. `SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` owns source handles; `SourceEntry` in `apps/server/src/sourceproxy/sourceEntry.ts` owns one exact raw gateway URL's resolved location and cached data.",
+      "contentBrief": "`SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` gives media tools opaque loopback handles while sharing remote bytes and probe results. `SourceEntry` in `apps/server/src/sourceproxy/sourceEntry.ts` owns one exact raw gateway URL's current location and cached data.",
       "relevantSourcePaths": [
         "apps/server/src/sourceproxy/proxy.ts",
         "apps/server/src/sourceproxy/sourceEntry.ts",
@@ -790,16 +817,14 @@
         "apps/server/src/sourceproxy/pacer.ts",
         "apps/server/src/sourceproxy/upstream.ts"
       ],
-      "relatedPages": [
-        "systems/network.md",
-        "systems/playback/lifecycle.md"
-      ]
+      "relatedPages": ["systems/network.md", "systems/playback/lifecycle.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/network.md",
       "title": "Network controls",
       "criticality": "normal",
-      "contentBrief": "Network controls cap remote media bytes and pause readers when sufficient media is buffered. `DownloadGate` in `apps/server/src/network/downloadGate.ts` handles aggregate scheduling; `ReadAheadWindow` in `apps/server/src/network/readAhead.ts` handles time-window hysteresis.",
+      "contentBrief": "Network controls bound remote media reads and advertise useful LAN addresses. `DownloadGate` in `apps/server/src/network/downloadGate.ts` schedules aggregate bytes; `ReadAheadWindow` in `apps/server/src/network/readAhead.ts` controls time hysteresis; `getLanAddresses` in `apps/server/src/net.ts` supplies server-info and discovery addresses.",
       "relevantSourcePaths": [
         "apps/server/src/network/downloadGate.ts",
         "apps/server/src/network/readAhead.ts",
@@ -813,17 +838,14 @@
         "apps/server/src/network/snapshot.ts",
         "apps/server/src/network/check.ts"
       ],
-      "relatedPages": [
-        "systems/source-proxy.md",
-        "systems/playback/index.md",
-        "reference/configuration.md"
-      ]
+      "relatedPages": ["systems/source-proxy.md", "systems/playback/index.md", "reference/configuration.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/gateway.md",
       "title": "Gateway",
       "criticality": "normal",
-      "contentBrief": "The gateway discovers server-side source URLs and checks playback links without accepting downloading clips as titles. `GatewayClient` in `apps/server/src/gateway/client.ts` shares caching and rate-limited discovery across stream selection, prefetch and downloads.",
+      "contentBrief": "`GatewayClient` in `apps/server/src/gateway/client.ts` shares cached, rate-limited AIOStreams discovery and placeholder-aware playback probes. Real source URLs remain server-side; clients receive metadata and stable URL-derived IDs.",
       "relevantSourcePaths": [
         "apps/server/src/gateway/client.ts",
         "apps/server/src/gateway/types.ts",
@@ -836,17 +858,14 @@
         "apps/server/src/gateway/",
         "apps/server/test/gateway/"
       ],
-      "relatedPages": [
-        "features/downloads.md",
-        "features/stream-selection.md",
-        "systems/source-proxy.md"
-      ]
+      "relatedPages": ["features/downloads.md", "features/stream-selection.md", "systems/source-proxy.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/health.md",
       "title": "Health",
       "criticality": "normal",
-      "contentBrief": "`HealthService` in `apps/server/src/health/service.ts` combines dependency checks with live playback/network state. It is richer and more expensive than liveness/readiness. See [monitoring](../how-to-monitor/index.md).",
+      "contentBrief": "`HealthService` in `apps/server/src/health/service.ts` combines dependency checks with live playback/network state. It is richer, slower and potentially more consequential than HTTP liveness/readiness.",
       "relevantSourcePaths": [
         "apps/server/src/health/service.ts",
         "apps/server/src/routes/health.ts",
@@ -861,11 +880,8 @@
         "apps/server/src/health/checks/ffmpeg.ts",
         "apps/server/src/health/checks/gpu.ts"
       ],
-      "relatedPages": [
-        "how-to-monitor/index.md",
-        "apps/web/data-and-startup.md",
-        "how-to-monitor/alerting.md"
-      ]
+      "relatedPages": ["how-to-monitor/index.md", "apps/web/data-and-startup.md", "how-to-monitor/alerting.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "systems/telemetry.md",
@@ -892,13 +908,14 @@
         "apps/web/build-and-tests.md",
         "how-to-monitor/tracing.md",
         "features/prefetch.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/index.md",
       "title": "Features",
       "criticality": "normal",
-      "contentBrief": "These pages follow title workflows across server services and clients. Catalog browsing, resume state and download notices feed implemented playback, while the server owns upstream access and media processing (`apps/server/src/app.ts`, `apps/web/src/pages/PlayerPage.tsx`).",
+      "contentBrief": "These pages follow title workflows across server services and clients. Catalog browsing, cast/similar-title details, resume state and download notices feed playback, while the server owns upstream credentials and media processing (`apps/server/src/app.ts`, `apps/web/src/pages/PlayerPage.tsx`).",
       "relevantSourcePaths": [
         "apps/server/src/app.ts",
         "apps/web/src/pages/PlayerPage.tsx",
@@ -922,7 +939,8 @@
         "systems/playback/index.md",
         "packages/shared.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/catalog.md",
@@ -944,7 +962,8 @@
         "apps/web/index.md",
         "features/viewing-progress.md",
         "features/downloads.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/stream-selection.md",
@@ -963,11 +982,8 @@
         "apps/server/src/playback/placeholder.ts",
         "apps/server/src/gateway/playbackProbe.ts"
       ],
-      "relatedPages": [
-        "systems/playback/index.md",
-        "features/downloads.md",
-        "features/prefetch.md"
-      ]
+      "relatedPages": ["systems/playback/index.md", "features/downloads.md", "features/prefetch.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/prefetch.md",
@@ -987,7 +1003,8 @@
         "features/downloads.md",
         "systems/source-proxy.md",
         "features/stream-selection.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/downloads.md",
@@ -1005,11 +1022,8 @@
         "apps/server/src/routes/events.ts",
         "apps/server/src/gateway/playbackProbe.ts"
       ],
-      "relatedPages": [
-        "systems/gateway.md",
-        "apps/web/index.md",
-        "features/prefetch.md"
-      ]
+      "relatedPages": ["systems/gateway.md", "apps/web/index.md", "features/prefetch.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "features/viewing-progress.md",
@@ -1030,11 +1044,8 @@
         "apps/server/src/routes/history.ts",
         "apps/server/src/db/history.ts"
       ],
-      "relatedPages": [
-        "apps/web/index.md",
-        "reference/data-models.md",
-        "api/index.md"
-      ]
+      "relatedPages": ["apps/web/index.md", "reference/data-models.md", "api/index.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "packages/index.md",
@@ -1057,7 +1068,8 @@
         "apps/desktop/index.md",
         "systems/telemetry.md",
         "api/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "packages/shared.md",
@@ -1085,7 +1097,8 @@
         "apps/desktop/windows-and-ipc.md",
         "systems/telemetry.md",
         "how-to-contribute/patterns-and-conventions.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "api/index.md",
@@ -1118,7 +1131,8 @@
         "apps/web/data-and-startup.md",
         "systems/health.md",
         "deployment.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "deployment.md",
@@ -1148,7 +1162,8 @@
         "how-to-monitor/index.md",
         "how-to-contribute/tooling.md",
         "how-to-monitor/alerting.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "security.md",
@@ -1177,13 +1192,14 @@
         "apps/desktop/windows-and-ipc.md",
         "systems/telemetry.md",
         "how-to-contribute/debugging.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-monitor/index.md",
       "title": "Monitoring",
       "criticality": "normal",
-      "contentBrief": "HomeStream has local structured logs, durable events, health snapshots, Prometheus metrics and optional Sentry/PostHog telemetry. These answer different questions; dashboard tabs remain placeholders, not a deployed monitoring backend. See [health](../systems/health.md).",
+      "contentBrief": "HomeStream has local structured logs, durable events, health snapshots, Prometheus metrics and optional Sentry/PostHog telemetry. Dashboard tabs remain placeholders in `apps/web/src/App.tsx` and `apps/web/src/pages/dashboard/DashboardPlaceholder.tsx`; their names do not imply a deployed monitoring UI. See [health](../systems/health.md).",
       "relevantSourcePaths": [
         "apps/server/src/routes/ops.ts",
         "apps/server/src/health/service.ts",
@@ -1204,13 +1220,14 @@
         "how-to-monitor/alerting.md",
         "systems/telemetry.md",
         "security.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-monitor/logging.md",
       "title": "Logging",
       "criticality": "normal",
-      "contentBrief": "Process logs, selected durable events and SSE are distinct channels. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).",
+      "contentBrief": "Process logs, selected durable events and SSE are distinct channels in `apps/server/src/logger.ts`, `apps/server/src/events/record.ts` and `apps/server/src/routes/events.ts`. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).",
       "relevantSourcePaths": [
         "apps/server/src/logger.ts",
         "apps/server/src/config.ts",
@@ -1232,13 +1249,14 @@
         "apps/desktop/index.md",
         "security.md",
         "reference/data-models.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-monitor/metrics.md",
       "title": "Metrics",
       "criticality": "normal",
-      "contentBrief": "`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes a per-server Prometheus registry through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/metrics/serverMetrics.ts`, `apps/server/src/routes/ops.ts`).",
+      "contentBrief": "`ServerMetrics` in `apps/server/src/metrics/serverMetrics.ts` exposes **19 HomeStream metric families** through `GET /metrics`, plus Node/process defaults. Local metrics work with telemetry disabled; a scraper and any dashboard/notification backend are separate services (`apps/server/src/routes/ops.ts`).",
       "relevantSourcePaths": [
         "apps/server/src/metrics/serverMetrics.ts",
         "apps/server/src/routes/ops.ts",
@@ -1251,16 +1269,14 @@
         "apps/server/test/integration/observability.test.ts",
         "apps/server/test/telemetry/telemetryUnits.test.ts"
       ],
-      "relatedPages": [
-        "systems/health.md",
-        "how-to-monitor/alerting.md"
-      ]
+      "relatedPages": ["systems/health.md", "how-to-monitor/alerting.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-monitor/tracing.md",
       "title": "Tracing",
       "criticality": "normal",
-      "contentBrief": "HomeStream implements request-ID correlation and restricted Sentry error/breadcrumb reporting, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).",
+      "contentBrief": "HomeStream implements request-ID correlation in `apps/server/src/requestContext.ts` and restricted Sentry error/breadcrumb reporting in `apps/server/src/telemetry/sentry.ts`, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).",
       "relevantSourcePaths": [
         "apps/server/src/requestContext.ts",
         "apps/server/src/logger.ts",
@@ -1275,11 +1291,8 @@
         "apps/desktop/src/telemetry/sentry.ts",
         "packages/shared/src/sanitize.ts"
       ],
-      "relatedPages": [
-        "how-to-monitor/logging.md",
-        "apps/desktop/supervisor.md",
-        "systems/telemetry.md"
-      ]
+      "relatedPages": ["how-to-monitor/logging.md", "apps/desktop/supervisor.md", "systems/telemetry.md"],
+      "action": "regenerate-from-source"
     },
     {
       "path": "how-to-monitor/alerting.md",
@@ -1306,13 +1319,14 @@
         "how-to-monitor/metrics.md",
         "reference/configuration.md",
         "how-to-monitor/logging.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "cleanup-opportunities.md",
       "title": "Cleanup opportunities",
       "criticality": "normal",
-      "contentBrief": "This is a source-backed maintenance list at `5eefa37`, not a new dead-code, dependency-age, security or performance audit. The main opportunities are registered exceptions and stale maintained prose. See [contribution tooling](how-to-contribute/tooling.md).",
+      "contentBrief": "This is a source-backed maintenance list at `0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae` on **2026-11-08**, not a new dead-code, dependency-age, security or performance audit. The main opportunities are registered exceptions and stale maintained prose. See [contribution tooling](how-to-contribute/tooling.md).",
       "relevantSourcePaths": [
         "apps/server/src/config.ts",
         "apps/server/src/health/checks/torbox.ts",
@@ -1337,13 +1351,14 @@
         "how-to-contribute/testing.md",
         "apps/web/player.md",
         "apps/desktop/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "reference/index.md",
       "title": "Reference",
       "criticality": "normal",
-      "contentBrief": "These pages collect configuration, durable models, and direct dependencies for source commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. They describe the current server, web player, and Electron shell rather than planned clients.",
+      "contentBrief": "These pages collect configuration, durable models and dependency inventories for **`0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`**, inspected **2026-11-08**. They describe the implemented server, web player and Electron shell; maintained operator documents remain under `docs/` and `docs/runbooks/`.",
       "relevantSourcePaths": [
         "apps/server/src/config.ts",
         "apps/server/src/db/migrations.ts",
@@ -1364,13 +1379,14 @@
         "apps/web/index.md",
         "apps/desktop/index.md",
         "security.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "reference/configuration.md",
       "title": "Configuration",
       "criticality": "normal",
-      "contentBrief": "The server selects one env-format file, overlays recognized nonblank process variables, and derives typed defaults. Restart after changes. File values do not automatically become shell environment variables (`apps/server/src/config.ts`). See [getting started](../overview/getting-started.md).",
+      "contentBrief": "The server selects one env-format file, overlays recognized nonblank process variables and derives typed defaults. Restart after changes; browser build inputs and device-local preferences have different lifetimes (`apps/server/src/config.ts`, `apps/web/vite.config.ts`). See [getting started](../overview/getting-started.md).",
       "relevantSourcePaths": [
         "apps/server/src/config.ts",
         "apps/server/src/index.ts",
@@ -1393,7 +1409,8 @@
         "apps/desktop/index.md",
         "how-to-contribute/patterns-and-conventions.md",
         "security.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "reference/data-models.md",
@@ -1421,13 +1438,14 @@
         "security.md",
         "systems/telemetry.md",
         "api/index.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     },
     {
       "path": "reference/dependencies.md",
       "title": "Dependencies",
       "criticality": "normal",
-      "contentBrief": "This inventory counts direct manifest declarations at source commit `5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001`. It is not a transitive inventory, freshness report, or vulnerability audit. Four workspaces are listed in `pnpm-workspace.yaml`; root `package.json` supplies tooling.",
+      "contentBrief": "This inventory separates direct manifest declarations from resolved lockfile records at **`0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`**, counted **2026-11-08**. Four workspaces are listed in `pnpm-workspace.yaml`; root `package.json` supplies tooling. Versions below are local requests/resolutions, not a freshness or vulnerability assessment.",
       "relevantSourcePaths": [
         "apps/server/package.json",
         "apps/web/package.json",
@@ -1444,7 +1462,9 @@
         "how-to-contribute/tooling.md",
         "overview/architecture.md",
         "reference/configuration.md"
-      ]
+      ],
+      "action": "regenerate-from-source"
     }
-  ]
+  ],
+  "pageCount": 56
 }

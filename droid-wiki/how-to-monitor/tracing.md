@@ -1,6 +1,6 @@
 # Tracing
 
-HomeStream implements request-ID correlation and restricted Sentry error/breadcrumb reporting, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).
+HomeStream implements request-ID correlation in `apps/server/src/requestContext.ts` and restricted Sentry error/breadcrumb reporting in `apps/server/src/telemetry/sentry.ts`, not a complete distributed tracing pipeline. Configuring a sampler or allowing trace headers does not create spans. See [logging](logging.md).
 
 ## Follow a failure
 
@@ -14,6 +14,8 @@ HomeStream implements request-ID correlation and restricted Sentry error/breadcr
 `registerRequestObservability` in `apps/server/src/http/observability.ts` sets the response header. `apps/server/src/app.ts` exposes it through CORS and attaches unexpected-error context. Background work may have no request ID; a playback session ID and request ID are not interchangeable.
 
 Browser `apiFetch` in `apps/web/src/api/client.ts` adds request IDs and includes them in breadcrumbs/`ApiError.requestId`. Desktop `createServerClient` in `apps/desktop/src/serverHttp.ts` uses `withRequestId` from `apps/desktop/src/requestId.ts` for main-process server requests. This is working shell wiring, not an unused request helper. See [desktop supervision](../apps/desktop/supervisor.md).
+
+The browser wrapper creates a fresh UUID for each call and records that generated value; it does not read a rewritten response header back into `ApiError`. Raw `EventSource` in `apps/web/src/events/serverEvents.ts` is a separate SSE connection without the wrapper's custom header. Fetch correlation therefore does not imply every client transport shares one ID or trace.
 
 ## What Sentry actually does
 
@@ -31,18 +33,18 @@ Start with an explicit instrumentation plan rather than enabling all default int
 
 Preserve media/probe/SSE exclusions and scrub transactions through `sanitizeSentryEvent` in `packages/shared/src/sanitize.ts`. Add stub-collector payload tests and update `docs/PRIVACY.md`/`docs/observability.md` when actual outbound behavior changes. Measure playback/Home overhead before and after hot-path changes.
 
-This page is based on source inspection, not a live trace capture or benchmark.
+This page is based on source inspection at **`0a8f04f`, 2026-11-08**, not a live trace capture or benchmark. Enablement and build-time/runtime opt-outs are in [configuration](../reference/configuration.md); the maintained operational reference is `docs/observability.md`.
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/requestContext.ts` | ID validation and async scope |
-| `apps/server/src/http/observability.ts` | Correlation header and completion instrumentation |
-| `apps/server/src/telemetry/sentry.ts` | Restricted integrations and sampling |
-| `apps/server/src/telemetry/playbackObserver.ts` | Manual lifecycle breadcrumbs/reports |
-| `apps/web/src/api/client.ts` | Renderer request correlation |
-| `apps/desktop/src/serverHttp.ts` | Main-process client correlation |
-| `packages/shared/src/sanitize.ts` | Error/transaction filtering |
-| `apps/server/test/telemetry/telemetryUnits.test.ts` | Sampling/context cases |
-| `apps/server/test/integration/observability.test.ts` | HTTP/CORS/request-ID integration |
+| File                                                 | Purpose                                           |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `apps/server/src/requestContext.ts`                  | ID validation and async scope                     |
+| `apps/server/src/http/observability.ts`              | Correlation header and completion instrumentation |
+| `apps/server/src/telemetry/sentry.ts`                | Restricted integrations and sampling              |
+| `apps/server/src/telemetry/playbackObserver.ts`      | Manual lifecycle breadcrumbs/reports              |
+| `apps/web/src/api/client.ts`                         | Renderer request correlation                      |
+| `apps/desktop/src/serverHttp.ts`                     | Main-process client correlation                   |
+| `packages/shared/src/sanitize.ts`                    | Error/transaction filtering                       |
+| `apps/server/test/telemetry/telemetryUnits.test.ts`  | Sampling/context cases                            |
+| `apps/server/test/integration/observability.test.ts` | HTTP/CORS/request-ID integration                  |

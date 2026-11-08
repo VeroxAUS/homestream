@@ -6,18 +6,34 @@ Active contributors: VeroxAUS
 
 The desktop shell keeps an owned server alive without taking ownership of a server started elsewhere. `Supervisor` in `apps/desktop/src/supervisor.ts` implements the lifecycle; `ServerMonitor` in `apps/desktop/src/monitor.ts` supplies activity and health to the tray, notifications and keep-awake policy. See the [desktop overview](index.md).
 
-| Abstraction | Source | Boundary |
-| --- | --- | --- |
-| `createServerClient` | `apps/desktop/src/serverHttp.ts` | Loopback requests with fresh request IDs and bounded JSON/probe timeouts |
-| `resolveServerLaunch` | `apps/desktop/src/serverLaunch.ts` | Development versus packaged command/environment |
-| `spawnServerChild` | `apps/desktop/src/serverProcess.ts` | Child pipes, exit observation and termination |
-| `createSseParser` | `apps/desktop/src/sse.ts` | Chunked event-stream parsing |
-| `trayView` | `apps/desktop/src/trayModel.ts` | Consistent icon, tooltip and menu model |
-| `TrayAdapter` | `apps/desktop/src/shell/trayAdapter.ts` | Electron images, menu and tray events |
+| Abstraction           | Source                                  | Boundary                                                                 |
+| --------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| `createServerClient`  | `apps/desktop/src/serverHttp.ts`        | Loopback requests with fresh request IDs and bounded JSON/probe timeouts |
+| `resolveServerLaunch` | `apps/desktop/src/serverLaunch.ts`      | Development versus packaged command/environment                          |
+| `spawnServerChild`    | `apps/desktop/src/serverProcess.ts`     | Child pipes, exit observation and termination                            |
+| `createSseParser`     | `apps/desktop/src/sse.ts`               | Chunked event-stream parsing                                             |
+| `trayView`            | `apps/desktop/src/trayModel.ts`         | Consistent icon, tooltip and menu model                                  |
+| `TrayAdapter`         | `apps/desktop/src/shell/trayAdapter.ts` | Electron images, menu and tray events                                    |
 
 ## Ownership and readiness
 
 The client probes `/api/info` on the configured loopback port and recognizes the `app: homestream` marker. A matching server is **attached**: no child is spawned, restart is refused with “Server is managed outside the app,” and quit leaves it running.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting
+    Starting --> Attached: Existing HomeStream answers
+    Starting --> Running: Owned child answers
+    Attached --> Lost: Two probe misses
+    Lost --> Attached: External server returns
+    Lost --> Starting: Explicit Start server
+    Running --> Crashed: Owned child exits
+    Crashed --> Starting: Backoff expires
+    Crashed --> Failed: Restart budget exhausted
+    Failed --> Starting: Retry
+    Running --> Stopped: Quit stops owned child
+    Attached --> Stopped: Quit leaves external server
+```
 
 An attached server is probed every four seconds. Two consecutive misses make it **lost**; a later matching answer restores attachment. Losing attachment never automatically launches a competing server. The explicit Start server action can start an owned child.
 
@@ -59,17 +75,17 @@ Change supervision timing/ownership in `apps/desktop/src/supervisor.ts`, subproc
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/desktop/src/supervisor.ts` | Ownership/state machine and serialized operations |
-| `apps/desktop/src/serverLaunch.ts` | Launch environments and safe failure hints |
-| `apps/desktop/src/serverProcess.ts` | Process boundary |
-| `apps/desktop/src/serverHttp.ts` | Correlated loopback client |
-| `apps/desktop/src/monitor.ts` | SSE and snapshot concurrency |
-| `apps/desktop/src/trayModel.ts` | Pure tray presentation rules |
-| `apps/desktop/src/shell/trayAdapter.ts` | Cached multi-scale tray images |
-| `apps/desktop/test/monitor.test.ts` | Activity race regressions |
+| File                                    | Purpose                                           |
+| --------------------------------------- | ------------------------------------------------- |
+| `apps/desktop/src/supervisor.ts`        | Ownership/state machine and serialized operations |
+| `apps/desktop/src/serverLaunch.ts`      | Launch environments and safe failure hints        |
+| `apps/desktop/src/serverProcess.ts`     | Process boundary                                  |
+| `apps/desktop/src/serverHttp.ts`        | Correlated loopback client                        |
+| `apps/desktop/src/monitor.ts`           | SSE and snapshot concurrency                      |
+| `apps/desktop/src/trayModel.ts`         | Pure tray presentation rules                      |
+| `apps/desktop/src/shell/trayAdapter.ts` | Cached multi-scale tray images                    |
+| `apps/desktop/test/monitor.test.ts`     | Activity race regressions                         |
 
 ## Measured scope
 
-Desktop-wide committed inventory at `5eefa37`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. Method and exclusions are in the [desktop overview](index.md); these figures describe the whole app, not an overlapping subsystem total.
+Desktop-wide committed inventory at `0a8f04f`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. Method and exclusions are in the [desktop overview](index.md); these figures describe the whole app, not an overlapping subsystem total.

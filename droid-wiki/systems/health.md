@@ -2,89 +2,95 @@
 
 Active contributors: VeroxAUS
 
-`HealthService` in `apps/server/src/health/service.ts` combines dependency checks with live playback/network state. It is richer and more expensive than liveness/readiness. See [monitoring](../how-to-monitor/index.md).
+`HealthService` in `apps/server/src/health/service.ts` combines dependency checks with live playback/network state. It is richer, slower and potentially more consequential than HTTP liveness/readiness.
+
+## Purpose
+
+Explain operational problems with actionable hints while keeping credentials out of results/events. Health is feedback, not a prerequisite that blocks every API request. See [monitoring](../how-to-monitor/index.md) for logs, metrics and alerts.
 
 ## Interfaces and scheduling
 
-| Surface | Meaning |
-| --- | --- |
-| GET `/api/health` | Latest snapshot with live checks refreshed; first read can run all checks |
-| POST `/api/health/run` | Manual pass, normally retaining caches |
-| POST `/api/health/run?fresh=1` | Bypass TorBox/FFmpeg caches; `fresh=true` also works |
-| SSE `health` | First service publication, status changes and manual-run snapshots |
-| GET `/api/logs` | Durable selected events, including health status transitions |
-| GET `/healthz` | Cheap HTTP liveness |
-| GET `/readyz` | DB `SELECT 1` plus data-directory write/remove probe |
-| GET `/metrics` | Counters/process data, not a dependency test |
+| Surface                        | Behavior                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| GET `/api/health`              | Latest snapshot with live checks refreshed; first read can run all checks |
+| POST `/api/health/run`         | Manual pass, normally retaining caches                                    |
+| POST `/api/health/run?fresh=1` | Bypass TorBox/FFmpeg caches; `fresh=true` also works                      |
+| SSE `health`                   | First publication, status transitions and manual-run snapshots            |
+| GET `/api/logs`                | Durable selected events, including status transitions                     |
+| GET `/healthz`                 | Cheap HTTP liveness                                                       |
+| GET `/readyz`                  | DB SELECT and data-directory write/remove probe; failure is 503           |
+| GET `/metrics`                 | Local Prometheus registry; not a health-check run                         |
 
-The HTTP adapters are `apps/server/src/routes/health.ts`, `apps/server/src/routes/ops.ts` and `apps/server/src/routes/events.ts`. Readiness returns 503 when DB/storage is unusable, is limited to **300 requests/minute/address**, and does not test transcode writes, GPU or upstreams. All three root ops routes avoid upstream calls.
+`registerHealthRoutes` in `apps/server/src/routes/health.ts` exposes the health/log APIs. `registerOpsRoutes` in `apps/server/src/routes/ops.ts` keeps root probes independent of TMDB, gateway and TorBox. Readiness alone is rate-limited to **300/minute per address**; playback/HLS is not globally throttled.
 
-`start()` launches a non-awaited full pass, repeats it every **60 seconds**, and refreshes in-memory sessions/network every **5 seconds**. Entry startup enables scheduling after listening (`apps/server/src/index.ts`); app construction alone does not. Timers are unreferenced.
+`main` in `apps/server/src/index.ts` starts health after listeners open. The service runs a full pass immediately and every **60 seconds**, plus cheap session/network refreshes every **five seconds**. Building the app alone does not activate these timers. Full-pass checks run concurrently; overall status is the worst of ok/warn/error in the shared check order.
+
+Nonfresh calls can join an in-flight full pass. A fresh request can start a new pass even if one is running; do not describe all runs as globally serialized. A manual run forces publication even if statuses do not change.
 
 ```mermaid
-graph LR
-    Full[60 s or manual pass] --> Checks[Concurrent checks]
-    Cache[TorBox and FFmpeg cache] --> Checks
-    Live[5 s or snapshot read] --> Memory[Sessions and network]
-    Checks --> Snapshot[Ordered worst-status snapshot]
-    Memory --> Snapshot
-    Snapshot --> Events[Status-change log]
-    Snapshot --> Stream[Conditional health SSE]
+graph TD
+    Trigger[Startup timer or manual request] --> Full[Concurrent full pass]
+    Full --> Cache{Reusable cached result?}
+    Cache -->|yes| Keep[Retain original check time]
+    Cache -->|no| Measure[Measure dependency or local check]
+    Keep --> Snapshot[Ordered worst-status snapshot]
+    Measure --> Snapshot
+    Live[Live timer or health read] --> Cheap[Refresh sessions and network]
+    Cheap --> Snapshot
+    Snapshot --> Compare[Compare statuses]
+    Compare --> Events[Persist transition events]
+    Compare --> SSE[Publish first changed or manual snapshot]
 ```
 
-Non-fresh concurrent runs share an in-flight promise; fresh runs can start another pass. Each check has independent failure handling, latency and ISO `checkedAt`. `overall` is the worst `ok`/`warn`/`error`; non-OK checks receive hints. A degraded snapshot is still a successful API response.
+## Checks and boundaries
 
-## Cache and publication rules
+| Check         | Implementation and meaning                                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration | `checkConfig` in `apps/server/src/health/checks/config.ts`: required gateway/TMDB key presence, optional TorBox presence, settings warnings and selected config-file metadata; never key values |
+| Gateway       | `checkGateway` in `apps/server/src/health/checks/gateway.ts`: addon manifest only, **10 s** timeout, plus last list-lookup status; never a stream lookup                                        |
+| TorBox        | `checkTorbox` in `apps/server/src/health/checks/torbox.ts`: account request, **10 s** timeout; plan/subscription/expiry only, no email/account/referral fields                                  |
+| TMDB          | `checkTmdb` in `apps/server/src/health/checks/tmdb.ts`: configured token plus service ping to `/configuration`                                                                                  |
+| FFmpeg/NVENC  | `checkFfmpeg` in `apps/server/src/health/checks/ffmpeg.ts`: executable versions, H.264/HEVC NVENC names and optional real one-second H.264 NVENC test                                           |
+| GPU           | `checkGpu` in `apps/server/src/health/checks/gpu.ts`: first nvidia-smi CSV GPU reading, **10 s** timeout, nullable unavailable measurements                                                     |
+| Disk          | `checkDisk` in `apps/server/src/health/checks/disk.ts`: free data/transcode volume space and finished-segment cap usage                                                                         |
+| Sessions      | `checkSessions` in `apps/server/src/health/checks/sessions.ts`: active count, recent playback errors and genuinely falling-behind sessions                                                      |
+| Network       | `buildNetworkCheck` in `apps/server/src/network/check.ts`: current aggregate cap/rate and per-session lead/read-ahead                                                                           |
 
-TorBox non-error results cache for **5 minutes**. FFmpeg non-error results cache for **10 minutes**, and an existing result remains reusable beyond that while playback activity exists. Errors retry on the next full pass. First checks and fresh passes can still encode during playback; do not use fresh as a polling mechanism. Cached measurements keep their original timestamps.
+TorBox warns when unconfigured, errors when rejected/inactive/expired, and warns for fewer than **seven days** remaining. A missing optional TorBox key can therefore make overall health warn while cached playback still works.
 
-Initial OK checks do not create log rows. Initial problems, later status changes and recoveries do. Numeric reading changes alone do not force publication. Manual runs force health SSE even without a status transition.
+FFmpeg version/encoder commands have **10-second** timeouts; its real encode has **20 seconds**. `HEALTH_NVENC_TEST=off` disables that encode, not version/encoder inspection. A “fresh health run” may touch the GPU and real services; it is not equivalent to a safe monitoring scrape.
 
-A new SSE connection receives heartbeat, **not a health baseline**. A steady server may therefore emit no health change after connection. `reconcileHealth` in `apps/web/src/events/serverEvents.ts` runs a snapshot through the health query on every open, cancelling older requests; a pushed newer snapshot cancels pending reads too. See [web data and startup](../apps/web/data-and-startup.md).
+GPU temperature warns strictly above **85°C**. Disk uses binary GiB despite GB labels, warns below configurable default **20 GB**, errors below **5 GB**, and can warn above the transcode cap. `diskSpace` in `apps/server/src/health/exec.ts` climbs to an existing parent if a configured directory is not yet created.
 
-`stop()` clears timers but does not await an already-running full pass. Local snapshots may contain hardware, paths and session information; secret redaction does not make them public-safe.
+Session errors cover the last **15 minutes**, excluding health's own check-transition errors. `FallingBehindWatch` in `apps/server/src/playback/fallingBehind.ts` requires known positive recent speed below 1× for more than **30 seconds** while filling. Waiting at read-ahead, finished or parked video does not count. Network limiting warns only after more than **30 seconds** of binding; it is not itself an error.
 
-## Nine checks
+## Caches, publication and privacy
 
-| ID | Work and boundary | Implementation |
-| --- | --- | --- |
-| `config` | Missing gateway/TMDB setting is error; configuration warnings produce warn | `apps/server/src/health/checks/config.ts` |
-| `gateway` | Manifest request, 10-second timeout; unreachable/invalid is error, last stream-lookup failure can warn after reachable manifest | `apps/server/src/health/checks/gateway.ts` |
-| `torbox` | Account request, 10-second timeout; absent optional key warns, rejected/unreachable/inactive/expired errors, fewer than seven full subscription days warns | `apps/server/src/health/checks/torbox.ts` |
-| `tmdb` | Service configuration ping; missing/rejected token or failure errors | `apps/server/src/health/checks/tmdb.ts` |
-| `ffmpeg` | Version/inventory requires H.264 and HEVC NVENC; normally a one-second 720p H.264 test encode | `apps/server/src/health/checks/ffmpeg.ts` |
-| `gpu` | First `nvidia-smi` GPU reading; unreadable errors, temperature above 85°C warns | `apps/server/src/health/checks/gpu.ts` |
-| `disk` | Fuller relevant volume below fixed 5 GiB errors; below configurable warning threshold warns; over-cap transcode usage also warns | `apps/server/src/health/checks/disk.ts` |
-| `sessions` | Qualifying session/FFmpeg errors in last 15 minutes or sustained falling behind warns | `apps/server/src/health/checks/sessions.ts` |
-| `network` | Shared download cap binding continuously for more than 30 seconds warns | `apps/server/src/network/check.ts` |
+Nonerror TorBox results cache for **five minutes**; nonerror FFmpeg results for **ten minutes**. Errors are retried on the next pass. An existing FFmpeg result remains reused beyond TTL while playback activity exists, unless fresh is requested. The check is not universally skipped whenever playback is active: initial/fresh passes can still run it.
 
-`HEALTH_NVENC_TEST=off` disables only the encode, not FFmpeg version/inventory. Version/inventory and GPU commands have 10-second limits; encode has 20 seconds. Full checks contact upstreams and may use the GPU.
+The service adds timing/name/id, deep-redacts results and converts thrown check failures into error outcomes. A status transition writes one event with check/status/previous/hint under the appropriate event source; initial ok checks stay out of durable transition logs. Numeric detail changes alone do not produce repeated events/SSE snapshots. Manual passes still publish.
 
-`checkDisk` in `apps/server/src/health/checks/disk.ts` probes data/transcode volumes, avoids counting the same reported root twice and uses the tighter free-space reading. GB-named fields use `1024³`; free space rounds to two decimals before comparison. The warning setting is **`DISK_WARN_FREE_GB`, default 20**; `DISK_ERROR_FREE_GB` remains **5** (`apps/server/src/config.ts`). Nonnegative warning values at or below five are accepted with a configuration warning, not silently clamped: disk health then goes directly from OK to error at the fixed boundary. The independent configuration check can still warn.
+`registerEventRoutes` in `apps/server/src/routes/events.ts` carries bus publications over SSE with heartbeats; it does not replay a health snapshot to every new connection by itself. Clients reconcile fetched health and SSE; see [web data and startup](../apps/web/data-and-startup.md). Local operational output is distinct from [telemetry](telemetry.md).
 
-Disk also compares finished live-session segment bytes with `TRANSCODE_MAX_GB`. Probing climbs to an existing parent, so a free-space OK is not proof the configured directory is writable (`apps/server/src/health/exec.ts`).
+## Modification entry points
 
-`apps/server/src/playback/fallingBehind.ts` requires positive speed below one for more than 30 seconds while filling the read-ahead window; waiting/idle/zero observations break the streak. Recent-error queries exclude health-generated rows marked `details.check` (`apps/server/src/events/query.ts`). This differs from the raw minimum-speed [Prometheus rule](../how-to-monitor/alerting.md).
-
-## Change entry points and tests
-
-Add IDs/wire shapes in `packages/shared/src/health.ts`, then implement outcomes and update ordering/name/event-source maps in the service. Inject HTTP, command, disk and clock adapters for offline tests. Keep playback/network policy in its own subsystem rather than hiding behavior changes inside display checks.
-
-Tests cover outcome boundaries, configurable disk thresholds, caching/expiry, active-playback retention, manual publication, independent failures, redaction and SSE/log queries. This refresh inspected source; it did not execute tests or contact services.
+Add/change check IDs and response contracts in [shared](../packages/shared.md), implement a focused check module and wire it in `apps/server/src/health/service.ts`. Preserve result redaction, actionable non-ok hints, expensive-check cache policy and the cheap root-probe boundary. Operational response changes also require the [API](../api/index.md) documentation.
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/health/service.ts` | Scheduler, cache, aggregation and transitions |
-| `apps/server/src/health/exec.ts` | Bounded processes and disk probing |
-| `apps/server/src/health/checks/types.ts` | Outcome helpers |
-| `packages/shared/src/health.ts` | IDs and response/log schemas |
-| `apps/server/test/health/checks.test.ts` | Stubbed dependency/check boundaries |
-| `apps/server/test/health/disk.test.ts` | Disk threshold/cap regressions |
-| `apps/server/test/integration/health-service.test.ts` | Service caches and publication |
-| `apps/server/test/integration/health-routes.test.ts` | Log/SSE route integration |
+| File                                                  | Purpose                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| `apps/server/src/health/service.ts`                   | Scheduling, caches, aggregation and transitions         |
+| `apps/server/src/health/checks/types.ts`              | Common outcomes and failure helper                      |
+| `apps/server/src/health/exec.ts`                      | Bounded commands and disk-space seam                    |
+| `apps/server/src/routes/health.ts`                    | Health/manual/log adapters                              |
+| `apps/server/src/routes/ops.ts`                       | Independent probes/metrics and readiness limit          |
+| `packages/shared/src/health.ts`                       | Check IDs and wire/log schemas                          |
+| `apps/server/test/health/checks.test.ts`              | Stubbed check parsing/failure boundaries                |
+| `apps/server/test/health/disk.test.ts`                | Free-space and cache-cap policy                         |
+| `apps/server/test/integration/health-service.test.ts` | Caches, publication, failure isolation and secret audit |
+| `apps/server/test/integration/health-routes.test.ts`  | Logs and SSE integration                                |
 
 ## Measured scope
 
-At `5eefa37`, `apps/server/src/health/` has **11 production `.ts` files**; `apps/server/test/health/` has **2 `.test.ts` files**, excluding its helper. Test/source file ratio: **0.18**. Integration tests and network/playback modules are outside this count, though relevant above. Scoped default-branch history has **1 unique human author**, VeroxAUS. These counts are inventory, not coverage or executed-test results.
+At **`0a8f04f`**, scoped `git ls-tree` counts **11 `.ts` production files in `apps/server/src/health/`** and **2 `*.test.ts` files in `apps/server/test/health/`**, ratio **0.18**. Helpers, integration tests and adjacent network/playback/routes are excluded even where discussed. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. Source/tests were inspected; no health runs, application tests, real encodes or upstream requests were executed.

@@ -6,25 +6,37 @@ Active contributors: VeroxAUS
 
 Viewing progress persists shared resume state and derives Continue Watching/up-next cards. `PlaybackManager.ping` in `apps/server/src/playback/manager.ts` writes progress/history; `ContinueWatchingService` in `apps/server/src/progress/service.ts` builds visible entries from that data.
 
+## Directory layout
+
+| Path                                  | Responsibility                                              |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `apps/server/src/progress/`           | Pure rules/grouping/traversal and Continue Watching service |
+| `apps/server/src/db/progress.ts`      | Latest media-key state and hidden markers                   |
+| `apps/server/src/db/plays.ts`         | Per-session watched time/history writes                     |
+| `apps/server/src/playback/manager.ts` | Ping orchestration and transactional persistence            |
+| `apps/server/src/routes/progress.ts`  | Ping, media/show read and card-removal adapters             |
+| `apps/server/test/progress/`          | Offline rule, grouping and next-episode tests               |
+| `packages/shared/src/progress.ts`     | Thresholds and progress/history/statistics contracts        |
+
 ## Identity and ping semantics
 
 `mediaKeyFor` in `apps/server/src/db/plays.ts` uses movie ID or TV ID/season/episode identity. Resume state is shared by media key, not account/device. Individual play history retains session/device context.
 
 `apps/server/src/routes/progress.ts` validates progress pings and media/show reads. Missing ping state means playing. Pings count as activity while paused or buffering too, preventing paused-but-connected sessions from timing out.
 
-| Rule | Value/meaning |
-| --- | --- |
-| Saved position | Clamped to nonnegative/probed duration |
-| Complete | At least **92%** of positive duration |
-| Resumable | At least **60 seconds**, not complete |
-| Watched time | Elapsed gap when **previous** ping state was playing |
-| Gap cap | At most **30 seconds** per ping gap |
+| Rule           | Value/meaning                                        |
+| -------------- | ---------------------------------------------------- |
+| Saved position | Clamped to nonnegative/probed duration               |
+| Complete       | At least **92%** of positive duration                |
+| Resumable      | At least **60 seconds**, not complete                |
+| Watched time   | Elapsed gap when **previous** ping state was playing |
+| Gap cap        | At most **30 seconds** per ping gap                  |
 
 Pure rules live in `apps/server/src/progress/rules.ts`, shared thresholds in `packages/shared/src/progress.ts`. A pause credits preceding playing time; resume does not credit paused time. Seeking to the end can complete a title without crediting the skipped distance as watched time.
 
 The manager transaction writes latest progress and play counters together. `apps/server/src/db/progress.ts` replaces current completion with the newest ping and clears hidden state. `apps/server/src/db/plays.ts` makes play-history completion sticky once reached in that session. These intentionally differ.
 
-Reading resume does not implicitly change a new session start: callers send their chosen start position (`apps/server/src/playback/sessionStart.ts`). The browser player is implemented and owns its ping loop; see [web](../apps/web/index.md).
+Reading resume does not implicitly change a new session start: callers send their chosen start position (`apps/server/src/playback/sessionStart.ts`). The [HLS client](../apps/web/player.md) owns its ping loop and sends a separate desired start position.
 
 ## Continue watching and hiding
 
@@ -50,9 +62,13 @@ graph LR
 
 ## Up next
 
-`findNextEpisode` in `apps/server/src/progress/upNext.ts` chooses the next numbered episode of the current season, otherwise the first episode in up to **three later nonempty seasons**. It does not skip an unaired next episode to offer a later one.
+`findNextEpisode` in `apps/server/src/progress/upNext.ts` chooses the next numbered episode of the current season. Otherwise it considers up to **three later seasons whose summaries advertise episodes**, in season order, stopping at the first actual episode found. It does not skip an unaired next episode to offer a later one.
 
 Future air dates are suppressed relative to the server's local calendar day; absent air dates are accepted. Successful lookups including null cache for **one hour**. Failure omits that entry with debug logging instead of failing the whole row (`apps/server/src/progress/service.ts`).
+
+## Browser-local spoiler protection
+
+Continue Watching removal's persisted `hidden` field is **not** the spoiler preference. `isEpisodeHidden` in `apps/web/src/lib/spoilers.ts` uses a browser-local choice (on by default) and the server's completion boolean: unfinished, missing or still-loading progress stays protected. `apps/web/src/components/EpisodeRow.tsx` and `apps/web/src/components/EpisodePanel.tsx` omit protected descriptions and request w92 episode stills instead of w300; they do not alter the saved progress or filter server metadata. Settings stores only the local opt-out, with a page-memory fallback when storage is blocked. See [screens](../apps/web/screens.md) for UI behavior.
 
 ## History and local statistics
 
@@ -64,19 +80,21 @@ These are local operational/product records, not telemetry. Dashboard tabs remai
 
 Change completion/time accounting in `apps/server/src/progress/rules.ts`, title grouping in `apps/server/src/progress/entries.ts`, and next-episode traversal in `apps/server/src/progress/upNext.ts`. Coordinate write changes with the manager and DB queries. Keep position, watched duration, current completion and sticky history completion separate.
 
+`apps/server/test/progress/rules.test.ts`, `apps/server/test/progress/entries.test.ts` and `apps/server/test/progress/upNext.test.ts` cover the pure policies. `apps/server/test/integration/progress-routes.test.ts` covers ping accounting, reopening completed progress, hide/unhide, Home/history and statistics. Browser spoiler tests are outside the measured server-domain scope.
+
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
+| File                                  | Purpose                      |
+| ------------------------------------- | ---------------------------- |
 | `apps/server/src/playback/manager.ts` | Ping and transactional write |
-| `apps/server/src/progress/rules.ts` | Pure progress rules |
-| `apps/server/src/progress/entries.ts` | Latest eligible title |
-| `apps/server/src/progress/service.ts` | Cards and hiding |
-| `apps/server/src/progress/upNext.ts` | Aired episode traversal |
-| `apps/server/src/db/progress.ts` | Latest resume/hidden state |
-| `apps/server/src/db/plays.ts` | Per-session history |
-| `apps/server/src/routes/progress.ts` | Progress API |
+| `apps/server/src/progress/rules.ts`   | Pure progress rules          |
+| `apps/server/src/progress/entries.ts` | Latest eligible title        |
+| `apps/server/src/progress/service.ts` | Cards and hiding             |
+| `apps/server/src/progress/upNext.ts`  | Aired episode traversal      |
+| `apps/server/src/db/progress.ts`      | Latest resume/hidden state   |
+| `apps/server/src/db/plays.ts`         | Per-session history          |
+| `apps/server/src/routes/progress.ts`  | Progress API                 |
 
 ## Measured scope
 
-At `5eefa37`, scoped `git ls-files` counts **4 progress `.ts` source / 3 matching `*.test.ts` files**, ratio **0.75**. Stats, manager, DB/routes, integration/web/contracts and helpers are excluded. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. Tests were inspected, not executed.
+At `0a8f04f`: **4 source files / 3 test files**, test/source file ratio **0.75**, **1 unique human contributor**. Method: `git ls-tree -r --name-only 0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`, counting `.ts` under `apps/server/src/progress/` and `*.test.ts` under `apps/server/test/progress/`. Exclude helpers, stats, manager, DB/routes, integration/shared/web tests. Human count uses scoped `origin/main` author history excluding bots, consistent with `.github/CODEOWNERS`. Ratios are not coverage; tests were inspected, not executed.

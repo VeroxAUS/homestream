@@ -2,6 +2,8 @@
 
 Active contributors: VeroxAUS
 
+## Purpose
+
 The client separates TanStack Query server data, route/component state, persistent device identity and small external stores for downloads, event-stream liveness and notices. Request code lives in `apps/web/src/api/`; SSE lives in `apps/web/src/events/`. There is no separate monolithic application-state store.
 
 ## Requests and cache keys
@@ -10,20 +12,24 @@ The client separates TanStack Query server data, route/component state, persiste
 
 `createQueryClient` and query factories in `apps/web/src/api/queries.ts` define:
 
-| Setting | Value |
-| --- | --- |
-| Query GET deadline | **15 seconds**, combined with Query cancellation |
-| Retry | One retry after **800 ms** for non-`ApiError`, non-timeout errors |
-| Window-focus refetch | Disabled |
-| Default stale / unused cache lifetime | **5 / 10 minutes** |
-| Home stale time | **30 seconds** |
-| Health stale time | **30 seconds** |
-| Health fallback polling | **60 seconds**, foreground only, disabled while SSE is live |
-| Saved progress | Immediately stale; always refetch on mount |
+| Setting                               | Value                                                             |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| Query GET deadline                    | **15 seconds**, combined with Query cancellation                  |
+| Retry                                 | One retry after **800 ms** for non-`ApiError`, non-timeout errors |
+| Window-focus refetch                  | Disabled                                                          |
+| Default stale / unused cache lifetime | **5 / 10 minutes**                                                |
+| Home stale time                       | **30 seconds**                                                    |
+| Health stale time                     | **30 seconds**                                                    |
+| Health fallback polling               | **60 seconds**, foreground only, disabled while SSE is live       |
+| Saved progress                        | Immediately stale; always refetch on mount                        |
 
 The deadline/retry behavior is attached to query fetchers, **not every raw `apiFetch` mutation**. Session starts, patches and progress use their own lifetime rules.
 
 Keys are `['home']`, `['health']`, `['info']`, `['search', text]`, `['movie', id]`, `['show', id]`, `['season', id, season]`, `['progress', 'movie', id]` and `['progress', 'tv', id]`. Movie-progress 404 maps to `null`; other errors propagate. Screen actions treat failed progress as absent. Playback cleanup invalidates both Home and the progress prefix after its final ping (`apps/web/src/player/watchState.ts`).
+
+Search's current text and immediate-submit marker belong to routing, not a second shared store. `apps/web/src/components/useNavSearch.ts` synchronizes the field with raw URL text; `apps/web/src/pages/SearchPage.tsx` queries the trimmed, settled value. Query cancellation and per-text keys prevent late answers from becoming the current results. See [navigation search](search.md).
+
+The spoiler preference is a separate `useSyncExternalStore` over browser storage, with same-page notifications, cross-window storage listeners and blocked-storage fallback. It never belongs to the server's device capability record or triggers an API mutation (`apps/web/src/lib/spoilers.ts`). [Settings and spoilers](settings-and-spoilers.md) explains its rendering policy.
 
 ## Deferred startup
 
@@ -61,7 +67,7 @@ Download progress validates the event then updates `downloadKey` entries in `app
 
 Ready/failed events clear the fraction, invalidate matching movie/show details and notify subscribers for [toasts](screens.md#notifications-and-toasts). Malformed JSON/schema-invalid events are ignored. There is no download polling loop here.
 
-`apps/web/src/device/identity.ts` stores `homestream.deviceId` and `homestream.deviceName`; blocked storage still permits page-lifetime identity. Names trim to **128 characters**. The profile is H.264, SDR, up to **3840×2160**, stereo, no HEVC/Main10/HDR10. The preload selects desktop kind/name; otherwise the name defaults to Web browser. Registration failures never block UI.
+`apps/web/src/device/identity.ts` stores `homestream.deviceId` and `homestream.deviceName`; blocked storage still permits page-lifetime identity. Names trim to **128 characters**, with an empty value returning to the default. The profile is H.264, SDR, up to **3840×2160**, stereo, no HEVC/Main10/HDR10. The preload selects desktop kind/name; otherwise the name defaults to Web browser. Registration failures never block UI. Device-name Save explicitly registers after its local write; this is separate from automatic deferred startup registration (`apps/web/src/pages/settings/DeviceCard.tsx`).
 
 `randomUuid` in `apps/web/src/lib/uuid.ts` uses `crypto.randomUUID` when available, otherwise constructs an RFC 4122 v4 UUID from `crypto.getRandomValues`, setting version/variant bits. This is necessary for ordinary **HTTP LAN origins**, where `randomUUID` may be absent; both request IDs and device registration still work.
 
@@ -69,15 +75,17 @@ Ready/failed events clear the fraction, invalidate matching movie/show details a
 
 Centralize query keys/schema validation, preserve cancellation when changing health, and keep unrelated startup off the first-content path. Do not add separate snapshot fetches or blanket reconnect invalidation that races health reconciliation.
 
-| File | Purpose |
-| --- | --- |
-| `apps/web/src/api/client.ts` | Request correlation, errors and parsing |
-| `apps/web/src/api/queries.ts` | Timeouts, retries, keys and staleness |
-| `apps/web/src/events/serverEvents.ts` | Singleton SSE and health ordering |
+| File                                  | Purpose                                                |
+| ------------------------------------- | ------------------------------------------------------ |
+| `apps/web/src/api/client.ts`          | Request correlation, errors and parsing                |
+| `apps/web/src/api/queries.ts`         | Timeouts, retries, keys and staleness                  |
+| `apps/web/src/events/serverEvents.ts` | Singleton SSE and health ordering                      |
 | `apps/web/src/events/events.test.tsx` | Late poll/snapshot, reconnect and download regressions |
-| `apps/web/src/device/identity.ts` | Persistent identity and capabilities |
-| `apps/web/src/lib/uuid.ts` | Secure random plain-HTTP fallback |
-| `apps/web/src/lib/startup.ts` | Content/idle gate |
-| `apps/web/src/telemetry/index.ts` | Deferred SDK-free facade |
+| `apps/web/src/device/identity.ts`     | Persistent identity and capabilities                   |
+| `apps/web/src/lib/uuid.ts`            | Secure random plain-HTTP fallback                      |
+| `apps/web/src/lib/startup.ts`         | Content/idle gate                                      |
+| `apps/web/src/lib/searchUrl.ts`       | Shared URL/search constants and focus marker           |
+| `apps/web/src/lib/spoilers.ts`        | Reactive browser-local preference                      |
+| `apps/web/src/telemetry/index.ts`     | Deferred SDK-free facade                               |
 
-Measured committed `src/api/`, `src/device/`, `src/events/`, `src/lib/` scope: **17 production files**, **7 tests**, **7/17 = 0.41** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope).
+Measured tracked `apps/web/src/api/`, `apps/web/src/device/`, `apps/web/src/events/`, `apps/web/src/lib/` scope: **20 production files**, **9 tests**, **9/20 = 0.45** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope).

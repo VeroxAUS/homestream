@@ -1,14 +1,12 @@
 # Security
 
-Active contributors: VeroxAUS
-
 HomeStream trusts its local network and host. These are implemented boundaries, not an internet-readiness claim or a new security audit. `SECURITY.md` defines private reporting and supported versions; see [deployment](deployment.md).
 
 ## LAN trust is policy, not authentication
 
 `buildApp` in `apps/server/src/app.ts` uses wildcard CORS and no account/authentication layer. `apps/server/src/config.ts` defaults to a wildcard listener; there is no configured TLS listener. Anyone reaching it can invoke catalog, playback, device, download, progress/history, health and event APIs.
 
-Device registration records identity/capabilities and caller address, not proof of identity (`apps/server/src/routes/devices.ts`). CORS and allowed `Authorization`/trace headers do not add access control. Address ranking for discovery in `apps/server/src/net.ts` is not an inbound firewall. Keep the service on a trusted LAN, restrict the host firewall and do not port-forward it.
+Device registration records identity/capabilities and caller address, not proof of identity (`apps/server/src/routes/devices.ts`). CORS and allowed `Authorization`/trace headers do not add access control. Cross-origin API use is deliberately permitted; do not treat a different website origin as a server-enforced permission boundary. Address ranking for discovery in `apps/server/src/net.ts` is not an inbound firewall. Keep the service on a trusted LAN, restrict the host firewall and do not port-forward it.
 
 `SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` binds loopback and serves registered sources through randomized `/src/<key>` identifiers. It is not a public arbitrary-URL endpoint or a replacement for authentication. See [source proxy](systems/source-proxy.md).
 
@@ -22,15 +20,15 @@ FFmpeg/ffprobe use executable paths and argument arrays rather than shell interp
 
 ## Input and resource boundaries
 
-| Boundary | Implementation | Constraint |
-| --- | --- | --- |
-| JSON/query input | `packages/shared/src/`, `apps/server/src/routes/` | Explicit shared Zod parsing in handlers |
-| Catalog IDs | `apps/server/src/routes/params.ts` | Bounded decimal forms and safe integer minima |
-| HLS files | `apps/server/src/playback/playlist.ts` | Named playlists/init and bounded numeric segment/track forms |
-| Session media | `apps/server/src/playback/hlsServing.ts` | Session lookup and parsed file kind, not arbitrary paths |
-| Database | `apps/server/src/db/` | Bound prepared-statement inputs |
-| Request ID | `apps/server/src/requestContext.ts` | 1–64 safe characters or generated UUID |
-| Readiness | `apps/server/src/routes/ops.ts` | 300 requests/minute/address for write probing |
+| Boundary         | Implementation                                    | Constraint                                                   |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------------ |
+| JSON/query input | `packages/shared/src/`, `apps/server/src/routes/` | Explicit shared Zod parsing in handlers                      |
+| Catalog IDs      | `apps/server/src/routes/params.ts`                | Bounded decimal forms and safe integer minima                |
+| HLS files        | `apps/server/src/playback/playlist.ts`            | Named playlists/init and bounded numeric segment/track forms |
+| Session media    | `apps/server/src/playback/hlsServing.ts`          | Session lookup and parsed file kind, not arbitrary paths     |
+| Database         | `apps/server/src/db/`                             | Bound prepared-statement inputs                              |
+| Request ID       | `apps/server/src/requestContext.ts`               | 1–64 safe characters or generated UUID                       |
+| Readiness        | `apps/server/src/routes/ops.ts`                   | 300 requests/minute/address for write probing                |
 
 OpenAPI metadata does not replace runtime handler validation or automatically serialize responses (`apps/server/src/docs/openapi.ts`). `AppError`/`errorBody` in `apps/server/src/errors.ts` redact actionable errors; unexpected failures become generic 500s.
 
@@ -40,7 +38,7 @@ Readiness limiting is opt-in for that route, not blanket API throttling. Playbac
 
 `createMainWindow`/`createMiniWindow` in `apps/desktop/src/shell/windows.ts` enable sandboxing/context isolation and disable Node integration. The preload in `apps/desktop/src/preload.cts` exposes named capabilities, not arbitrary IPC or filesystem access.
 
-`registerIpc` in `apps/desktop/src/ipc.ts` validates arguments and the sending frame's URL against the exact loopback origin or bundled startup page. This is URL-based trust, not per-window authorization: same-origin frames are not separately excluded. Navigation outside trusted URLs is blocked; new windows are denied, with approved HTTPS links opened externally. The default session permits fullscreen only.
+`registerIpc` in `apps/desktop/src/ipc.ts` checks the sending frame's URL against the exact loopback origin or bundled startup page; handlers and the settings store validate arguments. This is URL-based trust, not per-window authorization: same-origin frames are not separately excluded. Navigation outside trusted URLs is blocked; new windows are denied, but **any HTTPS URL** requested through the new-window handler can be opened in the external browser, without a destination-host allowlist (`apps/desktop/src/shell/windows.ts`). The default session permits fullscreen only (`apps/desktop/src/shell/shell.ts`).
 
 Keep the trusted renderer/server boundary aligned with LAN exposure. See [windows and IPC](apps/desktop/windows-and-ipc.md) for handoff and sender limitations, rather than treating the bridge as a separate account system.
 
@@ -49,6 +47,8 @@ Keep the trusted renderer/server boundary aligned with LAN exposure. See [window
 Keep keys in ignored `.env` or app-data `config.env`, never tracked files. `registerConfigSecrets` in `apps/server/src/config.ts` registers credentials with `redact` in `apps/server/src/redact.ts`. Structured Pino fields and complete serialized lines are scrubbed; persisted event messages/details, bus payloads, API errors and event reads have their own redaction boundaries.
 
 Do not rely on pattern matching to justify logging raw request bodies, signed URLs or credentials. Local scrubbing is not complete anonymization of paths/device names. Databases retain device names/addresses, viewing history/progress and gateway caches containing source URLs (`apps/server/src/gateway/cache.ts`). Treat data directories, backups, logs and CPU profiles as private. These modules provide no user accounts or storage encryption.
+
+The browser logger itself does not scrub its development console or in-memory buffer; the outbound Sentry hooks scrub breadcrumbs (`apps/web/src/logger.ts`, `apps/web/src/telemetry/sentry.ts`). Keep unsafe data out of call sites. Spoiler hiding is a local presentation preference, not censorship of the server response or an authorization rule: full episode metadata remains in the API payload (`apps/web/src/lib/spoilers.ts`, `apps/server/src/routes/catalog.ts`). See [Settings and spoilers](apps/web/settings-and-spoilers.md) and [data models](reference/data-models.md).
 
 Fixtures use invented tokens, `example.test` and documentation addresses. Revoke/rotate a leaked credential first; deleting it from a patch does not restore safety.
 
@@ -66,14 +66,16 @@ Account controls still matter: Sentry **Prevent Storing of IP Addresses** and Po
 
 `scripts/pre-commit-secrets.mjs` scans staged additions/blocked paths, uses Gitleaks when available and otherwise built-in patterns, and compares eligible local configuration literals without printing values. It is not a complete full-history scanner; fixture allowances are not permission to hide real secrets. `.gitleaks.toml` holds custom rules.
 
-| Automation | Scope |
-| --- | --- |
-| `lefthook.yml` | Staged secret scan and quality hooks |
-| `.github/workflows/ci.yml` | Linux full-history redacted Gitleaks scan |
-| `.github/workflows/gitleaks.yml` | Push/PR, weekly and manual history scans |
-| `.github/workflows/codeql.yml` | JavaScript/TypeScript security-and-quality analysis |
-| `.github/dependabot.yml` | Weekly dependency/action updates |
+| Automation                       | Scope                                               |
+| -------------------------------- | --------------------------------------------------- |
+| `lefthook.yml`                   | Staged secret scan and quality hooks                |
+| `.github/workflows/ci.yml`       | Linux full-history redacted Gitleaks scan           |
+| `.github/workflows/gitleaks.yml` | Push/PR, weekly and manual history scans            |
+| `.github/workflows/codeql.yml`   | JavaScript/TypeScript security-and-quality analysis |
+| `.github/dependabot.yml`         | Weekly dependency/action updates                    |
 
 Wiki-only push/PR exclusions do not remove separate scheduled/manual security runs. Source workflow declarations are not proof that branch protection or external security settings are applied. In particular, the current CI file has no `pnpm audit` step despite that statement in `SECURITY.md`.
+
+Likewise, `docs/database.md` says no stream URLs are stored, but the gateway cache serializes `GatewayStream.url` (`apps/server/src/gateway/types.ts`, `apps/server/src/gateway/cache.ts`). The narrower no-playback-link rule holds for download queue columns, not for the entire database. These are documentation/source discrepancies at **`0a8f04f`, 2026-11-08**, not newly verified exploits; no remote account, dependency freshness or live security scan was checked.
 
 Report privately through GitHub Security's vulnerability reporting, with commit/version and safe reproduction details, never live secrets. Policy supports latest main/latest release; old pre-1.0 versions do not receive security fixes. Leaks and path traversal are in scope; deliberate trusted-LAN access without accounts is a documented design boundary, not a hidden login feature. See [debugging](how-to-contribute/debugging.md).

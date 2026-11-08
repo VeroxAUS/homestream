@@ -41,7 +41,7 @@ HTTP ratios omit HLS/probe/SSE paths, so a green request-latency alert does not 
 | `HomeStream server: new or returning issue` | First seen, regression or reappearance; email issue owners, falling through to active members | At most once per 60 minutes  |
 | `HomeStream server: issue repeating`        | New/existing high-priority issue, with event-frequency threshold 20 in 1h; same email action  | At most once per 360 minutes |
 
-The expected enabled detector is `Error Monitor`; workflows reference `Issue Stream`. `scripts/sentry-alerts.mjs` uses Sentry's workflow/detector APIs rather than legacy alert-rule endpoints. It matches by name/project, creates missing workflows, updates drifted ones and leaves unrelated items alone. Missing/disabled monitors require Sentry UI action; the script cannot create/change them with its personal token.
+The expected enabled detector is `Error Monitor`; workflows reference `Issue Stream`. `scripts/sentry-alerts.mjs` uses Sentry's workflow/detector APIs rather than legacy alert-rule endpoints. It matches by name/project, creates missing workflows, updates drifted ones and leaves unrelated items alone. Detector writes rejected with **403/405** become manual UI follow-ups rather than workflow creation failures; other errors still fail apply. The script's comments document that the organization's personal token cannot create/change monitors, not a universal Sentry permission guarantee.
 
 ```text
 pnpm sentry:alerts --dry-run
@@ -54,9 +54,9 @@ Slack/PagerDuty channels are not provisioned here. Add actual workflow actions a
 
 ## Response and modification
 
-Maintained procedures are `docs/runbooks/sentry-triage.md`, `docs/runbooks/gateway-down.md`, `docs/runbooks/encoder-failing.md`, `docs/runbooks/profiling.md`, `docs/runbooks/disk-full-transcode.md`, `docs/runbooks/ffmpeg-orphans.md` and `docs/runbooks/rollback.md`. There is no checked-in on-call rota or timed escalation ladder.
+Start with the maintained [runbook index](../../docs/runbooks/README.md): [Sentry triage](../../docs/runbooks/sentry-triage.md), [gateway down](../../docs/runbooks/gateway-down.md), [encoder failures](../../docs/runbooks/encoder-failing.md), [profiling](../../docs/runbooks/profiling.md), [disk full](../../docs/runbooks/disk-full-transcode.md), [FFmpeg orphans](../../docs/runbooks/ffmpeg-orphans.md) and [rollback](../../docs/runbooks/rollback.md). There is no checked-in on-call rota or timed escalation ladder.
 
-Change conditions in the checked-in rules, confirm each metric exists, validate syntax and review local [logging](logging.md)/health evidence before applying external changes. This wiki generation did not apply rules or test live notification delivery.
+Change conditions in the checked-in rules, confirm each metric exists, validate syntax and review local [logging](logging.md)/[health](../systems/health.md) evidence before applying external changes. At the **2026-11-08 / `0a8f04f`** snapshot, eleven expressions and two workflows were source-verified; no rule was applied and no live notification delivery was tested. See the [reference index](../reference/index.md) for maintained operator documents.
 
 ## Key source files
 

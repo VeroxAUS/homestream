@@ -2,52 +2,65 @@
 
 Active contributors: VeroxAUS
 
+HomeStream separates session/process ownership, shared media-byte delivery and operational feedback. The composition root is `buildApp` in `apps/server/src/app.ts`.
+
 ## Purpose
 
-These systems separate process ownership, source-byte delivery and operational feedback. The composition root is `apps/server/src/app.ts`; clients receive HLS while media tools read opaque loopback source handles.
+The server does the expensive work; clients receive device-compatible HLS rather than secret-bearing upstream URLs. Follow [features](../features/index.md) for user workflows and [server](../apps/server.md) for process startup.
 
 ## System map
 
-| System | Responsibility |
-| --- | --- |
-| [Playback](playback/index.md) | Start, slots, encoder lifecycle, recovery, HLS and subtitles |
-| [Source proxy](source-proxy.md) | Shared ranged cache, stable handles and reader ownership |
-| [Network](network.md) | Aggregate download cap, priorities and read-ahead |
-| [Gateway](gateway.md) | Cached discovery and placeholder-aware playback probes |
-| [Health](health.md) | Dependency and live operational snapshots |
-| [Telemetry](telemetry.md) | Optional scrubbed errors, analytics and flags |
+| System                             | Main boundary                                                     |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| [Playback](playback/index.md)      | Session admission, first-segment readiness, encoding and HLS      |
+| [Encoding](playback/encoding.md)   | Probe-driven compatibility, NVENC and timestamp policy            |
+| [Lifecycle](playback/lifecycle.md) | Checked stops, serialized replacement and disk protection         |
+| [Subtitles](playback/subtitles.md) | Progressive text coverage and bitmap burn-in                      |
+| [Source proxy](source-proxy.md)    | Stable loopback handles, shared ranged cache and reader ownership |
+| [Network controls](network.md)     | Aggregate byte grants, read-ahead and LAN discovery addresses     |
+| [Gateway](gateway.md)              | Cached/rate-limited discovery and placeholder-aware probes        |
+| [Health](health.md)                | Dependency checks and live operational snapshots                  |
+| [Telemetry](telemetry.md)          | Optional scrubbed errors, analytics and flags                     |
 
 ```mermaid
 graph LR
-    Discovery[Stream selection] --> Playback
+    Gateway[Gateway discovery] --> Selection[Stream selection]
+    Selection --> Playback[Playback]
+    Selection --> Prefetch[Prefetch]
     Prefetch --> Proxy[Source proxy]
-    Playback --> Proxy
-    Playback --> Encoder
-    Playback --> Subtitles
+    Playback --> Encoder[Video encoder]
+    Playback --> Subs[Subtitle workers]
     Encoder --> Proxy
-    Subtitles --> Proxy
+    Subs --> Proxy
     Proxy --> Gate[Download gate]
-    Gate --> Upstream
+    Gate --> Remote[Remote media]
     Encoder --> HLS[HLS files]
-    HLS --> Client
+    HLS --> Client[LAN client]
 ```
 
-## Integration and modification
+## Integration and invariants
 
-`PlaybackManager` in `apps/server/src/playback/manager.ts` is a facade over focused modules, not the implementation of every playback operation. `SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` shares bytes without sharing each session's read-ahead state. `DownloadGate` in `apps/server/src/network/downloadGate.ts` schedules actual remote media bytes; cached reads do not consume its tokens.
+`PlaybackManager` in `apps/server/src/playback/manager.ts` is a facade over startup, recovery, HLS and worker modules. `PlaybackContext` in `apps/server/src/playback/context.ts` shares slots, watchdog and PID registry without merging their responsibilities.
 
-Start changes at the owning page. A stopped reader, a bandwidth hold, a disk park and an encoder failure are different states with different recovery rules. For user workflows, follow [features](../features/index.md); for shared practices, follow [conventions](../how-to-contribute/patterns-and-conventions.md).
+`SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` shares a source's bytes/probe results, but preserves each session's reader windows. `DownloadGate` in `apps/server/src/network/downloadGate.ts` governs actual remote media grants, not cached reads, outbound HLS or all machine traffic.
+
+A bandwidth hold, a disk-parked encoder, a discarded reader and a failed session are different states. A completed stop call is also not proof that its process exited: a surviving video child still consumes capacity and blocks unsafe replacement. These distinctions drive the regression tests.
+
+## Modification entry points
+
+Start at the owning system page and its test table. Keep HTTP validation in routes and wire changes in [shared contracts](../packages/shared.md). Preserve no-overlap process ownership, bounded reads, redaction and the always-re-encode policy; see [conventions](../how-to-contribute/patterns-and-conventions.md).
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/app.ts` | Composition |
-| `apps/server/src/playback/manager.ts` | Route-facing playback facade |
-| `apps/server/src/playback/context.ts` | Shared playback dependencies |
-| `apps/server/src/sourceproxy/proxy.ts` | Source ownership and listener |
-| `apps/server/src/network/downloadGate.ts` | Remote-byte scheduling |
+| File                                                               | Purpose                                |
+| ------------------------------------------------------------------ | -------------------------------------- |
+| `apps/server/src/app.ts`                                           | Service graph and resource ownership   |
+| `apps/server/src/playback/manager.ts`                              | Route-facing playback API              |
+| `apps/server/src/playback/context.ts`                              | Shared playback dependencies           |
+| `apps/server/src/sourceproxy/proxy.ts`                             | Source handles and private listener    |
+| `apps/server/src/network/downloadGate.ts`                          | Remote-byte scheduling                 |
+| `apps/server/test/integration/playback-manager-stuck-stop.test.ts` | Process-survival ownership regressions |
 
 ## Measured scope
 
-At `5eefa37`, committed playback/proxy/network source directories contain **58 `.ts` files**. Matching test directories plus `apps/server/test/encode/` contain **55 `*.test.ts` files**, ratio **0.95**. Method: scoped `git ls-files`; excludes routes, helpers and integration tests elsewhere. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. This overlapping media-pipeline count is not coverage.
+At **`0a8f04f`**, committed `apps/server/src/playback/`, `apps/server/src/sourceproxy/` and `apps/server/src/network/` contain **58 `.ts` source files**. Their matching test directories plus `apps/server/test/encode/` contain **55 `*.test.ts` files**, ratio **0.95**. Method: scoped `git ls-tree` inventory; routes, helpers and integration tests elsewhere are excluded. This overlapping media-pipeline scope is not coverage. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots; this is not an ownership guarantee.

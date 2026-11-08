@@ -4,9 +4,23 @@ Active contributors: VeroxAUS
 
 HomeStream runs on the encoding PC as a LAN server with a working React player and Electron tray shell. Releases create tags and release metadata, not installers or a deployed fleet. See [architecture](overview/architecture.md).
 
+```mermaid
+graph LR
+  Clients["Trusted LAN clients"] --> Server["Fastify on port 8600"]
+  Desktop["Electron tray shell"] -->|Own or attach| Server
+  Server --> Web["Built web assets"]
+  Server --> Data["Private SQLite and logs"]
+  Server --> Encoder["FFmpeg and NVENC"]
+  Encoder --> Proxy["Loopback source proxy"]
+  Proxy --> Upstream["Remote media source"]
+  Encoder --> HLS["Session HLS files"]
+  Server -->|Read| HLS
+  Server -->|HLS responses| Clients
+```
+
 ## Runtime shape and setup
 
-`apps/server/src/index.ts` boots the server, proxy, health/download workers and discovery, then owns graceful shutdown. Intended real playback uses a Windows NVIDIA PC with FFmpeg/ffprobe and NVENC; Linux supports offline development and CI. The [desktop shell](apps/desktop/index.md) can supervise an owned server or attach to an existing compatible one. Dashboard tabs remain placeholders; TV is planned without a source app.
+`apps/server/src/index.ts` boots the server, proxy, health/download workers and discovery, then owns graceful shutdown. Intended real playback uses a Windows NVIDIA PC with FFmpeg/ffprobe and NVENC; Linux supports offline development and CI. The [desktop shell](apps/desktop/index.md) can supervise an owned server or attach to an existing compatible one. Browsing, search, playback and Settings/About are working UI; dashboard tabs remain placeholders, and TV is planned without a source app.
 
 Use Node 24 and the pnpm version pinned by repository configuration:
 
@@ -51,6 +65,8 @@ Graceful close tears down workers, event streams, sessions, proxy and telemetry.
 
 `.github/workflows/ci.yml` defines required **Linux** and **Windows** checks, plus advisory **Web e2e**. It validates formatting, lint/types, boundaries, dependency consistency, code/debt/size gates, generated docs, offline tests/coverage and bundles. GPU/live tiers never run there.
 
+Linux carries the broad gates and sequential workspace coverage. Windows also builds the server/web/desktop and runs the real Electron launch smoke; desktop Node unit tests alone do not launch Electron. Web e2e builds isolated plain/telemetry-stub UIs and uses local upstreams, mocked playback responses and no real server session start. See [testing](how-to-contribute/testing.md) for the expanded navigation, details, spoiler and Settings browser cases.
+
 Wiki-only changes are ignored by normal CI. Superseded PR runs can cancel; main runs have unique concurrency groups and are not cancelled by newer pushes, preserving timing records.
 
 `.github/workflows/release.yml` runs after successful push CI on main. `scripts/next-version.mjs` plans Conventional Commit versions; eligible feat/fix/perf history can create a tag/GitHub release and Sentry release/deploy metadata. Older SHAs already contained in a newer release tag are skipped, because main CI may finish out of order. There is no installer build, artifact rollout or machine update step. A Sentry deploy marker is metadata, not evidence of installation.
@@ -59,22 +75,22 @@ Wiki-only changes are ignored by normal CI. Superseded PR runs can cancel; main 
 
 `docs/ci.md` defines three non-required automations, none of which writes application code to main:
 
-| Automation | Behavior |
-| --- | --- |
-| `.github/workflows/droid-review.yml` | PR inline findings/summary with sticky cleanup; every main push gets commit review/summary. Generated-only pushes get a short summary without calling Droid. Fork/Dependabot secrets are withheld. |
-| CI timing job, `scripts/ci-timing.mjs` | Each main CI run appends a record to orphan `ci-metrics`; PRs update a sticky comparison against the median of ten successful main runs. History is retained rather than pruned. |
-| `.github/workflows/code-health.yml` | Daily **18:30 UTC**/manual read-only review, one rolling `Code health` issue. Skips when no reviewable new commit exists; pushes no code or PR. |
+| Automation                             | Behavior                                                                                                                                                                                           |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/droid-review.yml`   | PR inline findings/summary with sticky cleanup; every main push gets commit review/summary. Generated-only pushes get a short summary without calling Droid. Fork/Dependabot secrets are withheld. |
+| CI timing job, `scripts/ci-timing.mjs` | Each main CI run appends a record to orphan `ci-metrics`; PRs update a sticky comparison against the median of ten successful main runs. History is retained rather than pruned.                   |
+| `.github/workflows/code-health.yml`    | Daily **18:30 UTC**/manual read-only review, one rolling `Code health` issue. Skips when no reviewable new commit exists; pushes no code or PR.                                                    |
 
 ### Other workflows
 
-| Workflow | Scope |
-| --- | --- |
-| `.github/workflows/docs.yml` | Regenerates/checks OpenAPI and SQL schema, links and database docs on relevant changes/manual dispatch |
-| `.github/workflows/gitleaks.yml` | Push/PR, weekly and manual full-history secret scanning |
-| `.github/workflows/codeql.yml` | JavaScript/TypeScript security-and-quality analysis; not a security certification |
-| `.github/workflows/devcontainer.yml` | Relevant changes, weekly/manual container build and unit tests |
-| `.github/workflows/sentry-issues.yml` | Daily **19:17 UTC**/manual unresolved Sentry-to-GitHub issue sync, not paging |
-| `.github/workflows/droid-wiki-refresh.yml` | Daily **17:00 UTC**/manual generated wiki refresh and rolling PR |
+| Workflow                                   | Scope                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/docs.yml`               | Regenerates/checks OpenAPI and SQL schema, links and database docs on relevant changes/manual dispatch |
+| `.github/workflows/gitleaks.yml`           | Push/PR, weekly and manual full-history secret scanning                                                |
+| `.github/workflows/codeql.yml`             | JavaScript/TypeScript security-and-quality analysis; not a security certification                      |
+| `.github/workflows/devcontainer.yml`       | Relevant changes, weekly/manual container build and unit tests                                         |
+| `.github/workflows/sentry-issues.yml`      | Daily **19:17 UTC**/manual unresolved Sentry-to-GitHub issue sync, not paging                          |
+| `.github/workflows/droid-wiki-refresh.yml` | Daily **17:00 UTC**/manual generated wiki refresh and rolling PR                                       |
 
 Security workflows exclude wiki-only push/PR changes, while their scheduled/manual runs remain separate. External credentials, branch protection and service delivery have not been verified by this source inspection.
 
@@ -82,6 +98,10 @@ Security workflows exclude wiki-only push/PR changes, while their scheduled/manu
 
 The refresh workflow checks for non-wiki changes since its last successful run; manual force bypasses that check. A read-only job restores the rolling wiki branch and generates pages. A separate write-enabled job mirrors the artifact with `scripts/wiki-mirror.mjs`, excluding video/images, and opens/updates `factory/droid-wiki`.
 
-The wiki-only PR receives not-applicable success statuses named **Linux** and **Windows**, because ordinary CI skips it. Keep those names aligned with required checks. The workflow requests squash merge, using auto-merge for a protected base and retaining the rolling branch. Optional `FACTORY_WIKI_PR_TOKEN` can trigger downstream workflows; fallback workflow-token PRs do not. Push/PR/merge failures are warned about rather than proving publication succeeded. Repository PR/auto-merge settings remain operator prerequisites (`docs/wiki.md`).
+The wiki-only PR receives not-applicable success statuses named **Linux** and **Windows**, because ordinary CI skips it. Keep those names aligned with required checks. The workflow requests squash merge, using auto-merge for a protected base and retaining the rolling branch. Optional `FACTORY_WIKI_PR_TOKEN` can trigger downstream workflows; fallback workflow-token PRs and merges do not. Push/PR/merge failures are warned about rather than proving publication succeeded. Repository PR/auto-merge settings remain operator prerequisites (`docs/wiki.md`).
+
+At this source revision, the publisher closes the workflow-token push-review gap itself. After requesting merge, it waits up to **three minutes** for `MERGED` plus a merge SHA, fetches that commit at depth two, and runs `scripts/droid-push-review.mjs` on its parent-to-merge diff. It supplies `GITHUB_TOKEN` but no `FACTORY_API_KEY`: the generated-only diff posts the short “no reviewable changes” summary on the merged commit without invoking Droid. This is not a code review or a test pass.
+
+If the PR does not merge before the deadline, a warning explains that the commit gets no summary. Posting is `continue-on-error`. With `FACTORY_WIKI_PR_TOKEN`, the publisher skips this step and lets `.github/workflows/droid-review.yml` handle the push instead, preventing duplicate summaries (`.github/workflows/droid-wiki-refresh.yml`, `docs/ci.md`). This describes checked-in automation, not a verified remote publication.
 
 See [contribution tooling](how-to-contribute/tooling.md) for commands and [alerting](how-to-monitor/alerting.md) for independent monitoring deployment.

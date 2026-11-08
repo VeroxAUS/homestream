@@ -1,6 +1,6 @@
 # Logging
 
-Process logs, selected durable events and SSE are distinct channels. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).
+Process logs, selected durable events and SSE are distinct channels in `apps/server/src/logger.ts`, `apps/server/src/events/record.ts` and `apps/server/src/routes/events.ts`. Use the request ID for HTTP context, event queries for domain history and SSE for live change notifications. See [monitoring](index.md).
 
 ## Server process log
 
@@ -52,7 +52,7 @@ Connections unsubscribe/clear timers on close/error; server pre-close ends open 
 
 ## Browser and desktop
 
-`apps/web/src/logger.ts` provides development-console logging and buffers up to **50 non-debug entries** until an optional telemetry sink attaches. Scrubbed non-debug entries become Sentry breadcrumbs; this is not a browser log-file service.
+`apps/web/src/logger.ts` provides development-console logging and buffers up to **50 non-debug entries** until an optional telemetry sink attaches. The logger does not scrub that console/buffer itself; outbound breadcrumbs pass through the Sentry sanitizer in `apps/web/src/telemetry/sentry.ts`. This is not a browser log-file service, and secrets/user text must never enter the call sites.
 
 Desktop `startTelemetry` in `apps/desktop/src/shell/telemetry.ts` wires `apps/desktop/src/logger.ts` to **`DATA_DIR/desktop.log`**, sharing the main scrubber and optional Sentry breadcrumb sink. At startup, an existing log larger than **2 MiB** is renamed to `desktop.log.1`; it is not continuously size-rotated while the process runs. Sink/open failures degrade without taking down the shell.
 
@@ -62,18 +62,20 @@ Main initialization, restart/supervisor events and graceful quit are implemented
 
 Pino censors structured token/auth/cookie/URL/query fields and redacts the full serialized line again (`apps/server/src/logger.ts`, `apps/server/src/redact.ts`). Events scrub before storage, on bus emission and on reads. These layers do not permit raw source URLs, keys, request bodies or user text in logs.
 
-Local logs can still contain operational paths and session/device details. Treat storage/backups as private and review output before sharing. Use fixed messages and small structured fields; persist only events worth keeping/displaying. See [security](../security.md) and [data models](../reference/data-models.md).
+Local logs can still contain operational paths and session/device details. Desktop structured-field scrubbing handles top-level strings and Error messages, not arbitrary nested objects (`apps/desktop/src/logger.ts`); do not pass unreviewed nested payloads. Treat storage/backups as private and review output before sharing. Use fixed messages and small structured fields; persist only events worth keeping/displaying. See [security](../security.md), [configuration](../reference/configuration.md) and [data models](../reference/data-models.md).
+
+The behavior above was checked against source at **`0a8f04f` on 2026-11-08**. No running log sink or retention job was exercised.
 
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/logger.ts` | Pino destinations, redaction and request mixin |
-| `apps/server/src/http/observability.ts` | Completion fields/exclusions |
-| `apps/server/src/requestContext.ts` | ID validation and async scope |
-| `apps/server/src/events/record.ts` | Durable writes and pruning |
-| `apps/server/src/events/query.ts` | Filtering/read-time redaction |
-| `apps/server/src/routes/events.ts` | SSE framing and lifetime |
-| `apps/desktop/src/shell/telemetry.ts` | Main log sink and startup rollover |
-| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration |
-| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE |
+| File                                                 | Purpose                                        |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| `apps/server/src/logger.ts`                          | Pino destinations, redaction and request mixin |
+| `apps/server/src/http/observability.ts`              | Completion fields/exclusions                   |
+| `apps/server/src/requestContext.ts`                  | ID validation and async scope                  |
+| `apps/server/src/events/record.ts`                   | Durable writes and pruning                     |
+| `apps/server/src/events/query.ts`                    | Filtering/read-time redaction                  |
+| `apps/server/src/routes/events.ts`                   | SSE framing and lifetime                       |
+| `apps/desktop/src/shell/telemetry.ts`                | Main log sink and startup rollover             |
+| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration                  |
+| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE                          |

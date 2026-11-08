@@ -6,7 +6,18 @@ Active contributors: VeroxAUS
 
 Selection exposes URL-free source metadata and determines automatic playback order. `StreamService` in `apps/server/src/streams/service.ts` combines gateway lookup, episode filtering, parsing and device-aware recommendation; real probe/output policy belongs to [playback](../systems/playback/index.md).
 
-## Layout and identity
+## Directory layout
+
+| Path                                 | Responsibility                                 |
+| ------------------------------------ | ---------------------------------------------- |
+| `apps/server/src/streams/service.ts` | Gateway integration, ranking and ID resolution |
+| `apps/server/src/streams/parse.ts`   | Pure filename hint parsing                     |
+| `apps/server/src/streams/rank.ts`    | Pure resolution/source/device ordering         |
+| `apps/server/src/streams/episode.ts` | Explicit episode-contradiction checks          |
+| `apps/server/test/streams/`          | Parsing, episode and ranking tests/fixtures    |
+| `packages/shared/src/streams.ts`     | URL-free public contract                       |
+
+## Identity and parsing
 
 `apps/server/src/routes/streams.ts` maps TMDB details to IMDb queries. `apps/server/src/streams/episode.ts` rejects contradictory explicit season/episode markers; unmarked files remain eligible, not proven correct.
 
@@ -14,7 +25,7 @@ Selection exposes URL-free source metadata and determines automatic playback ord
 
 Structured gateway cached status overrides legacy name markers, including explicit false. Hints describe listings, not fresh availability or actual probe results.
 
-`apps/server/src/gateway/types.ts` creates URL-derived IDs. Public shapes in `packages/shared/src/streams.ts` omit raw URLs. `apps/server/src/streams/service.ts` resolves IDs from persistent gateway cache membership and refetches expired lookup identities when necessary; disappeared IDs cannot be opened.
+`streamId` in `apps/server/src/gateway/types.ts` takes the first 16 hexadecimal characters of the URL's SHA-256 hash. Public shapes in `packages/shared/src/streams.ts` omit raw URLs. `apps/server/src/streams/service.ts` resolves IDs from persistent gateway cache membership and refetches expired lookup identities when necessary; disappeared IDs cannot be opened. Discovery transport, cache lifetime and rate limits belong to the [gateway](../systems/gateway.md).
 
 ## Ranking and display tiers
 
@@ -32,9 +43,9 @@ Recommendation orders known fitting resolutions first, then known resolutions ab
 
 ## Automatic starts and clips
 
-`startCandidates` in `apps/server/src/streams/rank.ts` returns at most three cached candidates in device order for session startup. When nothing is cached, it returns only the recommendation. The latter may trigger [download tracking](downloads.md), not an uncached multi-release retry loop.
+`startCandidates` in `apps/server/src/streams/rank.ts` returns cached candidates in device order up to its caller's limit. Session startup sets that limit to **three** in `apps/server/src/playback/sessionStart.ts`. When nothing is cached, only the recommendation is returned. That may trigger [download tracking](downloads.md), not an uncached multi-release retry loop.
 
-`SessionStarter` in `apps/server/src/playback/sessionStart.ts` abandons failed attempts before fallback. Source faults can advance; bad explicit tracks/shutdown cannot. A surviving old encoder blocks replacement. Explicit IDs remain internally supported but do not imply a product manual stream picker.
+`SessionStarter` in `apps/server/src/playback/sessionStart.ts` abandons failed attempts before fallback. Source faults can advance; bad explicit tracks/shutdown cannot. A surviving old encoder blocks replacement. Explicit IDs remain internally supported, but clients always request `streamId: "auto"`; there is no product manual picker (`apps/web/src/player/sessionApi.ts`).
 
 `apps/server/src/playback/placeholder.ts` rejects named placeholder paths across hosts/prefixes and implausibly small uncached bodies. `apps/server/src/gateway/playbackProbe.ts` follows redirect chains manually and checks targets before requesting clips. Successful uncached probes hand their resolved target directly to the proxy to avoid an extra gateway resolution.
 
@@ -56,17 +67,20 @@ graph LR
 
 Change filename tokens in `apps/server/src/streams/parse.ts`, ranking/device order in `apps/server/src/streams/rank.ts`, and explicit episode contradictions in `apps/server/src/streams/episode.ts`. Preserve URL secrecy and distinguish metadata cache status from availability.
 
+`apps/server/test/streams/parse.test.ts`, `apps/server/test/streams/rank.test.ts` and `apps/server/test/streams/episode.test.ts` exercise these pure rules. `apps/server/test/integration/streams-routes.test.ts` covers the route/service boundary. Client session and track behavior belongs to the [HLS player](../apps/web/player.md), not the source-hint parser.
+
 ## Key source files
 
-| File | Purpose |
-| --- | --- |
-| `apps/server/src/streams/service.ts` | Listing and ID resolution |
-| `apps/server/src/streams/parse.ts` | Hint parsing |
-| `apps/server/src/streams/rank.ts` | Quality/device/candidate order |
-| `apps/server/src/streams/episode.ts` | Episode checks |
-| `apps/server/src/playback/sessionStart.ts` | Attempt orchestration |
-| `apps/server/src/playback/placeholder.ts` | Clip rules |
+| File                                       | Purpose                          |
+| ------------------------------------------ | -------------------------------- |
+| `apps/server/src/streams/service.ts`       | Listing and ID resolution        |
+| `apps/server/src/streams/parse.ts`         | Hint parsing                     |
+| `apps/server/src/streams/rank.ts`          | Quality/device/candidate order   |
+| `apps/server/src/streams/episode.ts`       | Episode checks                   |
+| `apps/server/src/playback/sessionStart.ts` | Attempt orchestration            |
+| `apps/server/src/playback/placeholder.ts`  | Clip rules                       |
+| `apps/server/src/gateway/playbackProbe.ts` | Redirect-safe availability check |
 
 ## Measured scope
 
-At `5eefa37`, scoped `git ls-files` counts **4 streams `.ts` source / 3 matching `*.test.ts` files**, ratio **0.75**. Gateway, route, integration/GPU/live tests and helpers are excluded. Default-branch history/CODEOWNERS identify **1 unique human author**, excluding bots. No discovery or encoder tests were run.
+At `0a8f04f`: **4 source files / 3 test files**, test/source file ratio **0.75**, **1 unique human contributor**. Method: `git ls-tree -r --name-only 0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`, counting `.ts` under `apps/server/src/streams/` and `*.test.ts` under `apps/server/test/streams/`. Exclude helpers, gateway, routes and integration/GPU/live tests elsewhere. Human count uses scoped `origin/main` author history excluding bots, consistent with `.github/CODEOWNERS`. Ratios are not coverage; no tests or upstream discovery were run.

@@ -2,19 +2,19 @@
   "mode": "full",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
-  "baseCommit": "7eb94bafed5e0e046987a81d0cbbff8e6ba999d1",
-  "reason": "Full history available. Required comparison reports 403 files, 30462 inserted and 3096 deleted lines, above 10000-line full-refresh threshold; the comparison includes generated wiki changes.",
-  "summary": "HomeStream is a TypeScript ESM pnpm monorepo for LAN media playback. Fastify 5 on Node 24 owns SQLite, TMDB metadata, gateway source discovery, NVENC transcoding, proxy caching, optional TorBox downloads and health workers. React 19/Vite implements catalog screens and now the HLS player, notifications and desktop renderer views. Electron 45 now implements a single-instance tray shell, server supervisor, mini player, settings and preload IPC. Shared Zod contracts, bridge types, analytics, flags and sanitization live in packages/shared. Dashboard tabs remain placeholders and no TV source directory exists.",
-  "architecture": "Server entry loads settings/logging, creates services via buildApp, recovers encoder orphans, opens loopback proxy then LAN listener, and starts health/download workers and mDNS. PlaybackManager is now a facade over PlaybackContext, session slots, session startup, encoder lifecycle, recovery, subtitle handoff and HLS serving. Startup ranks sources, rejects downloading placeholders, probes through stable proxy URLs, computes output, and launches encoders; uncached starts can return 202 tracking instead of 201 session. Shared ranged cache, download pacer, lead gates and extractor share bound upstream use. Web requests use API client and Query; SSE health reconciliation cancels older requests. Web player pings while paused, owns cleanup/retry, track changes and desktop handoff. Desktop attaches to an existing server or owns a child; serialized restarts and session monitor avoid stale activity resurrection.",
-  "patterns": "Strict TS, explicit .js server specifiers, type-only imports, shared Zod schemas, thin routes, redacted AppError envelopes with hints. Pure rules have offline unit tests. Fastify inject uses fakes and isolated temp directories/PORT=0. GPU/live tiers opt-in. No accounts, devices not auth, LAN only, always re-encode video, clients use streamId auto. Telemetry opt-in, scrubbed, nonblocking, SDKs lazy after content+idle. New file/function counted limits 400/80 with only decreasing grandfathered ceilings.",
+  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
+  "baseCommit": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
+  "reason": "Required comparison includes generated wiki changes: 157 files, 9578 insertions and 4346 deletions, 13924 changed lines, above the 10000-line full-refresh threshold. Full history is available and upload access is allowed.",
+  "summary": "HomeStream is a TypeScript ESM pnpm monorepo for LAN media playback. Fastify 5 on Node 24 owns SQLite, TMDB metadata, AIOStreams discovery, FFmpeg/NVENC transcoding, a loopback ranged cache, optional TorBox caching and health workers. React 19/Vite provides browsing, always-visible navigation search, details with cast/recommendations, episode spoiler protection, HLS playback, Settings/About tabs and desktop renderer views. Electron 45 provides tray, supervision and a mini player with volume/mute. The shared package holds Zod schemas, IPC types, analytics, flags and sanitization. Dashboard tabs remain placeholders; no TV app source exists.",
+  "architecture": "buildApp constructs services and routes; server main recovers orphans, opens loopback/public listeners, and starts health, downloads and mDNS. PlaybackManager coordinates session slots, source ranking, startup, encoders, recovery, HLS and subtitle extraction. A 201 session or 202 download-tracking result reaches the client. Proxy block caches, pacing and encoder lead gates bound reads. Web Query hooks validate schemas through the API client, startup defers work until Home content and idle, and SSE reconciles health/downloads. Desktop IPC is typed and allowlisted; the supervisor distinguishes attached from owned servers.",
+  "patterns": "Strict TypeScript and explicit server .js imports; Zod contracts and thin routes; AppError envelopes with actionable hints; redacted logs/events/errors. Isolated offline tests use PORT=0, unique temp dirs and injected fakes; GPU/live are opt-in and must not run for documentation. No accounts, LAN only, always re-encode, streamId auto. Telemetry off without matching keys, manual/scrubbed/nonblocking, lazy web SDKs. File/function limits 400/80; grandfathered ceilings may only shrink. Additive details extras default to [] for older servers. Spoiler hiding is browser-local with blocked-storage fallback.",
   "glossary": [
-    "capability profile",
-    "decision",
-    "automatic fallback",
     "session",
     "session slot",
     "media key",
+    "capability profile",
+    "decision",
+    "automatic fallback",
     "source proxy",
     "prefetch",
     "TorBox tracking",
@@ -26,9 +26,37 @@
     "content mark",
     "supervisor",
     "desktop bridge",
-    "mini player"
+    "mini player",
+    "cast member",
+    "similar titles",
+    "spoiler protection"
   ],
-  "contributors": "origin/main log for apps/packages/scripts/monitoring has only human VeroxAUS; CODEOWNERS also assigns VeroxAUS. Domain bylines Active contributors: VeroxAUS. Filter bots. Omit maintainers.md because solo human history. No person metrics in statistics.",
+  "contributors": "CODEOWNERS and origin/main history identify VeroxAUS as the only human contributor. Domain pages begin # Heading then Active contributors: VeroxAUS. Exclude bots. Omit maintainers.md for solo human ownership; no individual contribution metrics.",
+  "newFindings": [
+    "TMDB details append credits or aggregate_credits, recommendations and similar; bounded cast/similar arrays default to empty for old payloads.",
+    "getLanAddresses filters virtual/link-local adapters only when physical candidates exist; mDNS uses that list.",
+    "Navigation search owns URL query/history, 300ms debounce and shortcuts; search route preload keeps initial navigation responsive.",
+    "Spoiler protection hides unfinished episode descriptions entirely and uses w92 stills, no CSS blur; settings preference is local only.",
+    "Settings now has accessible Settings/About tabs, device card and desktop integration, plus dynamic server information.",
+    "Mini-player volume/mute reuses player control state.",
+    "Wiki publish posts the no-reviewable-change summary on the merged wiki commit when GITHUB_TOKEN prevents workflow triggers.",
+    "docs/ideas and its HTML mockup are proposals, not implemented requirements."
+  ],
+  "skipWithReason": {
+    "apps/tv": "Planned only; no source directory.",
+    "primitives": "Covered in shared, playback and feature pages rather than duplicated.",
+    "background": "Rationale lives in architecture/conventions and history in lore.",
+    "fun-facts.md": "No independently established trivia requires a separate page.",
+    "maintainers.md": "Solo human owner.",
+    "generated outputs, reports, caches, node_modules": "Not implementation source.",
+    "dependency freshness and dead exports": "No upstream-version audit or dead-code findings; do not invent them.",
+    "docs/ideas": "Design proposals, covered as such in tooling/reference rather than as product features."
+  },
+  "validationPlan": "Run existing format:check, docs:check, agents:check. Since they exclude generated wiki pages, independently audit every wiki title, link/anchor, source path, tree index, page order/depth/size, reachability and Mermaid parse. No application code changes; skip application, e2e, GPU and live suites.",
+  "warnings": [
+    "Phase 3.5 requires a QA skill. Run /install-qa to set one up, then re-run wiki generation.",
+    "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Both required checks failed despite exit 0; rendering was skipped in non-interactive mode. No prior playable video was available."
+  ],
   "coverage": {
     "apps/server": "apps/server.md; focused service details under systems/features; app construction, config, discovery, shutdown, error handling and version are covered here or reference",
     "apps/web": "apps/web/index.md with screens, player, data-and-startup, desktop-integration and build-and-tests subpages",
@@ -73,22 +101,11 @@
     "monitoring/prometheus and monitoring/sentry": "how-to-monitor metrics and alerting",
     ".factory/skills": "how-to-contribute/tooling.md and testing.md",
     ".devcontainer": "overview/getting-started.md and deployment.md",
-    "docs and docs/runbooks": "how-to-contribute/debugging.md and reference index"
+    "docs and docs/runbooks": "how-to-contribute/debugging.md and reference index",
+    "apps/web/src/pages/settings": "apps/web/settings-and-spoilers.md: accessible tabs, device card, About data, browser-local spoiler preference and desktop integration",
+    "docs/ideas": "how-to-contribute/tooling.md: proposals, not shipped product requirements",
+    "apps/web/src/components/NavSearch.tsx and useNavSearch.ts": "apps/web/search.md: navigation field, URL/history/debounce/shortcuts/cancellation"
   },
-  "skipWithReason": {
-    "apps/tv": "Planned only, no source directory; mention in apps index instead of dedicated page.",
-    "primitives lens": "Session, media keys and capabilities covered in playback/features/shared without duplicate pages.",
-    "background lens": "Technical rationale covered in architecture/conventions and dated history in lore.",
-    "fun-facts.md": "No independently verified naming lore or trivia warrants a separate page.",
-    "maintainers.md": "Solo human contributor; CODEOWNERS and default-branch history agree.",
-    "generated outputs, node_modules, coverage, reports": "Not implementation source; exclude from subsystem inventory.",
-    "dead-ends or dependency-freshness pages": "No demonstrated dead exports or current upstream version research; do not invent findings."
-  },
-  "validationPlan": "Wiki-only output. Run repository format/docs/agents checks and a separate full-wiki titles/relative links/anchors/source paths/sidebar/tree/page-size/Mermaid audit. Do not run application, live or GPU tests for prose generation.",
-  "warnings": [
-    "Visual capture skipped: no .factory/skills/qa/config.yaml. Run /install-qa to enable screenshots.",
-    "HyperFrames doctor reported missing FFmpeg and FFprobe. The command exited 0 but both required checks failed; no video was rendered. No prior playable video was available."
-  ],
-  "generatedPages": 54,
-  "validationNotes": "Existing format:check, docs:check and agents:check passed. The added full-wiki audit passed after repairing overview navigation and normalizing contributor/source-section presentation: 54 pages, 19 parsed Mermaid diagrams, 313 links, 1638 source references, 95 package-manager commands, all pages reachable, and a maximum of 14 flowchart nodes. Metadata, page order, index coverage, depth and size limits passed. Application/GPU/live/e2e suites were not run for wiki-only changes."
+  "generatedPages": 56,
+  "validationNotes": "Passed existing pnpm format:check, docs:check and agents:check. Added explicit generated-wiki formatting and full-wiki structure/link/anchor/source-output/command/Mermaid audit because repository checks exclude generated pages. Final audit: 56 pages, 35 parsed Mermaid diagrams, 461 links, 2077 source/output references, 97 package commands, all pages reachable, at most 14 flowchart nodes. All titles, domain bylines/source tables, directory indexes, sidebar order, depth and size checks passed. Initial formatting failures were fixed. Configured generated output paths were checked against declarations rather than required to exist, and diagram labels were excluded from command checks. No application, e2e, GPU or live tests ran for wiki-only output."
 }

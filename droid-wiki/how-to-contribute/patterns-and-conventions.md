@@ -10,6 +10,8 @@ New source files stay within 400 counted lines and functions within 80; tests ar
 
 Runtime contracts live under `packages/shared/src`; keep wire names consistent across clients. Pure parsing, ranking, decisions, playlists, and statistics rules get offline unit tests. Apps cannot import each other; desktop IPC contracts belong in shared code (`.dependency-cruiser.cjs`, `packages/shared/src/desktop.ts`).
 
+Use schema defaults for additive response fields when newer clients must read older server responses. Cast and similar-title arrays default to empty lists in `packages/shared/src/catalog.ts`; the current server still returns both fields. Local UI choices stay local: the spoiler preference uses `useSyncExternalStore`, storage events, and an in-memory fallback when browser storage is blocked (`apps/web/src/lib/spoilers.ts`).
+
 ## HTTP and errors
 
 Handlers under `apps/server/src/routes` validate shared schemas and call services. Expected failures use `AppError`; errors have `{error:{code,message,hint?}}`, with an actionable plain-English hint. Unexpected failures are redacted by the app (`apps/server/src/errors.ts`, `apps/server/src/app.ts`).
