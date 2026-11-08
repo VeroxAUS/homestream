@@ -1,74 +1,119 @@
 {
-  "mode": "full",
-  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
-  "reason": "Required comparison includes generated wiki changes: 157 files, 9578 insertions and 4346 deletions, 13924 changed lines, above the 10000-line full-refresh threshold. Full history is available and upload access is allowed.",
+  "mode": "incremental",
+  "commitHash": "bb09d63f4166d4ca2d7bdc47e14eea5c837d2875",
+  "baseCommit": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
+  "reason": "5010 changed lines including generated wiki output; 928 outside it. Preserve the 56-page tree; refresh desktop smoke coverage, web budgets and measurements. Keep unchanged pages verbatim, including lore.",
+  "incrementalPlan": [
+    {
+      "path": "overview/index.md",
+      "criticality": "normal",
+      "contentBrief": "Update the source revision; retain product introduction and vocabulary.",
+      "relevantSourcePaths": ["apps/server/src/app.ts", "apps/web/src/App.tsx", "apps/desktop/src/main.ts"],
+      "relatedPages": ["by-the-numbers.md", "overview/architecture.md"]
+    },
+    {
+      "path": "overview/architecture.md",
+      "criticality": "normal",
+      "contentBrief": "Refresh inline physical-line and inventory counts from the statistics agent without changing architecture.",
+      "relevantSourcePaths": ["pnpm-workspace.yaml", "apps", "packages", "scripts"],
+      "relatedPages": ["by-the-numbers.md"]
+    },
+    {
+      "path": "by-the-numbers.md",
+      "criticality": "normal",
+      "contentBrief": "Recompute committed-tree size, activity, bot attribution, import chains and exports at HEAD using the existing defined methodology.",
+      "relevantSourcePaths": ["apps", "packages", "scripts", "pnpm-workspace.yaml"],
+      "relatedPages": ["overview/architecture.md", "lore.md"]
+    },
+    {
+      "path": "apps/web/index.md",
+      "criticality": "normal",
+      "contentBrief": "Refresh measured test-file scope after the budget regression test was added.",
+      "relevantSourcePaths": ["apps/web/src/bundleBudget.test.ts"],
+      "relatedPages": ["apps/web/build-and-tests.md"]
+    },
+    {
+      "path": "apps/web/player.md",
+      "criticality": "normal",
+      "contentBrief": "Document the current 200 kB gzip ceiling without claiming a fresh measured bundle size.",
+      "relevantSourcePaths": ["apps/web/.size-limit.json"],
+      "relatedPages": ["apps/web/build-and-tests.md"]
+    },
+    {
+      "path": "apps/web/build-and-tests.md",
+      "criticality": "normal",
+      "contentBrief": "Update the player ceiling and describe budget/README consistency checks; update test inventory.",
+      "relevantSourcePaths": [
+        "apps/web/.size-limit.json",
+        "apps/web/src/bundleBudget.test.ts",
+        "docs/runbooks/web-bundle-budget.md"
+      ],
+      "relatedPages": ["apps/web/player.md", "how-to-contribute/testing.md"]
+    },
+    {
+      "path": "apps/desktop/index.md",
+      "criticality": "critical",
+      "contentBrief": "Explain first-run versus configured launch smoke, rendered Home evidence, owned-child/hub cleanup and refreshed desktop inventory. Explore source and split only if genuinely necessary.",
+      "relevantSourcePaths": [
+        "apps/desktop/test/smoke",
+        "apps/desktop/test/smokeHarness.test.ts",
+        "apps/desktop/README.md"
+      ],
+      "relatedPages": ["apps/desktop/supervisor.md", "apps/desktop/windows-and-ipc.md", "how-to-contribute/testing.md"]
+    },
+    {
+      "path": "apps/desktop/supervisor.md",
+      "criticality": "normal",
+      "contentBrief": "Preserve runtime explanation; update desktop-wide inventory and link the expanded real-runtime smoke evidence.",
+      "relevantSourcePaths": ["apps/desktop/test/smoke", "apps/desktop/test/smokeHarness.test.ts"],
+      "relatedPages": ["apps/desktop/index.md"]
+    },
+    {
+      "path": "apps/desktop/windows-and-ipc.md",
+      "criticality": "normal",
+      "contentBrief": "Preserve windows/IPC behavior and update app-wide measured scope; mention configured renderer proof where appropriate.",
+      "relevantSourcePaths": ["apps/desktop/test/smoke"],
+      "relatedPages": ["apps/desktop/index.md"]
+    },
+    {
+      "path": "how-to-contribute/testing.md",
+      "criticality": "normal",
+      "contentBrief": "Replace outdated single-smoke description with both real-runtime scenarios and shared bounded harness/teardown, distinguishing offline harness tests from Electron execution.",
+      "relevantSourcePaths": [
+        "apps/desktop/test/smoke",
+        "apps/desktop/test/smokeHarness.test.ts",
+        ".github/workflows/ci.yml"
+      ],
+      "relatedPages": ["apps/desktop/index.md", "deployment.md"]
+    },
+    {
+      "path": "deployment.md",
+      "criticality": "normal",
+      "contentBrief": "Update Windows CI smoke description to include configured Home and cleanup; preserve other deployment content.",
+      "relevantSourcePaths": [".github/workflows/ci.yml", "apps/desktop/test/smoke"],
+      "relatedPages": ["how-to-contribute/testing.md", "apps/desktop/index.md"]
+    }
+  ],
   "pagesToRemove": [],
-  "pagesToCreate": ["apps/web/search.md", "apps/web/settings-and-spoilers.md"],
+  "pagesToCreate": [],
   "pages": [
     {
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "contentBrief": "HomeStream is a LAN media server. A Windows PC finds a source, re-encodes video with FFmpeg and NVIDIA NVENC, and serves HLS to thin clients. The React UI includes browsing, navigation search, cast and similar titles, spoiler protection, playback, and Settings; the Electron shell adds a tray, server supervision, and a mini player (`apps/server/src/app.ts`, `apps/web/src/App.tsx`, `apps/desktop/src/main.ts`).",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/web/src/App.tsx",
-        "apps/desktop/src/main.ts",
-        "apps/server/src/db/migrations.ts",
-        "apps/server",
-        "apps/web",
-        "apps/desktop",
-        "packages/shared",
-        "apps/web/src/pages/dashboard/DashboardPlaceholder.tsx",
-        "apps/web/src/pages/PlayerPage.tsx",
-        "apps/desktop/src/shell/shell.ts"
-      ],
-      "relatedPages": [
-        "overview/architecture.md",
-        "overview/getting-started.md",
-        "apps/index.md",
-        "systems/playback/index.md",
-        "features/index.md",
-        "api/index.md",
-        "how-to-contribute/index.md",
-        "systems/telemetry.md",
-        "by-the-numbers.md",
-        "lore.md",
-        "overview/glossary.md",
-        "packages/index.md",
-        "reference/index.md",
-        "cleanup-opportunities.md"
-      ],
-      "action": "regenerate-from-source"
+      "contentBrief": "Update the source revision; retain product introduction and vocabulary.",
+      "relevantSourcePaths": ["apps/server/src/app.ts", "apps/web/src/App.tsx", "apps/desktop/src/main.ts"],
+      "relatedPages": ["by-the-numbers.md", "overview/architecture.md"],
+      "action": "update"
     },
     {
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "contentBrief": "HomeStream runs a Fastify server, FFmpeg child processes, and thin LAN clients. `apps/server/src/app.ts` constructs services; `apps/server/src/index.ts` starts listeners and workers. The browser and Electron renderer share the web build, while the desktop main process supervises the server (`apps/web/src/main.tsx`, `apps/desktop/src/main.ts`).",
-      "relevantSourcePaths": [
-        "apps/server/src/app.ts",
-        "apps/server/src/index.ts",
-        "apps/web/src/main.tsx",
-        "apps/desktop/src/main.ts",
-        "apps/server/src/config.ts",
-        "apps/server/src/sourceproxy/proxy.ts",
-        "apps/server/src/routes/devices.ts",
-        "apps/server/src/db/index.ts",
-        "apps/server/src/db/migrations.ts",
-        "apps/server/src/playback/segmentStore.ts",
-        "apps/server/src/routes/sessions.ts",
-        "apps/server/src/playback/sessionStart.ts"
-      ],
-      "relatedPages": [
-        "security.md",
-        "reference/data-models.md",
-        "systems/playback/index.md",
-        "by-the-numbers.md",
-        "apps/desktop/index.md",
-        "systems/network.md"
-      ],
-      "action": "regenerate-from-source"
+      "contentBrief": "Refresh inline physical-line and inventory counts from the statistics agent without changing architecture.",
+      "relevantSourcePaths": ["pnpm-workspace.yaml", "apps", "packages", "scripts"],
+      "relatedPages": ["by-the-numbers.md"],
+      "action": "update"
     },
     {
       "path": "overview/getting-started.md",
@@ -95,7 +140,7 @@
         "reference/configuration.md",
         "how-to-contribute/debugging.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "overview/glossary.md",
@@ -122,34 +167,16 @@
         "systems/playback/index.md",
         "features/viewing-progress.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "contentBrief": "Collected **2026-11-08**, from committed tree **`0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae`**. Working-tree wiki edits are excluded. HomeStream has four workspaces and 38,097 physical source lines under the rules below; these are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).",
-      "relevantSourcePaths": [
-        "docs/openapi.json",
-        "docs/schema.sql",
-        "apps/server/src/docs/generated.ts",
-        "scripts/",
-        "apps/web/index.html",
-        "apps/desktop/assets/loading.html",
-        "apps/desktop/src/main.ts",
-        "apps/server",
-        "apps/web",
-        "apps/desktop",
-        "packages/shared",
-        "apps/server/src/playback"
-      ],
-      "relatedPages": [
-        "overview/architecture.md",
-        "lore.md",
-        "systems/playback/index.md",
-        "how-to-contribute/testing.md"
-      ],
-      "action": "regenerate-from-source"
+      "contentBrief": "Recompute committed-tree size, activity, bot attribution, import chains and exports at HEAD using the existing defined methodology.",
+      "relevantSourcePaths": ["apps", "packages", "scripts", "pnpm-workspace.yaml"],
+      "relatedPages": ["overview/architecture.md", "lore.md"],
+      "action": "update"
     },
     {
       "path": "lore.md",
@@ -185,7 +212,7 @@
         "apps/web/index.md",
         "apps/desktop/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-contribute/index.md",
@@ -215,7 +242,7 @@
         "how-to-contribute/debugging.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-contribute/development-workflow.md",
@@ -243,35 +270,20 @@
         "how-to-contribute/tooling.md",
         "deployment.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-contribute/testing.md",
       "title": "Testing",
       "criticality": "normal",
-      "contentBrief": "Vitest separates offline unit/integration checks from real encoding and upstream calls. The safe all-workspace default is `pnpm test:ci`, not `pnpm test` (`package.json`, `apps/server/vitest.config.ts`).",
+      "contentBrief": "Replace outdated single-smoke description with both real-runtime scenarios and shared bounded harness/teardown, distinguishing offline harness tests from Electron execution.",
       "relevantSourcePaths": [
-        "apps/server/vitest.config.ts",
-        "apps/server/package.json",
-        "packages/shared/vitest.config.ts",
-        "apps/web/vite.config.ts",
-        "apps/desktop/vitest.config.ts",
-        "apps/server/test/helpers.ts",
-        "apps/server/src/app.ts",
-        "apps/server/test/playback/fakeEncoder.ts",
-        "apps/server/test/playback/harness.ts",
-        "apps/web/src/test/render.tsx",
-        "apps/web/src/test/fakeHls.ts",
-        "apps/web/src/test/player.tsx"
+        "apps/desktop/test/smoke",
+        "apps/desktop/test/smokeHarness.test.ts",
+        ".github/workflows/ci.yml"
       ],
-      "relatedPages": [
-        "apps/desktop/index.md",
-        "apps/web/build-and-tests.md",
-        "by-the-numbers.md",
-        "how-to-contribute/debugging.md",
-        "systems/playback/index.md"
-      ],
-      "action": "regenerate-from-source"
+      "relatedPages": ["apps/desktop/index.md", "deployment.md"],
+      "action": "update"
     },
     {
       "path": "how-to-contribute/debugging.md",
@@ -302,7 +314,7 @@
         "reference/configuration.md",
         "security.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-contribute/patterns-and-conventions.md",
@@ -329,7 +341,7 @@
         "security.md",
         "how-to-contribute/development-workflow.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-contribute/tooling.md",
@@ -357,7 +369,7 @@
         "reference/dependencies.md",
         "how-to-contribute/debugging.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/index.md",
@@ -383,7 +395,7 @@
         "overview/architecture.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/server.md",
@@ -412,38 +424,16 @@
         "api/index.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/index.md",
       "title": "Web app",
-      "criticality": "critical",
-      "contentBrief": "HomeStream's React 19/Vite client implements catalog browsing, navigation search, details with cast and related titles, saved-progress actions, HLS playback, local spoiler preferences, Settings/About and the Electron renderer. The five dashboard tabs remain placeholders. The server chooses sources, persists progress and encodes video; the client always requests automatic stream selection (`apps/web/src/App.tsx`, `apps/web/src/player/sessionApi.ts`).",
-      "relevantSourcePaths": [
-        "apps/web/src/App.tsx",
-        "apps/web/src/player/sessionApi.ts",
-        "apps/web/src/pages/",
-        "apps/web/src/components/",
-        "apps/web/src/api/",
-        "apps/web/src/events/",
-        "apps/web/src/device/",
-        "apps/web/src/player/",
-        "apps/web/src/desktop/",
-        "apps/web/src/notices/",
-        "apps/web/src/telemetry/",
-        "apps/web/src/styles/"
-      ],
-      "relatedPages": [
-        "apps/web/screens.md",
-        "apps/web/data-and-startup.md",
-        "apps/web/player.md",
-        "apps/web/desktop-integration.md",
-        "systems/telemetry.md",
-        "apps/web/build-and-tests.md",
-        "apps/desktop/index.md",
-        "packages/shared.md"
-      ],
-      "action": "regenerate-from-source"
+      "criticality": "normal",
+      "contentBrief": "Refresh measured test-file scope after the budget regression test was added.",
+      "relevantSourcePaths": ["apps/web/src/bundleBudget.test.ts"],
+      "relatedPages": ["apps/web/build-and-tests.md"],
+      "action": "update"
     },
     {
       "path": "apps/web/screens.md",
@@ -473,7 +463,7 @@
         "features/prefetch.md",
         "apps/web/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/search.md",
@@ -487,7 +477,7 @@
         "apps/web/src/pages/SearchPage.tsx"
       ],
       "relatedPages": ["apps/web/screens.md", "apps/web/data-and-startup.md", "features/catalog.md"],
-      "action": "create"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/settings-and-spoilers.md",
@@ -501,35 +491,16 @@
         "apps/web/src/components/ContinueWatchingRow.tsx"
       ],
       "relatedPages": ["apps/web/screens.md", "apps/web/desktop-integration.md", "features/viewing-progress.md"],
-      "action": "create"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/player.md",
       "title": "Player",
       "criticality": "normal",
-      "contentBrief": "The full-window HLS player starts or attaches to a server session, drives a video element and owns progress, cleanup, controls and track selection. `PlayerPage` in `apps/web/src/pages/PlayerPage.tsx` is the route controller; `Playback` in `apps/web/src/player/Playback.tsx` renders the ready session; `usePlaybackModel` in `apps/web/src/player/usePlaybackModel.ts` composes the hooks. Server encoding and selection are covered in [playback](../../systems/playback/index.md).",
-      "relevantSourcePaths": [
-        "apps/web/src/pages/PlayerPage.tsx",
-        "apps/web/src/player/Playback.tsx",
-        "apps/web/src/player/usePlaybackModel.ts",
-        "apps/web/src/player/target.ts",
-        "apps/web/src/player/useSessionStart.ts",
-        "apps/web/src/player/sessionApi.ts",
-        "apps/web/src/player/downloading.ts",
-        "apps/web/src/App.tsx",
-        "apps/web/src/player/useHls.ts",
-        "apps/web/src/player/PlayerOverlays.module.css",
-        "apps/web/src/player/useTrackSwitching.ts",
-        "apps/web/src/player/tracks.ts"
-      ],
-      "relatedPages": [
-        "systems/playback/index.md",
-        "apps/web/desktop-integration.md",
-        "features/viewing-progress.md",
-        "apps/web/index.md",
-        "apps/web/build-and-tests.md"
-      ],
-      "action": "regenerate-from-source"
+      "contentBrief": "Document the current 200 kB gzip ceiling without claiming a fresh measured bundle size.",
+      "relevantSourcePaths": ["apps/web/.size-limit.json"],
+      "relatedPages": ["apps/web/build-and-tests.md"],
+      "action": "update"
     },
     {
       "path": "apps/web/data-and-startup.md",
@@ -551,7 +522,7 @@
         "apps/web/src/events/serverEvents.ts"
       ],
       "relatedPages": ["packages/shared.md", "systems/telemetry.md", "apps/web/screens.md", "apps/web/index.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/desktop-integration.md",
@@ -579,108 +550,51 @@
         "packages/shared.md",
         "apps/web/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "apps/web/build-and-tests.md",
       "title": "Build and tests",
       "criticality": "normal",
-      "contentBrief": "The web build keeps routes, HLS and telemetry behind lazy boundaries and generates compressed assets for server delivery. `apps/web/vite.config.ts` configures Vite/Vitest; `apps/web/playwright.config.ts` runs isolated browser fixtures. This page describes committed configuration and test scope, not results from a wiki-generation test run.",
+      "contentBrief": "Update the player ceiling and describe budget/README consistency checks; update test inventory.",
       "relevantSourcePaths": [
-        "apps/web/vite.config.ts",
-        "apps/web/playwright.config.ts",
-        "apps/web/package.json",
-        "apps/web/dist",
-        "apps/web/reports/analyze-dist",
-        "apps/web/reports/bundle.html",
-        "apps/web/vite.plugins.ts",
-        "apps/web/src/styles/fonts/",
-        "apps/web/src/styles/global.css",
         "apps/web/.size-limit.json",
-        "apps/web/coverage-thresholds.json",
-        "apps/web/src/test/render.tsx"
+        "apps/web/src/bundleBudget.test.ts",
+        "docs/runbooks/web-bundle-budget.md"
       ],
-      "relatedPages": [
-        "apps/web/player.md",
-        "systems/telemetry.md",
-        "how-to-contribute/testing.md",
-        "apps/web/index.md"
-      ],
-      "action": "regenerate-from-source"
+      "relatedPages": ["apps/web/player.md", "how-to-contribute/testing.md"],
+      "action": "update"
     },
     {
       "path": "apps/desktop/index.md",
       "title": "Desktop shell",
       "criticality": "critical",
-      "contentBrief": "The Electron 45 desktop app is a working single-instance tray shell around the server-hosted [web UI](../web/index.md). It supervises a local server, opens the main and mini-player windows, persists preferences, exposes a restricted preload bridge, and integrates Windows startup, notifications and power management. It does not import web or server implementation modules.",
+      "contentBrief": "Explain first-run versus configured launch smoke, rendered Home evidence, owned-child/hub cleanup and refreshed desktop inventory. Explore source and split only if genuinely necessary.",
       "relevantSourcePaths": [
-        "apps/desktop/src/main.ts",
-        "apps/desktop/src/shell/shell.ts",
-        "apps/desktop/src/supervisor.ts",
-        "apps/desktop/src/monitor.ts",
-        "apps/desktop/src/settings.ts",
-        "apps/desktop/src/miniPlayer.ts",
-        "apps/desktop/src/keepAwake.ts",
-        "apps/desktop/src/shell/",
-        "apps/desktop/src/telemetry/",
-        "apps/desktop/src/cli.ts",
-        "packages/shared/src/desktop.ts",
-        "apps/desktop/src/jsonFile.ts"
+        "apps/desktop/test/smoke",
+        "apps/desktop/test/smokeHarness.test.ts",
+        "apps/desktop/README.md"
       ],
-      "relatedPages": [
-        "apps/web/index.md",
-        "systems/telemetry.md",
-        "apps/desktop/supervisor.md",
-        "apps/desktop/windows-and-ipc.md",
-        "overview/getting-started.md",
-        "apps/web/desktop-integration.md",
-        "packages/shared.md"
-      ],
-      "action": "regenerate-from-source"
+      "relatedPages": ["apps/desktop/supervisor.md", "apps/desktop/windows-and-ipc.md", "how-to-contribute/testing.md"],
+      "action": "update"
     },
     {
       "path": "apps/desktop/supervisor.md",
       "title": "Server supervision",
       "criticality": "normal",
-      "contentBrief": "The desktop shell keeps an owned server alive without taking ownership of a server started elsewhere. `Supervisor` in `apps/desktop/src/supervisor.ts` implements the lifecycle; `ServerMonitor` in `apps/desktop/src/monitor.ts` supplies activity and health to the tray, notifications and keep-awake policy. See the [desktop overview](index.md).",
-      "relevantSourcePaths": [
-        "apps/desktop/src/supervisor.ts",
-        "apps/desktop/src/monitor.ts",
-        "apps/desktop/src/serverHttp.ts",
-        "apps/desktop/src/serverLaunch.ts",
-        "apps/desktop/src/serverProcess.ts",
-        "apps/desktop/src/sse.ts",
-        "apps/desktop/src/trayModel.ts",
-        "apps/desktop/src/shell/trayAdapter.ts",
-        "packages/shared/src/desktop.ts",
-        "packages/shared/src/health.ts",
-        "packages/shared/src/downloads.ts",
-        "apps/desktop/src/shell/shell.ts"
-      ],
-      "relatedPages": ["apps/desktop/index.md", "apps/web/desktop-integration.md", "apps/server.md"],
-      "action": "regenerate-from-source"
+      "contentBrief": "Preserve runtime explanation; update desktop-wide inventory and link the expanded real-runtime smoke evidence.",
+      "relevantSourcePaths": ["apps/desktop/test/smoke", "apps/desktop/test/smokeHarness.test.ts"],
+      "relatedPages": ["apps/desktop/index.md"],
+      "action": "update"
     },
     {
       "path": "apps/desktop/windows-and-ipc.md",
       "title": "Windows and IPC",
       "criticality": "normal",
-      "contentBrief": "The desktop shell loads the ordinary web renderer with a narrow capability bridge, rather than enabling Node in pages. Playback ownership moves between windows without starting another server session. See [desktop overview](index.md) and the renderer-side [desktop integration](../web/desktop-integration.md).",
-      "relevantSourcePaths": [
-        "apps/desktop/src/shell/windows.ts",
-        "apps/desktop/src/miniPlayer.ts",
-        "packages/shared/src/desktop.ts",
-        "apps/desktop/src/ipc.ts",
-        "apps/desktop/src/preload.cts",
-        "apps/desktop/src/windowState.ts",
-        "apps/desktop/src/shell/shell.ts",
-        "apps/desktop/src/settings.ts",
-        "apps/desktop/src/shell/appMenu.ts",
-        "apps/desktop/src/keepAwake.ts",
-        "apps/desktop/src/notifications.ts",
-        "apps/desktop/src/shell/toasts.ts"
-      ],
-      "relatedPages": ["apps/desktop/index.md", "apps/web/desktop-integration.md", "apps/desktop/supervisor.md"],
-      "action": "regenerate-from-source"
+      "contentBrief": "Preserve windows/IPC behavior and update app-wide measured scope; mention configured renderer proof where appropriate.",
+      "relevantSourcePaths": ["apps/desktop/test/smoke"],
+      "relatedPages": ["apps/desktop/index.md"],
+      "action": "update"
     },
     {
       "path": "systems/index.md",
@@ -705,7 +619,7 @@
         "features/index.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/playback/index.md",
@@ -734,7 +648,7 @@
         "features/viewing-progress.md",
         "packages/shared.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/playback/encoding.md",
@@ -751,7 +665,7 @@
         "apps/server/src/config.ts"
       ],
       "relatedPages": ["systems/playback/subtitles.md", "systems/playback/lifecycle.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/playback/lifecycle.md",
@@ -773,7 +687,7 @@
         "apps/server/src/playback/memoryWatchdog.ts"
       ],
       "relatedPages": ["systems/playback/index.md", "systems/network.md", "systems/playback/subtitles.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/playback/subtitles.md",
@@ -799,7 +713,7 @@
         "systems/playback/encoding.md",
         "systems/playback/lifecycle.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/source-proxy.md",
@@ -818,7 +732,7 @@
         "apps/server/src/sourceproxy/upstream.ts"
       ],
       "relatedPages": ["systems/network.md", "systems/playback/lifecycle.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/network.md",
@@ -839,7 +753,7 @@
         "apps/server/src/network/check.ts"
       ],
       "relatedPages": ["systems/source-proxy.md", "systems/playback/index.md", "reference/configuration.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/gateway.md",
@@ -859,7 +773,7 @@
         "apps/server/test/gateway/"
       ],
       "relatedPages": ["features/downloads.md", "features/stream-selection.md", "systems/source-proxy.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/health.md",
@@ -881,7 +795,7 @@
         "apps/server/src/health/checks/gpu.ts"
       ],
       "relatedPages": ["how-to-monitor/index.md", "apps/web/data-and-startup.md", "how-to-monitor/alerting.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "systems/telemetry.md",
@@ -909,7 +823,7 @@
         "how-to-monitor/tracing.md",
         "features/prefetch.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/index.md",
@@ -940,7 +854,7 @@
         "packages/shared.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/catalog.md",
@@ -963,7 +877,7 @@
         "features/viewing-progress.md",
         "features/downloads.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/stream-selection.md",
@@ -983,7 +897,7 @@
         "apps/server/src/gateway/playbackProbe.ts"
       ],
       "relatedPages": ["systems/playback/index.md", "features/downloads.md", "features/prefetch.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/prefetch.md",
@@ -1004,7 +918,7 @@
         "systems/source-proxy.md",
         "features/stream-selection.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/downloads.md",
@@ -1023,7 +937,7 @@
         "apps/server/src/gateway/playbackProbe.ts"
       ],
       "relatedPages": ["systems/gateway.md", "apps/web/index.md", "features/prefetch.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "features/viewing-progress.md",
@@ -1045,7 +959,7 @@
         "apps/server/src/db/history.ts"
       ],
       "relatedPages": ["apps/web/index.md", "reference/data-models.md", "api/index.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "packages/index.md",
@@ -1069,7 +983,7 @@
         "systems/telemetry.md",
         "api/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "packages/shared.md",
@@ -1098,7 +1012,7 @@
         "systems/telemetry.md",
         "how-to-contribute/patterns-and-conventions.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "api/index.md",
@@ -1132,38 +1046,16 @@
         "systems/health.md",
         "deployment.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "deployment.md",
       "title": "Deployment",
       "criticality": "normal",
-      "contentBrief": "HomeStream runs on the encoding PC as a LAN server with a working React player and Electron tray shell. Releases create tags and release metadata, not installers or a deployed fleet. See [architecture](overview/architecture.md).",
-      "relevantSourcePaths": [
-        "apps/server/src/index.ts",
-        "scripts/bootstrap.mjs",
-        "apps/web/dist",
-        "apps/server/src/config.ts",
-        "apps/server/src/sourceproxy/proxy.ts",
-        "apps/server/src/routes/static.ts",
-        "apps/web/vite.config.ts",
-        "apps/desktop/src/main.ts",
-        ".devcontainer/Dockerfile",
-        "apps/server/src/playback/pidRegistry.ts",
-        "docs/runbooks/ffmpeg-orphans.md",
-        "docs/runbooks/disk-full-transcode.md"
-      ],
-      "relatedPages": [
-        "overview/architecture.md",
-        "apps/desktop/index.md",
-        "reference/configuration.md",
-        "security.md",
-        "apps/desktop/supervisor.md",
-        "how-to-monitor/index.md",
-        "how-to-contribute/tooling.md",
-        "how-to-monitor/alerting.md"
-      ],
-      "action": "regenerate-from-source"
+      "contentBrief": "Update Windows CI smoke description to include configured Home and cleanup; preserve other deployment content.",
+      "relevantSourcePaths": [".github/workflows/ci.yml", "apps/desktop/test/smoke"],
+      "relatedPages": ["how-to-contribute/testing.md", "apps/desktop/index.md"],
+      "action": "update"
     },
     {
       "path": "security.md",
@@ -1193,7 +1085,7 @@
         "systems/telemetry.md",
         "how-to-contribute/debugging.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-monitor/index.md",
@@ -1221,7 +1113,7 @@
         "systems/telemetry.md",
         "security.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-monitor/logging.md",
@@ -1250,7 +1142,7 @@
         "security.md",
         "reference/data-models.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-monitor/metrics.md",
@@ -1270,7 +1162,7 @@
         "apps/server/test/telemetry/telemetryUnits.test.ts"
       ],
       "relatedPages": ["systems/health.md", "how-to-monitor/alerting.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-monitor/tracing.md",
@@ -1292,7 +1184,7 @@
         "packages/shared/src/sanitize.ts"
       ],
       "relatedPages": ["how-to-monitor/logging.md", "apps/desktop/supervisor.md", "systems/telemetry.md"],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "how-to-monitor/alerting.md",
@@ -1320,7 +1212,7 @@
         "reference/configuration.md",
         "how-to-monitor/logging.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "cleanup-opportunities.md",
@@ -1352,7 +1244,7 @@
         "apps/web/player.md",
         "apps/desktop/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "reference/index.md",
@@ -1380,7 +1272,7 @@
         "apps/desktop/index.md",
         "security.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "reference/configuration.md",
@@ -1410,7 +1302,7 @@
         "how-to-contribute/patterns-and-conventions.md",
         "security.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "reference/data-models.md",
@@ -1439,7 +1331,7 @@
         "systems/telemetry.md",
         "api/index.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     },
     {
       "path": "reference/dependencies.md",
@@ -1463,8 +1355,68 @@
         "overview/architecture.md",
         "reference/configuration.md"
       ],
-      "action": "regenerate-from-source"
+      "action": "keep-unchanged"
     }
   ],
-  "pageCount": 56
+  "pageCount": 56,
+  "pagesToUpdate": [
+    "overview/index.md",
+    "overview/architecture.md",
+    "by-the-numbers.md",
+    "apps/web/index.md",
+    "apps/web/player.md",
+    "apps/web/build-and-tests.md",
+    "apps/desktop/index.md",
+    "apps/desktop/supervisor.md",
+    "apps/desktop/windows-and-ipc.md",
+    "how-to-contribute/testing.md",
+    "deployment.md"
+  ],
+  "pagesToKeepUnchanged": [
+    "overview/getting-started.md",
+    "overview/glossary.md",
+    "lore.md",
+    "how-to-contribute/index.md",
+    "how-to-contribute/development-workflow.md",
+    "how-to-contribute/debugging.md",
+    "how-to-contribute/patterns-and-conventions.md",
+    "how-to-contribute/tooling.md",
+    "apps/index.md",
+    "apps/server.md",
+    "apps/web/screens.md",
+    "apps/web/search.md",
+    "apps/web/settings-and-spoilers.md",
+    "apps/web/data-and-startup.md",
+    "apps/web/desktop-integration.md",
+    "systems/index.md",
+    "systems/playback/index.md",
+    "systems/playback/encoding.md",
+    "systems/playback/lifecycle.md",
+    "systems/playback/subtitles.md",
+    "systems/source-proxy.md",
+    "systems/network.md",
+    "systems/gateway.md",
+    "systems/health.md",
+    "systems/telemetry.md",
+    "features/index.md",
+    "features/catalog.md",
+    "features/stream-selection.md",
+    "features/prefetch.md",
+    "features/downloads.md",
+    "features/viewing-progress.md",
+    "packages/index.md",
+    "packages/shared.md",
+    "api/index.md",
+    "security.md",
+    "how-to-monitor/index.md",
+    "how-to-monitor/logging.md",
+    "how-to-monitor/metrics.md",
+    "how-to-monitor/tracing.md",
+    "how-to-monitor/alerting.md",
+    "cleanup-opportunities.md",
+    "reference/index.md",
+    "reference/configuration.md",
+    "reference/data-models.md",
+    "reference/dependencies.md"
+  ]
 }

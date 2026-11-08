@@ -67,7 +67,9 @@ Pure toast planning lives in `apps/desktop/src/notifications.ts`: ready notifica
 
 Change bridge shape in shared, update both the IPC allowlist and preload channel table, and update renderer callers together. Keep handoff/session cleanup in the appropriate layer rather than adding media side effects to the pure handoff state machine.
 
-`apps/desktop/test/ipc.test.ts` checks handlers, hostile origins, invalid inputs and preload channel consistency. `apps/desktop/test/miniPlayer.test.ts` exercises routing, one-session handoff and power transitions; `apps/desktop/test/windowState.test.ts` checks display recovery; `apps/desktop/test/notifications.test.ts` covers focus policy, title safety and XML. These tests do not launch Electron; the separate launch smoke covers real preload exposure.
+`apps/desktop/test/ipc.test.ts` checks handlers, hostile origins, invalid inputs and preload channel consistency. `apps/desktop/test/miniPlayer.test.ts` exercises routing, one-session handoff and power transitions; `apps/desktop/test/windowState.test.ts` checks display recovery; `apps/desktop/test/notifications.test.ts` covers focus policy, title safety and XML. These tests do not launch Electron.
+
+The separate first-run smoke checks the real preload's exact 20-member surface, desktop/non-mini markers, visible window/tray and settings persistence (`apps/desktop/test/smoke/launch.smoke.ts`). Its configured companion drives the real renderer over CDP until Home has a content mark, no setup screen, a Trending Movies heading and poster titles from the local stub (`apps/desktop/test/smoke/configured.smoke.ts`, `apps/desktop/test/smoke/harness.ts`). It does not exercise native mini playback handoff or prove media encoding. See [smoke scenarios and bounds](index.md#first-run-versus-configured-home) and [testing tiers](../../how-to-contribute/testing.md).
 
 ## Key source files
 
@@ -84,4 +86,4 @@ Change bridge shape in shared, update both the IPC allowlist and preload channel
 
 ## Measured scope
 
-Desktop-wide committed inventory at `0a8f04f`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. See the [overview](index.md) for the committed-path count method; these are app-wide counts, not coverage.
+Desktop-wide committed inventory at `bb09d63`: **31 source / 19 test files** (17 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.61**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. See the [overview](index.md#measured-scope) for the committed-path count method; these are app-wide counts, not coverage.

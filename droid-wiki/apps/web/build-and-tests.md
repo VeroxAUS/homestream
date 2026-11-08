@@ -17,11 +17,13 @@ Vite dev listens on **8601**, proxying `/api` and `/hls` to **8600**. `apps/web/
 | Initial `index-*.js`                         | **150 kB gzip**     |
 | All CSS                                      | **24 kB gzip**      |
 | `*Page-*.js`, excluding PlayerPage, together | **40 kB gzip**      |
-| `PlayerPage-*.js`, including hls.js          | **210 kB gzip**     |
+| `PlayerPage-*.js`, including hls.js          | **200 kB gzip**     |
 | `inter-var-*.woff2`                          | **50 kB**, not gzip |
 | Deferred `telemetry-*.js`                    | **100 kB gzip**     |
 
 Route limits are aggregate, not per page; these are ceilings rather than measured build sizes. The [player](player.md) has its own heavy lazy boundary. Telemetry's initial facade imports no SDK; build-time configuration and privacy are covered under [telemetry](../../systems/telemetry.md).
+
+`apps/web/src/bundleBudget.test.ts` checks that the player ceiling is exactly **200 kB** and that `apps/web/README.md` documents the same value. Those checks catch configuration/documentation drift; only a build followed by the size command measures emitted assets. `docs/runbooks/web-bundle-budget.md` covers failures, including keeping full hls.js for subtitles behind the lazy player boundary.
 
 Hidden source maps are enabled only for `HOMESTREAM_RELEASE_BUILD=1`, nonempty `SENTRY_AUTH_TOKEN` and telemetry not disabled. The Sentry plugin targets `homestream-web` and deletes maps under `apps/web/dist/` after upload. Ordinary builds produce no maps (`apps/web/vite.config.ts`).
 
@@ -104,6 +106,7 @@ Chromium must be installed separately. Keep new component tests offline, preserv
 | `apps/web/vite.config.ts`                 | Proxy, lazy output, telemetry build config and Vitest |
 | `apps/web/vite.plugins.ts`                | Precompression and font preload                       |
 | `apps/web/.size-limit.json`               | Asset ceilings                                        |
+| `apps/web/src/bundleBudget.test.ts`       | Player ceiling and README consistency                 |
 | `apps/web/coverage-thresholds.json`       | Coverage ratchet                                      |
 | `apps/web/src/test/render.tsx`            | Fetch and provider test seams                         |
 | `apps/web/src/test/fakeHls.ts`            | HLS controller double                                 |
@@ -114,4 +117,4 @@ Chromium must be installed separately. Keep new component tests offline, preserv
 | `apps/web/e2e/support/desktopBridge.ts`   | Browser-side desktop settings double                  |
 | `apps/web/e2e/support/redirect-fetch.mjs` | Server fetch redirection/restriction                  |
 
-Tracked web scope: **119 production files**, **45 unit/component tests**, **10 browser specs**, **55/119 = 0.46** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites, live/GPU tests or global checks were run by this page's writer.
+Tracked web scope at `bb09d63`: **119 production files**, **46 unit/component test files**, **10 browser specs**, **56/119 = 0.47** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites or live/GPU tests were run for this wiki update.
