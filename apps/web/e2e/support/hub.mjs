@@ -103,6 +103,8 @@ const SEASON_EPISODES = [
 const captured = { sentry: [], posthog: [], flagRequests: [] };
 // Every TMDB and gateway request (path with query string), for checks that count upstream calls.
 const requestLog = [];
+// Query (trimmed, lower-case) -> milliseconds to hold back the `/search/multi` answer for it.
+const searchDelays = new Map();
 let featureFlags = {};
 
 function send(response, status, body, headers = {}) {
@@ -219,11 +221,32 @@ function requestLogEndpoint(url, request, response) {
   return true;
 }
 
+/**
+ * `POST /__search-delays` with a JSON body such as `{"stub": 3000}` delays the `/search/multi` answer for that query
+ * (compared trimmed and lower-case) by that many milliseconds; `DELETE /__search-delays` removes all delays. A
+ * delayed answer is logged when it arrives, so the request log shows when the server asked. Returns true when handled.
+ */
+async function searchDelayEndpoint(url, request, response) {
+  if (url.pathname !== '/__search-delays') return false;
+  if (request.method === 'DELETE') searchDelays.clear();
+  if (request.method === 'POST') {
+    const delays = JSON.parse((await readBody(request)).toString('utf8') || '{}');
+    for (const [query, ms] of Object.entries(delays)) searchDelays.set(query.trim().toLowerCase(), Number(ms));
+  }
+  send(response, 200, { delays: Object.fromEntries(searchDelays) });
+  return true;
+}
+
 async function tmdbHandler(request, response) {
   const url = new URL(request.url ?? '/', `http://${HOST}`);
   if (requestLogEndpoint(url, request, response)) return;
+  if (await searchDelayEndpoint(url, request, response)) return;
   if (url.pathname.startsWith('/img/')) return send(response, 200, PNG);
   requestLog.push({ upstream: 'tmdb', method: request.method, path: `${url.pathname}${url.search}` });
+  if (url.pathname === '/search/multi') {
+    const wait = searchDelays.get((url.searchParams.get('query') ?? '').trim().toLowerCase());
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+  }
   const [status, body] = tmdb(url);
   return send(response, status, body);
 }

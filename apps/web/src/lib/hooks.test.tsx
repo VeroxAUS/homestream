@@ -6,6 +6,7 @@ import { setBannerIntervalMs, useBannerIntervalMs } from './bannerInterval';
 import { HOME_CONTENT_MARK, afterHomeContent, markContentShown, whenIdle } from './startup';
 import { useContentShown } from './useContentShown';
 import { useDebouncedValue } from './useDebouncedValue';
+import { useMediaQuery } from './useMediaQuery';
 import { useReducedMotion } from './useReducedMotion';
 import { useTmdbId } from './useTmdbId';
 
@@ -29,6 +30,46 @@ describe('useDebouncedValue', () => {
     expect(result.current).toBe('a');
     act(() => void vi.advanceTimersByTime(1));
     expect(result.current).toBe('abc');
+  });
+
+  it('starts from the given initial value and settles on the first value after the delay', () => {
+    const { result } = renderHook(() => useDebouncedValue('abc', 300, ''));
+    expect(result.current).toBe('');
+    act(() => void vi.advanceTimersByTime(299));
+    expect(result.current).toBe('');
+    act(() => void vi.advanceTimersByTime(1));
+    expect(result.current).toBe('abc');
+  });
+});
+
+describe('useMediaQuery', () => {
+  function stubMedia(matches: boolean) {
+    const listeners = new Set<() => void>();
+    const media = {
+      matches,
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+    };
+    const matchMedia = vi.fn(() => media);
+    window.matchMedia = matchMedia as unknown as typeof window.matchMedia;
+    return { media, listeners, matchMedia };
+  }
+
+  it('reports whether the query matches and follows changes', () => {
+    const { media, listeners, matchMedia } = stubMedia(false);
+    const { result, unmount } = renderHook(() => useMediaQuery('(max-width: 699px)'));
+    expect(result.current).toBe(false);
+    expect(matchMedia).toHaveBeenCalledWith('(max-width: 699px)');
+    media.matches = true;
+    act(() => listeners.forEach((listener) => listener()));
+    expect(result.current).toBe(true);
+    unmount();
+    expect(listeners.size).toBe(0);
+  });
+
+  it('is false where matchMedia does not exist', () => {
+    Reflect.deleteProperty(window, 'matchMedia');
+    expect(renderHook(() => useMediaQuery('(max-width: 699px)')).result.current).toBe(false);
   });
 });
 

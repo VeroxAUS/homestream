@@ -11,6 +11,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 
 const telemetry = vi.hoisted(() => ({ reportRenderError: vi.fn() }));
 vi.mock('../telemetry', async (importOriginal) => ({ ...(await importOriginal<object>()), ...telemetry }));
+vi.mock('../pages/searchRoute', () => ({ loadSearchPage: vi.fn() }));
 
 function Boom({ message = 'boom' }: { message?: string }): never {
   throw new Error(message);
@@ -149,7 +150,7 @@ describe('the route boundary in the layout', () => {
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(telemetry.reportRenderError).toHaveBeenCalledTimes(1);
     expect(telemetry.reportRenderError).toHaveBeenCalledWith(expect.any(Error), 'route');
-    await userEvent.click(screen.getByRole('link', { name: 'Search' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search movies and shows' }), 'x');
     expect(await screen.findByText('search page')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

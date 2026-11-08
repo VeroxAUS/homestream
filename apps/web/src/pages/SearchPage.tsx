@@ -1,17 +1,15 @@
 import type { MediaSummary } from '@homestream/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useState, type KeyboardEvent } from 'react';
-import { useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { useLocation, useNavigationType } from 'react-router';
 import { searchQuery } from '../api/queries';
 import { ErrorPanel } from '../components/ErrorPanel';
 import { Icon } from '../components/Icon';
 import { PosterCard } from '../components/PosterCard';
+import { MIN_QUERY_CHARS, SEARCH_DELAY_MS, isSearchNow, readSearchText } from '../lib/searchUrl';
 import { useContentShown } from '../lib/useContentShown';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 import styles from './SearchPage.module.css';
-
-const SEARCH_DELAY_MS = 300;
-const MAX_QUERY_LENGTH = 200;
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -72,12 +70,21 @@ function Message({ text, hint }: { text: string; hint: string }) {
   );
 }
 
+/**
+ * The results for the `q` of the address; the field that sets it is in the nav. A deep link, Back or Forward searches at
+ * once. Typing waits for a pause, counted from the page opening when the first key is what opened it. Enter searches
+ * at once. Only the answer for the current text is shown.
+ */
 export default function SearchPage() {
-  const [params, setParams] = useSearchParams();
-  const [typed, setTyped] = useState(params.get('q') ?? '');
-  const trimmed = typed.trim();
-  const text = useDebouncedValue(trimmed, SEARCH_DELAY_MS);
-  const { data, error, refetch } = useQuery({ ...searchQuery(text), enabled: text !== '' });
+  const { search, state } = useLocation();
+  const opening = useNavigationType();
+  const trimmed = readSearchText(search).trim();
+  const paused = useDebouncedValue(trimmed, SEARCH_DELAY_MS, opening === 'POP' ? trimmed : '');
+  const settled = isSearchNow(state, trimmed) ? trimmed : paused;
+  const { data, error, refetch } = useQuery({
+    ...searchQuery(settled),
+    enabled: settled.length >= MIN_QUERY_CHARS,
+  });
   useContentShown();
 
   const searching = (
@@ -85,27 +92,20 @@ export default function SearchPage() {
       Searching...
     </p>
   );
-  const change = (value: string) => {
-    setTyped(value);
-    setParams(value.trim() ? { q: value.trim() } : {}, { replace: true });
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') change('');
-  };
 
   let body;
-  if (trimmed === '') {
+  if (trimmed.length < MIN_QUERY_CHARS) {
     body = <Message text="Search for movies and shows" hint="Type a title to find it." />;
-  } else if (trimmed !== text) {
+  } else if (trimmed !== settled) {
     body = searching;
   } else if (error) {
     body = <ErrorPanel error={error} title="Search failed" onRetry={() => void refetch()} />;
   } else if (data) {
     body =
       data.results.length === 0 ? (
-        <Message text={`No results for “${text}”`} hint="Check the spelling or try a different title." />
+        <Message text={`No results for “${settled}”`} hint="Check the spelling or try a different title." />
       ) : (
-        <Results key={text} text={text} results={data.results} />
+        <Results key={settled} text={settled} results={data.results} />
       );
   } else {
     body = searching;
@@ -114,22 +114,6 @@ export default function SearchPage() {
   return (
     <main className={styles.page}>
       <h1 className="visually-hidden">Search</h1>
-      <div className={styles.box}>
-        <Icon name="search" size={22} className={styles.boxIcon} />
-        <input
-          className={styles.input}
-          type="text"
-          value={typed}
-          maxLength={MAX_QUERY_LENGTH}
-          placeholder="Search movies and shows"
-          aria-label="Search movies and shows"
-          autoComplete="off"
-          autoFocus
-          onChange={(event) => change(event.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        {typed ? <span className={styles.hintKey}>Esc to clear</span> : null}
-      </div>
       {body}
     </main>
   );

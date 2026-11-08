@@ -36,52 +36,71 @@ describe('describeHealth', () => {
 describe('navigation bar', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('lists Home, Search, Dashboards and Settings, and highlights the page that is open', async () => {
+  const activeLinks = () =>
+    within(nav())
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('aria-current') === 'page')
+      .map((link) => link.textContent);
+
+  it('lists Home, Dashboard and Settings, and highlights the page that is open', async () => {
     mockApi({ 'GET /api/health': health('ok') });
     renderWithProviders(<App />, '/settings');
     await screen.findByRole('heading', { name: 'Settings' });
     expect(within(nav()).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav()).getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
-    expect(within(nav()).getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/search');
-    expect(within(nav()).getByRole('button', { name: /Dashboards/ })).not.toHaveAttribute('aria-current');
+    expect(within(nav()).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard/health');
+    expect(within(nav()).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
+    expect(activeLinks()).toEqual(['Settings']);
   });
 
-  it('opens the Dashboards menu with the five dashboards, goes to one, and closes the menu', async () => {
+  it('has no Search link, no Dashboards menu and no round search button', () => {
     mockApi({ 'GET /api/health': health('ok') });
     renderWithProviders(<App />, '/');
-    const button = within(nav()).getByRole('button', { name: /Dashboards/ });
+    expect(screen.queryByRole('link', { name: /^Search/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Dashboards|Search titles/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Dashboards' })).not.toBeInTheDocument();
-    fireEvent.click(button);
-    expect(button).toHaveAttribute('aria-expanded', 'true');
-    const menu = screen.getByRole('list', { name: 'Dashboards' });
+  });
+
+  it('opens the Health dashboard from the Dashboard link', async () => {
+    mockApi({ 'GET /api/health': health('ok') });
+    renderWithProviders(<App />, '/');
+    fireEvent.click(within(nav()).getByRole('link', { name: 'Dashboard' }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Health' })).toBeInTheDocument();
+    expect(activeLinks()).toEqual(['Dashboard']);
+  });
+
+  it.each(['health', 'activity', 'history', 'graphs', 'stats'])(
+    'keeps Dashboard active on /dashboard/%s, and only Dashboard',
+    async (tab) => {
+      mockApi({ 'GET /api/health': health('ok') });
+      renderWithProviders(<App />, `/dashboard/${tab}`);
+      await screen.findByRole('navigation', { name: 'Dashboard sections' });
+      expect(activeLinks()).toEqual(['Dashboard']);
+    },
+  );
+
+  it('keeps Dashboard active while moving between the dashboard tabs, and not elsewhere', async () => {
+    mockApi({ 'GET /api/health': health('ok') });
+    renderWithProviders(<App />, '/dashboard/health');
+    const tabs = await screen.findByRole('navigation', { name: 'Dashboard sections' });
     expect(
-      within(menu)
+      within(tabs)
         .getAllByRole('link')
         .map((link) => link.textContent),
     ).toEqual(['Health', 'Activity', 'History', 'Graphs', 'Stats']);
+    fireEvent.click(within(tabs).getByRole('link', { name: 'Graphs' }));
+    expect(await within(tabs).findByRole('link', { name: 'Graphs' })).toHaveAttribute('aria-current', 'page');
+    expect(activeLinks()).toEqual(['Dashboard']);
 
-    fireEvent.click(within(menu).getByRole('link', { name: 'Graphs' }));
-    expect(await screen.findByRole('heading', { name: 'Dashboards' })).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Dashboards' })).not.toBeInTheDocument();
-    expect(within(nav()).getByRole('button', { name: /Dashboards/ })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Graphs' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(within(nav()).getByRole('link', { name: 'Home' }));
+    await waitFor(() => expect(activeLinks()).toEqual(['Home']));
   });
 
-  it('closes the Dashboards menu on Escape and on a click elsewhere', () => {
+  it.each(['/', '/search', '/settings'])('does not mark Dashboard active on %s', async (path) => {
     mockApi({ 'GET /api/health': health('ok') });
-    renderWithProviders(<App />, '/');
-    const button = within(nav()).getByRole('button', { name: /Dashboards/ });
-    fireEvent.click(button);
-    fireEvent.keyDown(document, { key: 'Enter' });
-    expect(screen.getByRole('list', { name: 'Dashboards' })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('list', { name: 'Dashboards' })).not.toBeInTheDocument();
-
-    fireEvent.click(button);
-    fireEvent.pointerDown(within(nav()).getByRole('list', { name: 'Dashboards' }));
-    expect(screen.getByRole('list', { name: 'Dashboards' })).toBeInTheDocument();
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole('list', { name: 'Dashboards' })).not.toBeInTheDocument();
+    renderWithProviders(<App />, path);
+    await screen.findByRole('link', { name: 'Dashboard' });
+    expect(activeLinks()).not.toContain('Dashboard');
   });
 
   it.each([
@@ -161,7 +180,7 @@ describe('navigation bar in the desktop app', () => {
     const desktopRule = /\.desktop\s*\{([^}]*)\}/.exec(navCss)?.[1] ?? '';
     expect(desktopRule).toMatch(/padding-right:\s*186px/);
     expect(desktopRule).toMatch(/-webkit-app-region:\s*drag/);
-    const noDrag = /\.desktop a,\s*\.desktop button,\s*\.desktop ul\s*\{([^}]*)\}/.exec(navCss)?.[1] ?? '';
+    const noDrag = /\.desktop a,\s*\.desktop button,\s*\.desktop input\s*\{([^}]*)\}/.exec(navCss)?.[1] ?? '';
     expect(noDrag).toMatch(/-webkit-app-region:\s*no-drag/);
     const compact = /@media \(max-width: 1199px\)\s*\{[^@]*\.compact \.text\s*\{\s*display:\s*none/.test(healthPillCss);
     expect(compact).toBe(true);

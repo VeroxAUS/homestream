@@ -178,19 +178,42 @@ describe('keys', () => {
     expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument();
   });
 
-  it('Ctrl+F and / go to Search, but not while typing', async () => {
+  it.each([
+    ['Ctrl+F', '{Control>}f{/Control}'],
+    ['/', '/'],
+  ])(
+    '%s focuses the nav search field without leaving the page, and keys typed into it are text',
+    async (_name, keys) => {
+      installBridge();
+      mockApi({
+        'GET /api/health': health('ok'),
+        'GET /api/movie/278': () => movieDetails(),
+        'GET /api/progress/movie:278': apiError(404, 'not_found', 'none'),
+      });
+      renderWithProviders(<App />, '/movie/278');
+      const title = await screen.findByRole('heading', { level: 1 });
+      const field = screen.getByRole('textbox', { name: 'Search movies and shows' });
+      expect(field).not.toHaveFocus();
+      await userEvent.keyboard(keys);
+      expect(field).toHaveFocus();
+      expect(title).toBeInTheDocument();
+      expect(field).toHaveValue('');
+
+      await userEvent.keyboard('a/b?');
+      expect(field).toHaveValue('a/b?');
+      expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('Ctrl+F selects the text that is in the field', async () => {
     installBridge();
-    mockApi({
-      'GET /api/health': health('ok'),
-      'GET /api/movie/278': () => movieDetails(),
-      'GET /api/progress/movie:278': apiError(404, 'not_found', 'none'),
-    });
-    renderWithProviders(<App />, '/movie/278');
-    await screen.findByRole('heading', { level: 1 });
+    mockApi({ 'GET /api/health': health('ok') });
+    renderWithProviders(<App />, '/search?q=dune');
+    const field = screen.getByRole('textbox', { name: 'Search movies and shows' });
     await userEvent.keyboard('{Control>}f{/Control}');
-    expect(await screen.findByRole('textbox')).toBeInTheDocument();
-    await userEvent.keyboard('a/b');
-    expect(screen.getByRole('textbox')).toHaveValue('a/b');
+    expect(field).toHaveFocus();
+    expect((field as HTMLInputElement).selectionStart).toBe(0);
+    expect((field as HTMLInputElement).selectionEnd).toBe(4);
   });
 
   it('does nothing in a plain browser', async () => {

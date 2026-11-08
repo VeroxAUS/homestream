@@ -1,0 +1,118 @@
+.slot {
+  flex: 1 1 auto;
+  min-width: 240px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.phoneSlot {
+  flex: none;
+  margin-left: auto;
+}
+
+/* The desktop window drags by its nav; the field and its buttons must stay clickable. */
+.field,
+.input,
+.clear,
+.iconButton {
+  -webkit-app-region: no-drag;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+
+.field:hover,
+.field:focus-within {
+  border-color: var(--line-strong);
+}
+
+.field:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 0;
+}
+
+.icon {
+  position: absolute;
+  left: 14px;
+  color: var(--mut);
+  pointer-events: none;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 40px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--dim);
+}
+
+.clear {
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--mut);
+  background: var(--s3);
+  border: 0;
+  border-radius: 50%;
+}
+
+.clear:hover {
+  color: var(--text);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.iconButton:hover {
+  background: var(--s3);
+}
+
+/* On a phone the field opens over the nav, so nothing below the nav moves. */
+.overlay {
+  position: absolute;
+  top: calc((var(--nav-h) - 44px) / 2);
+  right: 16px;
+  left: 16px;
+  z-index: 2;
+  height: 44px;
+}
+
+/* 16 px keeps iOS from zooming the page when the field gets focus. */
+.overlay .input {
+  font-size: 16px;
+}

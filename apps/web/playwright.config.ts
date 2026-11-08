@@ -61,7 +61,13 @@ export default defineConfig({
   projects: [
     {
       name: 'plain',
-      testMatch: ['smoke.spec.ts', 'resume.spec.ts', 'player-input.spec.ts', 'details-api.spec.ts'],
+      testMatch: [
+        'smoke.spec.ts',
+        'resume.spec.ts',
+        'player-input.spec.ts',
+        'details-api.spec.ts',
+        'nav-search.spec.ts',
+      ],
       use: { baseURL: `http://127.0.0.1:${ports.serverPlain}` },
     },
     { name: 'telemetry', testMatch: 'telemetry.spec.ts', use: { baseURL: `http://127.0.0.1:${ports.serverStub}` } },

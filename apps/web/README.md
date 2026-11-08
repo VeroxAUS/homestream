@@ -19,6 +19,7 @@ Run from the repository root.
 ## Screens and conventions
 
 - Routes (`src/App.tsx`, all lazy): `/` Home, `/search`, `/movie/:id`, `/tv/:id` (`?season=&episode=`), `/play/movie/:id` and `/play/tv/:id/:season/:episode` (the player), `/dashboard/{health,activity,history,graphs,stats}` and `/settings`. The server answers every one of these paths with `index.html`, so deep links and reloads work.
+- The nav (static in the initial bundle) holds Home, one Dashboard link (active on every `/dashboard/*` route), Settings, the search field and the health pill. The field (`components/NavSearch.tsx`) is the only search entry: typing goes to `/search?q=` (one history entry, results after 300 ms and at least 2 characters, Enter at once, Escape clears), `Ctrl+F` and `/` focus it, and below 700 px it collapses to an icon button.
 - Design tokens (dark theme, red accent) are in `src/styles/tokens.css`; Inter is self-hosted from `src/styles/fonts/`. No `backdrop-filter`, no icon fonts: icons are inline SVG (`components/Icon.tsx`).
 - Data comes from TanStack Query hooks in `src/api/queries.ts`, all built on `apiGet` and the shared schemas. Pending downloads show a "Downloading n%" badge instead of Play and update from the `/api/events` stream (`src/events/`), which opens after Home is shown.
 - A play link carries the resume point as `?start=<seconds>` (`?start=0` to start over); the player reads it.

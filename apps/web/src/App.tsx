@@ -2,9 +2,10 @@ import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { DASHBOARD_TABS } from './pages/dashboard/tabs';
+import { loadSearchPage } from './pages/searchRoute';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
-const SearchPage = lazy(() => import('./pages/SearchPage'));
+const SearchPage = lazy(loadSearchPage);
 const MovieDetailsPage = lazy(() => import('./pages/MovieDetailsPage'));
 const ShowDetailsPage = lazy(() => import('./pages/ShowDetailsPage'));
 const PlayerPage = lazy(() => import('./pages/PlayerPage'));
