@@ -100,7 +100,12 @@ test.describe('Cast and More like this on the details pages (stub TMDB)', () => 
 
   test('an older server without cast and similar fields still renders the hero, quietly', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
+    // "Nothing saved yet" is a normal 404 from the progress endpoint, which the browser logs as a console error.
+    page.on('console', (message) => {
+      if (message.type() === 'error' && !message.location().url.includes('/api/progress/')) {
+        errors.push(`${message.text()} ${message.location().url}`);
+      }
+    });
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/api/movie/603', async (route) => {
       const response = await route.fetch();
