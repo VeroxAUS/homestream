@@ -37,7 +37,7 @@ Run from the repository root.
 | Initial JavaScript (`index-*.js`) | 150 kB        | React, router, TanStack Query, the shared schemas and the app shell    |
 | All CSS                           | 24 kB         | Tokens, global styles and the CSS modules                              |
 | Route chunks (`*Page-*.js`)       | 40 kB total   | One chunk per page (not the player), loaded on navigation              |
-| Player (`PlayerPage-*.js`)        | 210 kB        | The player page with hls.js, loaded only when a title is played        |
+| Player (`PlayerPage-*.js`)        | 200 kB        | The player page with hls.js, loaded only when a title is played        |
 | Inter font (`Inter-*.woff2`)      | 50 kB         | The one self-hosted font file, preloaded from `index.html`             |
 | Telemetry (`telemetry-*.js`)      | 100 kB        | Sentry and PostHog, loaded after Home is shown and the browser is idle |
 

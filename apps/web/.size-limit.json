@@ -21,7 +21,7 @@
     "name": "Player chunk with hls.js (gzip)",
     "path": "dist/assets/PlayerPage-*.js",
     "gzip": true,
-    "limit": "210 kB"
+    "limit": "200 kB"
   },
   {
     "name": "Inter font",
