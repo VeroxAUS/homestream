@@ -69,6 +69,8 @@ export default defineConfig({
         'details-cast.spec.ts',
         'nav-search.spec.ts',
         'spoilers.spec.ts',
+        'settings-tabs.spec.ts',
+        'settings-content.spec.ts',
       ],
       use: { baseURL: `http://127.0.0.1:${ports.serverPlain}` },
     },

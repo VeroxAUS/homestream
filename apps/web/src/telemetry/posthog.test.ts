@@ -66,9 +66,9 @@ describe('restrictToCatalog', () => {
   });
 
   it('drops a property that does not fit its schema, such as a real path instead of a route template', () => {
-    const result = restrictToCatalog(event('page_viewed', { route: '/movie/603', deviceKind: 'web' }), '1.2.3');
+    const result = restrictToCatalog(event('page_viewed', { route: '/movie/60317', deviceKind: 'web' }), '1.2.3');
     expect(result?.properties).not.toHaveProperty('route');
-    expect(JSON.stringify(result)).not.toContain('603');
+    expect(JSON.stringify(result)).not.toContain('60317');
   });
 
   it('passes null through', () => {

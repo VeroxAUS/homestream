@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HomeStream - Settings idea: sidebar layout (mockup, not built)</title>
+    <style>
+      :root {
+        --bg: #0a0a0e;
+        --s1: #14141a;
+        --s2: #1d1d26;
+        --s3: #292935;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-strong: rgba(255, 255, 255, 0.25);
+        --hover: rgba(255, 255, 255, 0.06);
+        --active: rgba(255, 255, 255, 0.1);
+        --text: #f5f5f7;
+        --mut: #9b9ba8;
+        --dim: #6c6c79;
+        --ok: #30d158;
+        --accent: #e50914;
+        --accent-hi: #ff3d47;
+        --on-accent: #fff;
+        --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        --font: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        min-height: 100vh;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+      svg.ic {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .note {
+        padding: 10px 48px;
+        background: #050507;
+        border-bottom: 1px solid #202028;
+        color: #a0a0ad;
+        font-size: 12px;
+      }
+      .nav {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        gap: 28px;
+        align-items: center;
+        height: 68px;
+        padding: 0 48px;
+        background: linear-gradient(180deg, rgba(10, 10, 14, 0.97), rgba(10, 10, 14, 0.92));
+        border-bottom: 1px solid var(--line);
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      .logo i {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent-hi), var(--accent));
+        color: var(--on-accent);
+        font-style: normal;
+        font-size: 13px;
+      }
+      .nav .links {
+        display: flex;
+        gap: 6px;
+      }
+      .nav .links a {
+        padding: 8px 14px;
+        border-radius: 999px;
+        color: var(--mut);
+        font-weight: 500;
+        font-size: 15px;
+      }
+      .nav .links a:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .nav .links a.on {
+        color: var(--text);
+        background: var(--active);
+      }
+      .nsearch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-self: center;
+        width: 100%;
+        max-width: 460px;
+        height: 40px;
+        padding: 0 16px;
+        border-radius: 999px;
+        background: var(--s1);
+        border: 1px solid var(--line);
+        color: var(--mut);
+        font-size: 14px;
+      }
+      .nsearch input {
+        flex: 1;
+        min-width: 0;
+        background: none;
+        border: 0;
+        outline: 0;
+        color: var(--text);
+        font: inherit;
+      }
+      .nsearch input::placeholder {
+        color: var(--mut);
+      }
+      .nsearch svg.ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .hdot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--ok);
+        box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.18);
+      }
+
+      .page {
+        padding: 0 48px 80px;
+      }
+      .h1 {
+        margin-top: 32px;
+        font-size: 40px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 760px);
+        gap: 48px;
+        margin-top: 28px;
+        align-items: start;
+      }
+      .side {
+        position: sticky;
+        top: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .side .gl {
+        margin: 0 0 6px;
+        padding: 0 14px;
+        color: var(--dim);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .side hr {
+        margin: 14px;
+        border: 0;
+        border-top: 1px solid var(--line);
+      }
+      .side a {
+        padding: 10px 14px;
+        border-radius: 10px;
+        color: var(--mut);
+        font-weight: 500;
+        font-size: 15px;
+      }
+      .side a:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .side a.on {
+        background: var(--active);
+        color: var(--text);
+      }
+      .panel[hidden] {
+        display: none;
+      }
+      .panel h2 {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+      .panel .lead {
+        margin: 4px 0 20px;
+        color: var(--mut);
+        font-size: 14px;
+      }
+      .det {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: -8px 0 14px;
+        color: var(--mut);
+        font-size: 13px;
+      }
+      .det b {
+        color: #dcdce4;
+        font-weight: 500;
+      }
+
+      .set {
+        background: var(--s1);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+      }
+      .set > .r {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 16px 20px;
+      }
+      .set > .r + .r {
+        border-top: 1px solid var(--line);
+      }
+      .set .lb {
+        max-width: 500px;
+        font-size: 15px;
+      }
+      .set small {
+        display: block;
+        margin-top: 3px;
+        color: var(--mut);
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+      .namefield {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .input {
+        height: 40px;
+        width: 250px;
+        padding: 0 16px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--s2);
+        color: var(--text);
+        font: inherit;
+        font-size: 14.5px;
+        outline: none;
+      }
+      .input:focus {
+        border-color: var(--line-strong);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.12);
+        font-weight: 600;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: var(--on-accent);
+      }
+      .btn.primary:hover {
+        background: var(--accent-hi);
+      }
+      .btn.outline {
+        background: transparent;
+        border: 1px solid var(--line);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .btn[disabled]:hover {
+        background: transparent;
+      }
+      .tg {
+        position: relative;
+        flex: none;
+        width: 46px;
+        height: 28px;
+        border-radius: 28px;
+        background: var(--s3);
+      }
+      .tg:after {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 3px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.2s var(--ease);
+      }
+      .tg.on {
+        background: var(--accent);
+      }
+      .tg.on:after {
+        transform: translateX(18px);
+      }
+      .seg {
+        display: inline-flex;
+        flex: none;
+        padding: 3px;
+        border-radius: 10px;
+        background: var(--s2);
+      }
+      .seg button {
+        height: 30px;
+        padding: 0 12px;
+        border-radius: 8px;
+        color: var(--mut);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .seg button.on {
+        background: var(--text);
+        color: #000;
+      }
+
+      .ihead {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 4px 0 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .ihead b {
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .ihead small {
+        display: block;
+        margin-top: 2px;
+        color: var(--mut);
+        font-size: 13px;
+      }
+      .ihead .u {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: auto;
+        color: var(--mut);
+        font-size: 12.5px;
+      }
+      .irow {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+      }
+      .irow > span:first-child {
+        color: var(--mut);
+      }
+      .irow small {
+        display: block;
+        margin-top: 2px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .irow .v {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+      .copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 4px;
+        border-radius: 6px;
+        color: var(--mut);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .copy:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      :focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+      }
+      @media (max-width: 900px) {
+        .nav {
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          padding: 0 16px;
+        }
+        .nav .links,
+        .hdot .lbl {
+          display: none;
+        }
+        .note,
+        .page {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .side {
+          position: static;
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+        .side .gl,
+        .side hr {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="note">
+      Idea mockup, not built. The real Settings page uses two tabs (Settings and About). Every value here is invented.
+      See docs/ideas.md.
+    </div>
+    <nav class="nav">
+      <a class="logo" href="#"><i>&#9654;</i>HomeStream</a>
+      <div class="links"><a href="#">Home</a><a href="#">Dashboard</a><a class="on" href="#">Settings</a></div>
+      <label class="nsearch"
+        ><svg class="ic" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-3.5-3.5" /></svg
+        ><input type="search" placeholder="Search movies and shows" aria-label="Search movies and shows"
+      /></label>
+      <a class="hdot" href="#" aria-label="All systems healthy"
+        ><span class="dot"></span><span class="lbl">All systems healthy</span></a
+      >
+    </nav>
+    <main class="page">
+      <h1 class="h1">Settings</h1>
+      <div class="layout">
+        <nav class="side" aria-label="Settings sections">
+          <div class="gl">Settings</div>
+          <a href="#device" data-p="device" class="on">This device</a>
+          <a href="#desktop" data-p="desktop">Desktop</a>
+          <hr />
+          <div class="gl">Information</div>
+          <a href="#about" data-p="about">About</a>
+        </nav>
+        <div>
+          <section class="panel" id="p-device">
+            <h2>This device</h2>
+            <p class="lead">How this screen appears to HomeStream and what it shows you.</p>
+            <div class="det">
+              <svg class="ic" viewBox="0 0 24 24" style="width: 16px; height: 16px">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v5M12 8h.01" />
+              </svg>
+              <span>Detected as <b>Desktop app</b></span>
+            </div>
+            <div class="set">
+              <div class="r">
+                <span class="lb">Device name<small>Shown in the Activity and History dashboards</small></span>
+                <span class="namefield"
+                  ><input class="input" value="Living room PC" aria-label="Device name" /><button class="btn primary">
+                    Save
+                  </button></span
+                >
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Hide episode spoilers<small
+                    >Blurs stills and hides descriptions of episodes you haven't finished</small
+                  ></span
+                >
+                <button class="tg on" role="switch" aria-checked="true" aria-label="Hide episode spoilers"></button>
+              </div>
+            </div>
+          </section>
+          <section class="panel" id="p-desktop" hidden>
+            <h2>Desktop</h2>
+            <p class="lead">Only in the desktop app. Changes are saved straight away.</p>
+            <div class="set">
+              <div class="r">
+                <span class="lb"
+                  >Start with Windows<small
+                    >Starts when you sign in, so the TV can play without opening the app first</small
+                  ></span
+                >
+                <button class="tg" role="switch" aria-checked="false" aria-label="Start with Windows"></button>
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Start minimised to tray<small
+                    >When started with Windows, stay in the tray instead of opening the window</small
+                  ></span
+                >
+                <button class="tg on" role="switch" aria-checked="true" aria-label="Start minimised to tray"></button>
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Close button<small>Closing the window keeps the server running for your other devices</small></span
+                >
+                <span class="seg" role="radiogroup" aria-label="Close button"
+                  ><button class="on" role="radio" aria-checked="true">Keep running in tray</button
+                  ><button role="radio" aria-checked="false">Quit</button></span
+                >
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Notify me when a title is ready to watch<small
+                    >A Windows notification when a TorBox download finishes</small
+                  ></span
+                >
+                <button
+                  class="tg on"
+                  role="switch"
+                  aria-checked="true"
+                  aria-label="Notify me when a title is ready to watch"
+                ></button>
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Notify me when playback or a download fails<small
+                    >Only while the HomeStream window is not in front. Windows Settings &gt; System &gt; Notifications
+                    can also turn HomeStream off</small
+                  ></span
+                >
+                <button
+                  class="tg on"
+                  role="switch"
+                  aria-checked="true"
+                  aria-label="Notify me when playback or a download fails"
+                ></button>
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Hardware acceleration<small
+                    >Uses the GPU to draw the app. Turn off only if the window flickers or video shows black or green
+                    blocks. Takes effect after a restart</small
+                  ></span
+                >
+                <button class="tg on" role="switch" aria-checked="true" aria-label="Hardware acceleration"></button>
+              </div>
+              <div class="r">
+                <span class="lb">Server status<small>Server: running (spawned, pid 18244)</small></span
+                ><button class="btn">Restart server</button>
+              </div>
+              <div class="r">
+                <span class="lb"
+                  >Logs<small>Server and app logs. Keys and stream links are never written to them</small></span
+                ><button class="btn">Open logs folder</button>
+              </div>
+              <div class="r">
+                <span class="lb">Quit HomeStream<small>Stops the server this app started</small></span
+                ><button class="btn outline">Quit</button>
+              </div>
+            </div>
+          </section>
+          <section class="panel" id="p-about" hidden>
+            <h2>About</h2>
+            <p class="lead">Read-only details about the app and the server.</p>
+            <div class="ihead">
+              <span><b>HomeStream</b><small>Desktop app v0.1.0 &middot; Electron 45</small></span
+              ><span class="u"
+                >Updates are not set up yet<button class="btn outline" disabled>Check for updates</button></span
+              >
+            </div>
+            <div class="irow"><span>Server name</span><span class="v">HomeStream on EXAMPLE-PC</span></div>
+            <div class="irow"><span>Version</span><span class="v">0.1.0</span></div>
+            <div class="irow"><span>Server address</span><span class="v">http://127.0.0.1:8600</span></div>
+            <div class="irow"><span>Port</span><span class="v">8600</span></div>
+            <div class="irow">
+              <span>LAN addresses<small>Use one of these on a TV or phone</small></span
+              ><span class="v"
+                >192.0.2.10<button
+                  class="copy"
+                  onclick="
+                    var b = this;
+                    try {
+                      navigator.clipboard.writeText('http://192.0.2.10:8600');
+                    } catch (e) {}
+                    b.lastChild.textContent = 'Copied';
+                    setTimeout(function () {
+                      b.lastChild.textContent = 'Copy address';
+                    }, 1500);
+                  "
+                >
+                  <svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px">
+                    <rect x="9" y="9" width="11" height="11" rx="2" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                  <span>Copy address</span>
+                </button></span
+              >
+            </div>
+            <div class="irow"><span>Stream source</span><span class="v">aiostreams (redacted)</span></div>
+            <div class="irow">
+              <span>Playback profile<small>What this browser asks the server to produce</small></span
+              ><span class="v">H.264 &middot; SDR &middot; up to 2160p &middot; stereo</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <script>
+      function show(p) {
+        if (['device', 'desktop', 'about'].indexOf(p) < 0) p = 'device';
+        document.querySelectorAll('.side a').forEach(function (a) {
+          a.classList.toggle('on', a.dataset.p === p);
+        });
+        document.querySelectorAll('.panel').forEach(function (s) {
+          s.hidden = s.id !== 'p-' + p;
+        });
+      }
+      document.querySelectorAll('.tg').forEach(function (t) {
+        t.addEventListener('click', function () {
+          t.classList.toggle('on');
+          t.setAttribute('aria-checked', t.classList.contains('on'));
+        });
+      });
+      document.querySelectorAll('.seg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          b.parentNode.querySelectorAll('button').forEach(function (o) {
+            o.classList.toggle('on', o === b);
+            o.setAttribute('aria-checked', o === b);
+          });
+        });
+      });
+      window.addEventListener('hashchange', function () {
+        show(location.hash.slice(1));
+      });
+      show(location.hash.slice(1));
+    </script>
+  </body>
+</html>

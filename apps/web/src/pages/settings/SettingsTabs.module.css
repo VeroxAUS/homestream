@@ -1,0 +1,35 @@
+/* Same strip as the dashboard tabs (Dashboard.module.css), as buttons. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  max-width: 860px;
+  margin: 24px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  min-height: 44px;
+  padding: 12px 18px;
+  color: var(--mut);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--line-strong);
+  outline-offset: -2px;
+}
+
+.active,
+.active:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}

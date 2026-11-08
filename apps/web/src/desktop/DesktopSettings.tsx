@@ -108,16 +108,14 @@ export function DesktopSettings() {
   );
 }
 
-/** The first row of About inside the app: the desktop version, and an update check that is not set up yet. */
-export function AboutDesktopRow() {
-  const bridge = desktopBridge();
-  if (!bridge) return null;
+/** In the About header inside the app: an update check that is not set up yet. */
+export function UpdateStatus({ className }: { className?: string }) {
   return (
-    <Row label="HomeStream" help={`Desktop app v${bridge.version} \u00b7 Electron 45`}>
+    <div className={className}>
       <span className={styles.note}>Updates are not set up yet</span>
       <button type="button" className={`${styles.small} ${styles.outline}`} disabled>
         Check for updates
       </button>
-    </Row>
+    </div>
   );
 }

@@ -105,11 +105,12 @@ describe('Settings > Desktop', () => {
     expect(bridge.quit).toHaveBeenCalledTimes(1);
   });
 
-  it('adds the desktop version and a disabled update check to About', async () => {
+  it('keeps the update status out of the Desktop card', async () => {
     open();
-    expect(await screen.findByText('Desktop app v0.1.0 \u00b7 Electron 45')).toBeInTheDocument();
-    expect(screen.getByText('Updates are not set up yet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeDisabled();
+    const section = await screen.findByRole('region', { name: 'Desktop' });
+    expect(within(section).queryByText('Updates are not set up yet')).not.toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: 'Check for updates' })).not.toBeInTheDocument();
+    expect(within(section).queryByText(/Electron 45/)).not.toBeInTheDocument();
   });
 
   it('is absent in a plain browser', async () => {

@@ -1,5 +1,5 @@
 .page {
-  max-width: calc(760px + 2 * var(--gutter));
+  max-width: calc(860px + 2 * var(--gutter));
   padding: 36px var(--gutter) 64px;
 }
 
@@ -8,6 +8,10 @@
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.1;
+}
+
+.sections {
+  max-width: 760px;
 }
 
 .section {
@@ -24,10 +28,6 @@
   background: var(--s1);
   border: 1px solid var(--line);
   border-radius: 16px;
-}
-
-.loading {
-  height: 220px;
 }
 
 .row {
@@ -92,12 +92,6 @@
 
 .save:hover {
   background: var(--accent-hi);
-}
-
-.addresses {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .status {

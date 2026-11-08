@@ -31,8 +31,8 @@
 .small {
   height: 34px;
   padding: 0 14px;
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
   border: 0;
   border-radius: 10px;
   font-size: 13px;
@@ -41,7 +41,7 @@
 }
 
 .small:hover:not(:disabled) {
-  background: var(--accent-hi);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .outline {
@@ -56,6 +56,7 @@
 
 .small:disabled {
   opacity: 0.5;
+  cursor: default;
 }
 
 .note {

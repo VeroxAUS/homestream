@@ -216,7 +216,7 @@ Repo-local skills (step-by-step procedures for agents) are in `.factory/skills/`
 - [homestream-live-tests](.factory/skills/homestream-live-tests/SKILL.md): run the live and GPU tiers safely
 - [homestream-telemetry](.factory/skills/homestream-telemetry/SKILL.md): add telemetry events without leaking data
 
-Runbooks for operating the server are indexed in [docs/runbooks/README.md](docs/runbooks/README.md). Other documents: [docs/architecture.md](docs/architecture.md) (diagrams), [docs/database.md](docs/database.md), [docs/PRIVACY.md](docs/PRIVACY.md), [docs/TECH_DEBT.md](docs/TECH_DEBT.md), [docs/wiki.md](docs/wiki.md).
+Runbooks for operating the server are indexed in [docs/runbooks/README.md](docs/runbooks/README.md). Other documents: [docs/architecture.md](docs/architecture.md) (diagrams), [docs/database.md](docs/database.md), [docs/PRIVACY.md](docs/PRIVACY.md), [docs/TECH_DEBT.md](docs/TECH_DEBT.md), [docs/ideas.md](docs/ideas.md) (ideas for later, not in scope), [docs/wiki.md](docs/wiki.md).
 
 ## CI checks
 
