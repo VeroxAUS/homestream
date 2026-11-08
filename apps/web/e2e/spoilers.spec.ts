@@ -151,7 +151,9 @@ test.describe('spoiler protection', () => {
     const writes: string[] = [];
     let watching = false;
     page.on('request', (request) => {
-      if (watching && request.url().includes('/api/') && request.method() !== 'GET') writes.push(request.method());
+      if (!watching || request.method() === 'GET') return;
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith('/api/')) writes.push(`${request.method()} ${pathname}`);
     });
     const flip = async () => {
       watching = true;
@@ -184,7 +186,8 @@ test.describe('spoiler protection', () => {
     await flip();
     await navLink(page, 'Home').click();
     expect(await stillSrc(card)).toBe(`${IMG}/w92/still.png`);
-    expect(writes).toEqual([]);
+    // The device registration after each full page load is not caused by the switch.
+    expect(writes.filter((write) => write !== 'POST /api/devices')).toEqual([]);
 
     const other = await browser.newContext({ baseURL: `http://127.0.0.1:${ports.serverPlain}` });
     const second = await other.newPage();
