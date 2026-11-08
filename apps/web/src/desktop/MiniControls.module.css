@@ -12,7 +12,8 @@
 .round,
 .skip,
 .play,
-.seek {
+.seek,
+.volume {
   -webkit-app-region: no-drag;
 }
 
@@ -99,4 +100,10 @@
 .seek {
   flex: 1;
   min-width: 0;
+}
+
+.volume {
+  flex: none;
+  width: 64px;
+  accent-color: var(--accent);
 }

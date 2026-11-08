@@ -6,6 +6,7 @@ import { BAR_ATTRIBUTE } from '../player/useIdleChrome';
 import { SKIP_BACK_SEC, SKIP_FORWARD_SEC, type PlayerActions } from '../player/usePlayerActions';
 import { useVideoClock, type VideoState } from '../player/useVideoState';
 import styles from './MiniControls.module.css';
+import { MiniVolume } from './MiniVolume';
 
 interface MiniControlsProps {
   title: string;
@@ -95,6 +96,7 @@ export function MiniControls(props: MiniControlsProps) {
           <SeekBar videoRef={props.videoRef} durationSec={props.durationSec} onSeek={actions.seekTo} />
         </div>
         <span className={`${styles.time} tabular`}>{formatClock(props.durationSec)}</span>
+        <MiniVolume video={video} actions={actions} />
       </div>
     </div>
   );
