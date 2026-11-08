@@ -1,10 +1,34 @@
 {
-  "mode": "full",
+  "mode": "incremental",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
-  "baseCommit": "5eefa37775db95b4bdd1e1dfe7b33cb8a9f31001",
-  "reason": "Required comparison includes generated wiki changes: 157 files, 9578 insertions and 4346 deletions, 13924 changed lines, above the 10000-line full-refresh threshold. Full history is available and upload access is allowed.",
+  "commitHash": "bb09d63f4166d4ca2d7bdc47e14eea5c837d2875",
+  "baseCommit": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
+  "reason": "Required comparison includes generated wiki changes: 70 files, 3290 insertions and 1720 deletions, 5010 changed lines, within the 10000-line incremental threshold. Outside generated wiki output: 11 files, 819 insertions and 109 deletions. Full history is available and Factory upload access is allowed.",
+  "incrementalScope": {
+    "changes": [
+      "Player gzip ceiling reduced from 210 to 200 kB with a budget/README regression test",
+      "Desktop configured smoke reaches rendered Home through local upstream stubs",
+      "Shared smoke harness bounds waits and always attempts all owned-process and stub-hub cleanup",
+      "Offline smoke harness tests cover success, timeouts and failed cleanup"
+    ],
+    "pagesToUpdate": [
+      "overview/index.md",
+      "overview/architecture.md",
+      "by-the-numbers.md",
+      "apps/web/index.md",
+      "apps/web/player.md",
+      "apps/web/build-and-tests.md",
+      "apps/desktop/index.md",
+      "apps/desktop/supervisor.md",
+      "apps/desktop/windows-and-ipc.md",
+      "how-to-contribute/testing.md",
+      "deployment.md"
+    ],
+    "pagesToCreate": [],
+    "pagesToRemove": [],
+    "coverageCrossCheck": "Enumerated all apps, shared workspace and top-level source directories; each is covered by the unchanged coverage map below. No new product subsystem or deleted source path. New desktop smoke helpers belong to desktop and testing pages. Lore remains unchanged because this delta adds regression coverage and minor budget/cleanup changes rather than a new runtime subsystem."
+  },
   "summary": "HomeStream is a TypeScript ESM pnpm monorepo for LAN media playback. Fastify 5 on Node 24 owns SQLite, TMDB metadata, AIOStreams discovery, FFmpeg/NVENC transcoding, a loopback ranged cache, optional TorBox caching and health workers. React 19/Vite provides browsing, always-visible navigation search, details with cast/recommendations, episode spoiler protection, HLS playback, Settings/About tabs and desktop renderer views. Electron 45 provides tray, supervision and a mini player with volume/mute. The shared package holds Zod schemas, IPC types, analytics, flags and sanitization. Dashboard tabs remain placeholders; no TV app source exists.",
   "architecture": "buildApp constructs services and routes; server main recovers orphans, opens loopback/public listeners, and starts health, downloads and mDNS. PlaybackManager coordinates session slots, source ranking, startup, encoders, recovery, HLS and subtitle extraction. A 201 session or 202 download-tracking result reaches the client. Proxy block caches, pacing and encoder lead gates bound reads. Web Query hooks validate schemas through the API client, startup defers work until Home content and idle, and SSE reconciles health/downloads. Desktop IPC is typed and allowlisted; the supervisor distinguishes attached from owned servers.",
   "patterns": "Strict TypeScript and explicit server .js imports; Zod contracts and thin routes; AppError envelopes with actionable hints; redacted logs/events/errors. Isolated offline tests use PORT=0, unique temp dirs and injected fakes; GPU/live are opt-in and must not run for documentation. No accounts, LAN only, always re-encode, streamId auto. Telemetry off without matching keys, manual/scrubbed/nonblocking, lazy web SDKs. File/function limits 400/80; grandfathered ceilings may only shrink. Additive details extras default to [] for older servers. Spoiler hiding is browser-local with blocked-storage fallback.",
@@ -33,14 +57,10 @@
   ],
   "contributors": "CODEOWNERS and origin/main history identify VeroxAUS as the only human contributor. Domain pages begin # Heading then Active contributors: VeroxAUS. Exclude bots. Omit maintainers.md for solo human ownership; no individual contribution metrics.",
   "newFindings": [
-    "TMDB details append credits or aggregate_credits, recommendations and similar; bounded cast/similar arrays default to empty for old payloads.",
-    "getLanAddresses filters virtual/link-local adapters only when physical candidates exist; mDNS uses that list.",
-    "Navigation search owns URL query/history, 300ms debounce and shortcuts; search route preload keeps initial navigation responsive.",
-    "Spoiler protection hides unfinished episode descriptions entirely and uses w92 stills, no CSS blur; settings preference is local only.",
-    "Settings now has accessible Settings/About tabs, device card and desktop integration, plus dynamic server information.",
-    "Mini-player volume/mute reuses player control state.",
-    "Wiki publish posts the no-reviewable-change summary on the merged wiki commit when GITHUB_TOKEN prevents workflow triggers.",
-    "docs/ideas and its HTML mockup are proposals, not implemented requirements."
+    "Player chunk ceiling is 200 kB gzip; the new offline test checks the ceiling and README consistency, not emitted bundle bytes.",
+    "Desktop smoke now distinguishes first-run setup from configured rendered Home; the latter uses isolated loopback upstream stubs and starts no playback session.",
+    "Shared smoke helpers bound polling, retain known descendants after launcher exit, and attempt shell, stub-hub and directory cleanup independently; offline regressions exercise failure paths.",
+    "Current committed inventory is 423 source files / 38097 physical lines and 277 test/support files / 44460 lines; 113 commits. Architecture and affected app counts are refreshed."
   ],
   "skipWithReason": {
     "apps/tv": "Planned only; no source directory.",
@@ -107,5 +127,15 @@
     "apps/web/src/components/NavSearch.tsx and useNavSearch.ts": "apps/web/search.md: navigation field, URL/history/debounce/shortcuts/cancellation"
   },
   "generatedPages": 56,
-  "validationNotes": "Passed existing pnpm format:check, docs:check and agents:check. Added explicit generated-wiki formatting and full-wiki structure/link/anchor/source-output/command/Mermaid audit because repository checks exclude generated pages. Final audit: 56 pages, 35 parsed Mermaid diagrams, 461 links, 2077 source/output references, 97 package commands, all pages reachable, at most 14 flowchart nodes. All titles, domain bylines/source tables, directory indexes, sidebar order, depth and size checks passed. Initial formatting failures were fixed. Configured generated output paths were checked against declarations rather than required to exist, and diagram labels were excluded from command checks. No application, e2e, GPU or live tests ran for wiki-only output."
+  "validationNotes": "Existing format:check, docs:check and agents:check passed. Generated wiki is excluded from those checks, so explicit formatting plus inline structure/link/anchor/source-output/command audits and Mermaid parsing cover generated output separately. An initial formatting check failed and was fixed. Initial Mermaid parsing lacked a browser DOM; rerun with jsdom parsed all 35 diagrams. Missing source-output paths were confirmed against Vite/Playwright/package configuration instead of requiring unbuilt files. No application, browser, Electron, GPU or live tests ran for documentation-only changes. Video setup through npm was rejected by the repository package-manager policy; pnpm succeeded and doctor identified missing FFmpeg/FFprobe. Final generated-wiki audit passed: 56 pages, 35 parsed Mermaid diagrams, 475 links, 2115 source/output references, 5 declared generated-output paths, 47 distinct package commands and all 56 pages reachable. All 45 pages marked keep-unchanged are byte-identical to HEAD; all 11 edited Markdown pages are planned. Explicit all-wiki Prettier and git diff --check passed.",
+  "baselineFindings": [
+    "TMDB details append credits or aggregate_credits, recommendations and similar; bounded cast/similar arrays default to empty for old payloads.",
+    "getLanAddresses filters virtual/link-local adapters only when physical candidates exist; mDNS uses that list.",
+    "Navigation search owns URL query/history, 300ms debounce and shortcuts; search route preload keeps initial navigation responsive.",
+    "Spoiler protection hides unfinished episode descriptions entirely and uses w92 stills, no CSS blur; settings preference is local only.",
+    "Settings now has accessible Settings/About tabs, device card and desktop integration, plus dynamic server information.",
+    "Mini-player volume/mute reuses player control state.",
+    "Wiki publish posts the no-reviewable-change summary on the merged wiki commit when GITHUB_TOKEN prevents workflow triggers.",
+    "docs/ideas and its HTML mockup are proposals, not implemented requirements."
+  ]
 }

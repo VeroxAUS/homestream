@@ -36,7 +36,7 @@ graph LR
 
 ## HLS and playback state
 
-The route is lazy in `apps/web/src/App.tsx`; `useHls` in `apps/web/src/player/useHls.ts` statically imports hls.js inside that lazy player dependency graph, not Home's initial code. The player chunk has its own **210 kB gzip** budget in `apps/web/.size-limit.json`.
+The route is lazy in `apps/web/src/App.tsx`; `useHls` in `apps/web/src/player/useHls.ts` statically imports hls.js inside that lazy player dependency graph, not Home's initial code. The player chunk has its own **200 kB gzip** budget in `apps/web/.size-limit.json`. This is a configured ceiling, not a fresh measured bundle size.
 
 When MediaSource-based hls.js is supported, the hook creates an instance, attaches video, loads the master playlist and attempts play after manifest parsing. It retains **60 seconds** of back buffer. Fragment policy uses **20-second** first-byte and **120-second** load limits, four timeout retries and up to **90** error retries with a **1-second** base delay and **2-second** maximum delay, accommodating subtitle extraction's temporary 503s. Fatal media errors get **two** recovery attempts; later fatal errors produce a user-facing failure card. Nonfatal errors remain with hls.js (`apps/web/src/player/useHls.ts`).
 

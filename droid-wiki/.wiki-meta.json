@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-08T07:33:33.715Z",
-  "commitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae",
+  "generatedAt": "2026-11-08T21:02:01.410Z",
+  "commitHash": "bb09d63f4166d4ca2d7bdc47e14eea5c837d2875",
   "branch": "main",
   "pageCount": 56,
   "topLevelSections": [
@@ -89,5 +89,7 @@
     "warnings": [
       "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Both required checks failed despite exit 0; rendering was skipped in non-interactive mode. No prior playable video was available."
     ]
-  }
+  },
+  "mode": "incremental",
+  "baseCommitHash": "0a8f04fd81cfaa7ca5d1689550ad207e7fc0d3ae"
 }

@@ -73,6 +73,8 @@ Change supervision timing/ownership in `apps/desktop/src/supervisor.ts`, subproc
 
 `apps/desktop/test/supervisor.test.ts` covers attach/lost recovery, backoff limits, forced shutdown, overlapping restarts/Retry and quit during pending operations. `apps/desktop/test/monitor.test.ts` covers errors without ends, recovery, delayed snapshots, stream reconnect and stop. Scripted process tests exercise real process plumbing without starting Electron (`apps/desktop/test/spawnScripted.test.ts`, `apps/desktop/test/processAndFiles.test.ts`).
 
+The separate real-runtime smoke covers both first run and configured Home, not just injectable supervisor policy (`apps/desktop/test/smoke/launch.smoke.ts`, `apps/desktop/test/smoke/configured.smoke.ts`). Both assert second-instance `--quit` leaves the server unavailable and no tracked owned PIDs alive. The shared harness retains known children after the launcher exits; fallback teardown attempts shell, stub hub and folder cleanup independently even if another step fails. `apps/desktop/test/smokeHarness.test.ts` tests those cleanup paths with fake processes, without Electron. See the [desktop smoke details](index.md#first-run-versus-configured-home) for ports, render assertions, timing and limitations. This does not add a runtime supervisor ownership rule or prove live playback.
+
 ## Key source files
 
 | File                                    | Purpose                                           |
@@ -88,4 +90,4 @@ Change supervision timing/ownership in `apps/desktop/src/supervisor.ts`, subproc
 
 ## Measured scope
 
-Desktop-wide committed inventory at `0a8f04f`: **31 source / 17 test files**, ratio **0.55**, **1 unique human author**, VeroxAUS. Method and exclusions are in the [desktop overview](index.md); these figures describe the whole app, not an overlapping subsystem total.
+Desktop-wide committed inventory at `bb09d63`: **31 source / 19 test files** (17 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.61**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. Committed-path method and exclusions are in the [desktop overview](index.md#measured-scope); these figures describe the whole app, not an overlapping subsystem total.
