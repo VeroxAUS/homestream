@@ -41,7 +41,7 @@ The web player, Settings/About tabs and desktop shell are implemented; dashboard
 - Required checks pass; skipped GPU/live/browser checks and environment limits are stated.
 - The pull request template is filled in (`.github/pull_request_template.md`).
 
-`Linux` and `Windows` are the required CI job names recorded in `AGENTS.md` and defined in `.github/workflows/ci.yml`. Advisory Droid review, timing feedback, and code-health reports do not replace them. Hooks are a safety net, not the complete test gate (`lefthook.yml`, `docs/ci.md`).
+`Linux` and `Windows` are the required CI job names recorded in `AGENTS.md` and defined in `.github/workflows/ci.yml`. `Linux` is a fail-closed gate over parallel **Linux checks**, **Linux tests** and **Linux secrets**; a failed, cancelled or skipped dependency blocks it. Advisory Droid review, timing feedback, and code-health reports do not replace them. Hooks are a safety net, not the complete test gate (`lefthook.yml`, `docs/ci.md`). See [deployment](../deployment.md#ci-and-releases) for the job layout.
 
 ## Boundaries
 

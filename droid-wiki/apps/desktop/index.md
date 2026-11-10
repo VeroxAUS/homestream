@@ -10,15 +10,17 @@ The player and shell are implemented; dashboard tabs remain limited/placeholder 
 
 ## Layout and key abstractions
 
-| Boundary          | Source                            | Responsibility                                                                 |
-| ----------------- | --------------------------------- | ------------------------------------------------------------------------------ |
-| Bootstrap         | `apps/desktop/src/main.ts`        | Single-instance lock, environment, pre-ready settings, telemetry and lifecycle |
-| `Shell`           | `apps/desktop/src/shell/shell.ts` | Windows, tray, IPC, monitoring and graceful quit composition                   |
-| `Supervisor`      | `apps/desktop/src/supervisor.ts`  | Owned child versus external attachment, readiness, retries and shutdown        |
-| `ServerMonitor`   | `apps/desktop/src/monitor.ts`     | SSE, activity reconciliation and health                                        |
-| `SettingsStore`   | `apps/desktop/src/settings.ts`    | Validated, atomic desktop preferences                                          |
-| `MiniPlayerState` | `apps/desktop/src/miniPlayer.ts`  | One-session renderer handoff                                                   |
-| `KeepAwake`       | `apps/desktop/src/keepAwake.ts`   | At most one power-save blocker                                                 |
+| Boundary           | Source                             | Responsibility                                                                 |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------ |
+| Bootstrap          | `apps/desktop/src/main.ts`         | Single-instance lock, environment, pre-ready settings, telemetry and lifecycle |
+| `Shell`            | `apps/desktop/src/shell/shell.ts`  | Windows, tray, IPC, monitoring and graceful quit composition                   |
+| `Supervisor`       | `apps/desktop/src/supervisor.ts`   | Owned child versus external attachment, readiness, retries and shutdown        |
+| `ServerMonitor`    | `apps/desktop/src/monitor.ts`      | SSE, activity reconciliation and health                                        |
+| `SettingsStore`    | `apps/desktop/src/settings.ts`     | Validated, atomic desktop preferences                                          |
+| `MiniPlayerState`  | `apps/desktop/src/miniPlayer.ts`   | One-session renderer handoff                                                   |
+| `KeepAwake`        | `apps/desktop/src/keepAwake.ts`    | At most one power-save blocker                                                 |
+| `guardPermissions` | `apps/desktop/src/permissions.ts`  | Shared-session request/check permission policy                                 |
+| `placeWindow`      | `apps/desktop/src/windowBounds.ts` | Bounded correction of restored main-window geometry                            |
 
 `apps/desktop/src/shell/` contains Electron adapters; sibling source modules hold injectable policy, file and process seams. Telemetry support lives in `apps/desktop/src/telemetry/`; outbound SDK behavior belongs to [telemetry](../../systems/telemetry.md).
 
@@ -27,6 +29,8 @@ The player and shell are implemented; dashboard tabs remain limited/placeholder 
 `apps/desktop/src/main.ts` names the app HomeStream and selects the HomeStream user-data directory unless Chromium's user-data override is present. The lock is acquired before startup: another normal launch focuses the main window; another launch with `--quit` asks the existing instance to shut down. `--hidden`, parsed in `apps/desktop/src/cli.ts`, starts directly to the tray.
 
 Desktop preferences and hardware acceleration are read before Electron becomes ready. After readiness, the shell installs permissions, IPC and tray, optionally opens the window, and starts server supervision. Closing every window does not quit the app. All quit requests use one shared shutdown promise: stop monitoring, release power management, destroy mini, stop only the owned server, destroy tray, flush telemetry, destroy main, then exit.
+
+An initial non-HomeStream answer on the server port now produces a failed startup page without spawning a child or waiting through readiness/backoff. Main and mini share the default Electron session: fullscreen is allowed, keyboard lock is restricted to the server origin, and other permission requests/checks are denied. Keyboard lock lets the renderer handle Escape in menu → Info → fullscreen → player order. Main-window restoration corrects native border inflation in window bounds; mini sizing separately fixes its content rectangle after the aspect lock. See the focused pages below for policy scope and regression evidence.
 
 Read [server supervision](supervisor.md) for ownership, crash recovery and activity correctness, and [windows and IPC](windows-and-ipc.md) for renderer trust and handoff.
 
@@ -42,7 +46,7 @@ Renderer settings are now grouped inside the Settings tab, while About shows app
 
 `apps/desktop/src/envFile.ts` resolves an explicit environment-file override first, then packaged `%APPDATA%/HomeStream/config.env`; development prefers the repository `.env`, falling back to the AppData file when appropriate. The shell loads only its port, data and telemetry keys, without overwriting nonblank environment values. The server reads the same file itself.
 
-Opening configuration accepts only a path ending in `.env`. A missing file is created exclusively with empty TMDB, gateway and TorBox key names; an existing file is neither overwritten nor backfilled. Windows opens Notepad, other platforms use the OS opener. This is a manual setup path, not credential submission through IPC. Missing upstream keys lead to the web first-run setup experience, not a nonexistent-shell state.
+Opening configuration accepts only a path ending in `.env`. A missing file is created exclusively with empty TMDB, gateway and TorBox key names; an existing file is neither overwritten nor backfilled. Windows opens Notepad, other platforms use the OS opener. This is a manual setup path, not credential submission through IPC. Missing upstream keys lead to the first-run setup experience only in the desktop renderer with its bridge; an ordinary browser still shows Home.
 
 ## Build, validation and modification
 
@@ -94,24 +98,28 @@ Start policy changes in the injectable module, add its unit regression, then cha
 
 ## Key source files
 
-| File                                          | Purpose                                            |
-| --------------------------------------------- | -------------------------------------------------- |
-| `apps/desktop/src/main.ts`                    | Executed bootstrap                                 |
-| `apps/desktop/src/shell/shell.ts`             | Application composition and shutdown               |
-| `apps/desktop/src/settings.ts`                | Field recovery and validated updates               |
-| `apps/desktop/src/envFile.ts`                 | Environment resolution and missing-file template   |
-| `apps/desktop/src/jsonFile.ts`                | Atomic JSON persistence                            |
-| `apps/desktop/src/logger.ts`                  | Injected structured, scrubbed logging              |
-| `apps/desktop/src/requestId.ts`               | Request correlation                                |
-| `apps/desktop/test/settingsFile.test.ts`      | Preference and write-failure regressions           |
-| `apps/desktop/test/launchAndEnv.test.ts`      | Launch/environment/startup-page cases              |
-| `apps/desktop/test/smoke/launch.smoke.ts`     | Real-runtime first-run validation                  |
-| `apps/desktop/test/smoke/configured.smoke.ts` | Configured Home with local upstream stubs          |
-| `apps/desktop/test/smoke/harness.ts`          | Launch, rendered-Home probe, quit and PID tracking |
-| `apps/desktop/test/smoke/cdp.ts`              | Bounded DevTools discovery and evaluation          |
-| `apps/desktop/test/smoke/teardown.ts`         | Independent cleanup steps and PID stop escalation  |
-| `apps/desktop/test/smokeHarness.test.ts`      | Offline readiness/process/cleanup regressions      |
+| File                                          | Purpose                                                    |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `apps/desktop/src/main.ts`                    | Executed bootstrap                                         |
+| `apps/desktop/src/shell/shell.ts`             | Application composition and shutdown                       |
+| `apps/desktop/src/settings.ts`                | Field recovery and validated updates                       |
+| `apps/desktop/src/envFile.ts`                 | Environment resolution and missing-file template           |
+| `apps/desktop/src/jsonFile.ts`                | Atomic JSON persistence                                    |
+| `apps/desktop/src/logger.ts`                  | Injected structured, scrubbed logging                      |
+| `apps/desktop/src/requestId.ts`               | Request correlation                                        |
+| `apps/desktop/src/permissions.ts`             | Fullscreen and origin-scoped keyboard-lock policy          |
+| `apps/desktop/src/windowBounds.ts`            | Observed window-bound correction                           |
+| `apps/desktop/test/permissions.test.ts`       | Shared request/check-handler and hostile-origin cases      |
+| `apps/desktop/test/windowBounds.test.ts`      | Border inflation, shifted placement and bounded correction |
+| `apps/desktop/test/settingsFile.test.ts`      | Preference and write-failure regressions                   |
+| `apps/desktop/test/launchAndEnv.test.ts`      | Launch/environment/startup-page cases                      |
+| `apps/desktop/test/smoke/launch.smoke.ts`     | Real-runtime first-run validation                          |
+| `apps/desktop/test/smoke/configured.smoke.ts` | Configured Home with local upstream stubs                  |
+| `apps/desktop/test/smoke/harness.ts`          | Launch, rendered-Home probe, quit and PID tracking         |
+| `apps/desktop/test/smoke/cdp.ts`              | Bounded DevTools discovery and evaluation                  |
+| `apps/desktop/test/smoke/teardown.ts`         | Independent cleanup steps and PID stop escalation          |
+| `apps/desktop/test/smokeHarness.test.ts`      | Offline readiness/process/cleanup regressions              |
 
 ## Measured scope
 
-At `bb09d63`, committed `apps/desktop/src/` has **31 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **19 test files** (17 `.test.ts`, two `.smoke.ts`), plus three excluded helpers: `apps/desktop/test/smoke/cdp.ts`, `apps/desktop/test/smoke/harness.ts` and `apps/desktop/test/smoke/teardown.ts`. Test/source file ratio: **0.61** (19/31, rounded to two decimals). Counts use `git ls-tree -r --name-only HEAD`, classifying source by `.ts`/`.cts` beneath `apps/desktop/src/` and tests by `.test.ts`/`.smoke.ts` beneath `apps/desktop/test/`, excluding configs/assets/build outputs and nonsuite helpers. Scoped `git log origin/main --format='%aN' -- apps/desktop` history has **1 unique human author** after excluding bots, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage or a claim that tests were run for this documentation.
+At `663492c`, committed `apps/desktop/src/` has **33 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **21 test files** (19 `.test.ts`, two `.smoke.ts`), plus three excluded helpers: `apps/desktop/test/smoke/cdp.ts`, `apps/desktop/test/smoke/harness.ts` and `apps/desktop/test/smoke/teardown.ts`. Test/source file ratio: **0.64** (21/33, rounded to two decimals). Counts use `git ls-tree -r --name-only HEAD`, classifying source by `.ts`/`.cts` beneath `apps/desktop/src/` and tests by `.test.ts`/`.smoke.ts` beneath `apps/desktop/test/`, excluding configs/assets/build outputs and nonsuite helpers. Scoped `git log origin/main --format='%aN' -- apps/desktop` history has **1 unique human author** after excluding bots, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage or a claim that tests were run for this documentation.

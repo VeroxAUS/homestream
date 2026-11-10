@@ -24,6 +24,7 @@ stateDiagram-v2
     [*] --> Starting
     Starting --> Attached: Existing HomeStream answers
     Starting --> Running: Owned child answers
+    Starting --> Failed: Initial probe identifies another service
     Attached --> Lost: Two probe misses
     Lost --> Attached: External server returns
     Lost --> Starting: Explicit Start server
@@ -37,7 +38,11 @@ stateDiagram-v2
 
 An attached server is probed every four seconds. Two consecutive misses make it **lost**; a later matching answer restores attachment. Losing attachment never automatically launches a competing server. The explicit Start server action can start an owned child.
 
-If the initial probe finds nobody or another application, supervision attempts a child launch; a port collision is then reported through startup failure classification. Development runs Node against the built server. Packaged mode runs Electron's own executable as Node against server files in resources and supplies the bundled web directory (`apps/desktop/src/serverLaunch.ts`). This resolver is not an installer pipeline.
+If the initial probe finds **another application**, `Supervisor.begin()` fails immediately after that probe with `code: EADDRINUSE`, a timestamp and `portInUse: true`. It spawns nothing and schedules no automatic restart, so the user does not wait for the 60-second child-readiness deadline or exhaust a crash budget. The probe in `apps/desktop/src/serverHttp.ts` treats JSON lacking the HomeStream marker and invalid JSON as `other`; connection failures/timeouts are `none`, not proof of an occupied port. Retry re-probes and can attach or spawn after the conflict clears.
+
+`apps/desktop/src/loadingPage.ts` carries the flag into the bundled page URL; `apps/desktop/assets/loading.html` displays “Port N is used by another program” instead of the repeated-crash wording. The `EADDRINUSE` hint asks the user to close that program or set a different `PORT` in `config.env`, then Retry. A child that actually launches and repeatedly exits with `EADDRINUSE` still uses the crash-recovery wording: the code alone does not set `portInUse`.
+
+If the initial probe finds nobody, supervision attempts a child launch. Development runs Node against the built server. Packaged mode runs Electron's own executable as Node against server files in resources and supplies the bundled web directory (`apps/desktop/src/serverLaunch.ts`). This resolver is not an installer pipeline.
 
 An owned child is probed every 250 ms, with a 60-second readiness deadline. It becomes **running** only after a HomeStream answer; timeout kills that child and enters normal crash recovery. The probe is an identity/readiness check, not authentication or a full dependency-health check.
 
@@ -71,7 +76,7 @@ A reachable server is healthy until a non-OK health answer arrives. Dependency w
 
 Change supervision timing/ownership in `apps/desktop/src/supervisor.ts`, subprocess mechanics in `apps/desktop/src/serverProcess.ts`, and reconciliation in `apps/desktop/src/monitor.ts`. Keep user-facing restart timing aligned with shared contracts.
 
-`apps/desktop/test/supervisor.test.ts` covers attach/lost recovery, backoff limits, forced shutdown, overlapping restarts/Retry and quit during pending operations. `apps/desktop/test/monitor.test.ts` covers errors without ends, recovery, delayed snapshots, stream reconnect and stop. Scripted process tests exercise real process plumbing without starting Electron (`apps/desktop/test/spawnScripted.test.ts`, `apps/desktop/test/processAndFiles.test.ts`).
+`apps/desktop/test/supervisor.test.ts` covers attach/lost recovery, backoff limits, forced shutdown, overlapping restarts/Retry and quit during pending operations. Its wrong-service regressions require starting → failed with no child even after 60 seconds, Retry while occupied and after release, and preserved crash wording for a spawned child. `apps/desktop/test/launchAndEnv.test.ts` checks the port-specific startup message/hint and its absence for crash failures. `apps/desktop/test/monitor.test.ts` covers errors without ends, recovery, delayed snapshots, stream reconnect and stop. Scripted process tests exercise real process plumbing without starting Electron (`apps/desktop/test/spawnScripted.test.ts`, `apps/desktop/test/processAndFiles.test.ts`).
 
 The separate real-runtime smoke covers both first run and configured Home, not just injectable supervisor policy (`apps/desktop/test/smoke/launch.smoke.ts`, `apps/desktop/test/smoke/configured.smoke.ts`). Both assert second-instance `--quit` leaves the server unavailable and no tracked owned PIDs alive. The shared harness retains known children after the launcher exits; fallback teardown attempts shell, stub hub and folder cleanup independently even if another step fails. `apps/desktop/test/smokeHarness.test.ts` tests those cleanup paths with fake processes, without Electron. See the [desktop smoke details](index.md#first-run-versus-configured-home) for ports, render assertions, timing and limitations. This does not add a runtime supervisor ownership rule or prove live playback.
 
@@ -86,8 +91,10 @@ The separate real-runtime smoke covers both first run and configured Home, not j
 | `apps/desktop/src/monitor.ts`           | SSE and snapshot concurrency                      |
 | `apps/desktop/src/trayModel.ts`         | Pure tray presentation rules                      |
 | `apps/desktop/src/shell/trayAdapter.ts` | Cached multi-scale tray images                    |
+| `apps/desktop/src/loadingPage.ts`       | Failure-page query and message classification     |
+| `apps/desktop/test/supervisor.test.ts`  | Wrong-service, ownership and recovery regressions |
 | `apps/desktop/test/monitor.test.ts`     | Activity race regressions                         |
 
 ## Measured scope
 
-Desktop-wide committed inventory at `bb09d63`: **31 source / 19 test files** (17 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.61**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. Committed-path method and exclusions are in the [desktop overview](index.md#measured-scope); these figures describe the whole app, not an overlapping subsystem total.
+Desktop-wide committed inventory at `663492c`: **33 source / 21 test files** (19 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.64**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. Committed-path method and exclusions are in the [desktop overview](index.md#measured-scope); these figures describe the whole app, not an overlapping subsystem total.

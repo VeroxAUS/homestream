@@ -38,7 +38,11 @@ graph LR
 
 The route is lazy in `apps/web/src/App.tsx`; `useHls` in `apps/web/src/player/useHls.ts` statically imports hls.js inside that lazy player dependency graph, not Home's initial code. The player chunk has its own **200 kB gzip** budget in `apps/web/.size-limit.json`. This is a configured ceiling, not a fresh measured bundle size.
 
-When MediaSource-based hls.js is supported, the hook creates an instance, attaches video, loads the master playlist and attempts play after manifest parsing. It retains **60 seconds** of back buffer. Fragment policy uses **20-second** first-byte and **120-second** load limits, four timeout retries and up to **90** error retries with a **1-second** base delay and **2-second** maximum delay, accommodating subtitle extraction's temporary 503s. Fatal media errors get **two** recovery attempts; later fatal errors produce a user-facing failure card. Nonfatal errors remain with hls.js (`apps/web/src/player/useHls.ts`).
+When MediaSource-based hls.js is supported, the hook creates an instance, attaches video, loads the master playlist and attempts play after manifest parsing. It retains **60 seconds** of back buffer. Fragment policy uses **20-second** first-byte and **120-second** load limits, **four timeout retries with zero delay**, and up to **90 error retries** with a **1-second** base delay and **2-second** maximum delay, accommodating subtitle extraction's temporary 503s (`apps/web/src/player/useHls.ts`).
+
+The fragment error predicate is exactly `hlsVerdict || (response?.code === 0 && retryCount < MAX_FRAGMENT_RETRIES)`, with `MAX_FRAGMENT_RETRIES = 90`. It preserves hls.js's decision for other responses and adds retries for status-0 aborted/reset connections, including video fragments, even when hls.js would reject an online status-0 failure as CORS. It does **not** rewrite the response to HTTP 502 or add a separate retry loop. With a false hls.js verdict, counts 0–89 retry; count 90 and above stop. HTTP 4xx and errors without a response get no added retry (`apps/web/src/player/useHls.ts`, `apps/web/src/player/useHls.test.ts`). This is a retry-count budget, not a fixed 90-second deadline.
+
+The error listener leaves nonfatal errors with hls.js. Fatal media errors get **two** `recoverMediaError()` attempts per instance; the next fatal media error, or a fatal error of another type, reports a user-facing failure card (`apps/web/src/player/useHls.ts`). Server-side subtitle extraction and temporary availability belong to [subtitles](../../systems/playback/subtitles.md).
 
 When hls.js is unsupported but the video element accepts `application/vnd.apple.mpegurl`, the hook loads HLS natively and seeks after metadata. With neither path, it reports unsupported HLS. The richer rendition-selection path is hls.js-specific; this fallback is not a claim of identical native track controls. Cleanup destroys the hls.js instance.
 
@@ -52,7 +56,8 @@ The video-state hook, reload flag and pending track PATCH determine buffering UI
 - Burn-in subtitles PATCH the session, then reload the **same playlist** at the current video position.
 - Leaving burn-in sends **`subtitle: null`**, then applies the requested local text track or Off.
 - Audio changes PATCH `audioIndex`, update the described session and reload at the current position.
-- Selection is kept in a shared ref and reapplied when renditions are relisted. Off and burned-in tracks disable sidecar display. Subtitle toggle restores the last choice or first usable entry, with text tracks ordered before bitmap tracks (`apps/web/src/player/tracks.ts`).
+- Selection is kept in a shared ref and reapplied when renditions are relisted. `SUBTITLE_TRACKS_UPDATED` queues a microtask because hls.js chooses its own default immediately after the event handler returns. The microtask applies the current choice only if that instance is still active, so late listings from replaced streams are ignored. Off and burned-in tracks select rendition `-1`; sidecar selection maps the server index to the rendition and enables display, avoiding a redundant track assignment when already selected (`apps/web/src/player/useHls.ts`).
+- That ordering preserves Off and non-default text choices through audio/burn-in stream reloads; it is not persistence across a browser-page refresh. Subtitle toggle restores the last choice or first usable entry, with text tracks ordered before bitmap tracks (`apps/web/src/player/tracks.ts`). `apps/web/src/pages/PlayerSubtitleReload.test.tsx` covers Off/non-default choices after audio switches, Off after leaving burn-in with one `subtitle: null` PATCH, and stale-instance listings.
 - A refused PATCH leaves playback available and displays a persistent error toast.
 
 `usePlayerActions` in `apps/web/src/player/usePlayerActions.ts` centralizes buttons, keyboard and media-key behavior. Seek clamps to the title duration; skip is **−10/+30 seconds**, volume step **0.05**, and fullscreen targets the player stage. `useShortcuts` in `apps/web/src/player/useShortcuts.ts` listens even when chrome is hidden:
@@ -91,19 +96,21 @@ The desktop mini player shares these actions, including its **0–1**, **0.01-st
 
 Preserve cleanup ordering, metadata gating and handoff release when changing hooks. Track changes must distinguish local sidecar selection from server encoder restart; avoid adding a manual source picker or a second session owner.
 
-| File                                         | Purpose                                              |
-| -------------------------------------------- | ---------------------------------------------------- |
-| `apps/web/src/pages/PlayerPage.tsx`          | Target, start/attach state and retry transitions     |
-| `apps/web/src/player/Playback.tsx`           | Video, overlays and draining Retry                   |
-| `apps/web/src/player/sessionApi.ts`          | Start/PATCH/DELETE/progress/prefetch helpers         |
-| `apps/web/src/player/useHls.ts`              | HLS instance, native fallback and recovery           |
-| `apps/web/src/player/useTrackSwitching.ts`   | Audio/subtitle handoff                               |
-| `apps/web/src/player/useSessionLifetime.ts`  | Paused pings and exactly-once teardown               |
-| `apps/web/src/player/useVideoState.ts`       | Discrete media state and DOM-only clock subscription |
-| `apps/web/src/desktop/MiniVolume.tsx`        | Shared video volume/mute in mini mode                |
-| `apps/web/src/pages/PlayerPage.test.tsx`     | Starts, progress, late results and fatal Retry       |
-| `apps/web/src/pages/PlayerControls.test.tsx` | Input, tracks, info and chrome                       |
-| `apps/web/src/pages/PlayerExtras.test.tsx`   | Pagehide, native fallback and PATCH failure          |
-| `apps/web/e2e/player-input.spec.ts`          | Browser-intercepted layout hit-testing               |
+| File                                               | Purpose                                                |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| `apps/web/src/pages/PlayerPage.tsx`                | Target, start/attach state and retry transitions       |
+| `apps/web/src/player/Playback.tsx`                 | Video, overlays and draining Retry                     |
+| `apps/web/src/player/sessionApi.ts`                | Start/PATCH/DELETE/progress/prefetch helpers           |
+| `apps/web/src/player/useHls.ts`                    | HLS instance, native fallback and recovery             |
+| `apps/web/src/player/useHls.test.ts`               | Status-0 retry bounds and idempotent track selection   |
+| `apps/web/src/player/useTrackSwitching.ts`         | Audio/subtitle handoff                                 |
+| `apps/web/src/player/useSessionLifetime.ts`        | Paused pings and exactly-once teardown                 |
+| `apps/web/src/player/useVideoState.ts`             | Discrete media state and DOM-only clock subscription   |
+| `apps/web/src/desktop/MiniVolume.tsx`              | Shared video volume/mute in mini mode                  |
+| `apps/web/src/pages/PlayerPage.test.tsx`           | Starts, progress, late results and fatal Retry         |
+| `apps/web/src/pages/PlayerControls.test.tsx`       | Input, tracks, info and chrome                         |
+| `apps/web/src/pages/PlayerExtras.test.tsx`         | Pagehide, native fallback and PATCH failure            |
+| `apps/web/src/pages/PlayerSubtitleReload.test.tsx` | Subtitle choice after reload and stale-instance guards |
+| `apps/web/e2e/player-input.spec.ts`                | Browser-intercepted layout hit-testing                 |
 
-Measured tracked scope: `apps/web/src/player/` has **27 production files**, **3 tests**; adding the four dedicated player-page suites under `apps/web/src/pages/` gives **7/27 = 0.26** test-to-source file ratio. The route file itself and mini-player files are excluded from this denominator. Unique human authors **1**; see [inventory method](index.md#measured-scope). Browser fixtures do not run a real encoder or prove media playback; see [test boundaries](build-and-tests.md#isolated-browser-flow).
+Measured tracked scope: `apps/web/src/player/` has **27 production files**, **4 tests**; adding the five dedicated player-page suites under `apps/web/src/pages/` gives **9/27 = 0.33** test-to-source file ratio. The route file itself and mini-player files are excluded from this denominator. Unique human authors **1**; see [inventory method](index.md#measured-scope). Browser fixtures do not run a real encoder or prove media playback; see [test boundaries](build-and-tests.md#isolated-browser-flow).

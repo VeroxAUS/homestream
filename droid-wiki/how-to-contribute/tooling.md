@@ -53,10 +53,12 @@ The docs checker explicitly excludes generated wiki pages; its Mermaid checks ar
 
 ## Advisory automations
 
+The required **Linux** job in `.github/workflows/ci.yml` now gates three parallel execution jobs: **Linux checks** for static/docs/bundle checks, **Linux tests** for software FFmpeg and sequential workspace coverage/reports, and **Linux secrets** for full-history Gitleaks. It runs even after dependency failure and passes only if all three succeeded. Required protection names remain **Linux** and **Windows**. See [deployment](../deployment.md#ci-and-releases) for cache fallback and limits; `apps/server/test/scripts/workflows.test.ts` guards the layout and command coverage.
+
 `docs/ci.md` is the maintained guide. These do not replace required `Linux`/`Windows` checks:
 
 - Droid PR review uses the pinned official action, then a cleanup job retains only the newest summary. Push review posts inline commit comments plus one summary, including a short generated-only summary without invoking Droid (`.github/workflows/droid-review.yml`, `scripts/droid-pr-cleanup.mjs`, `scripts/droid-push-review.mjs`).
-- CI timing compares jobs/steps/tests with the median of ten successful main runs. Every main run has a distinct concurrency group and records timing on the orphan `ci-metrics` branch; PRs receive a sticky comparison (`.github/workflows/ci.yml`, `scripts/ci-timing.mjs`, `scripts/lib/metrics-branch.mjs`).
+- CI timing compares jobs/steps/tests with the median of ten successful main runs, reading test durations from the **Linux tests** `test-reports` artifact. Every main run has a distinct concurrency group and records timing on the orphan `ci-metrics` branch; PRs receive a sticky comparison (`.github/workflows/ci.yml`, `scripts/ci-timing.mjs`, `scripts/lib/metrics-branch.mjs`).
 - Daily code health compares main with the SHA in one rolling issue, skips generated-only deltas, and updates that issue without pushing code. Dependencies are installed before the line-limit check (`.github/workflows/code-health.yml`, `scripts/code-health.mjs`).
 
 Review and health scans restrict Droid to read tools; write-capable wrapper scripts publish only the specified reports. Missing keys or service failures remain advisory (`scripts/lib/droid.mjs`, `docs/ci.md`).

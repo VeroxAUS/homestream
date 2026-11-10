@@ -87,6 +87,8 @@ Settings/About does not introduce a settings HTTP endpoint. Device-name saving u
 
 `registerEventRoutes` in `apps/server/src/routes/events.ts` sends `retry: 3000`, an immediate `heartbeat`, then heartbeats every **15 seconds**. Frames contain `event: <name>` and `data: <JSON payload>`, without an event ID/replay cursor.
 
+Each subscription writes one info-level `event stream opened` line immediately, with its `reqId`, method, route template and 200 status. The hijacked response skips ordinary completion logging; heartbeats and individual events are not access-logged. This does not change the SSE payload or HTTP contract (`apps/server/src/routes/events.ts`, `apps/server/test/integration/events.test.ts`). See [logging](../how-to-monitor/logging.md).
+
 Events include `health`, `log`, `session.start`, `session.update`, `session.end`, and download started/progress/ready/failed. The payload is bus `event.data`, not its internal wrapper (`apps/server/src/events/bus.ts`). Reconnects need REST snapshot reconciliation. Connecting does **not** send a health baseline; the [web data layer](../apps/web/data-and-startup.md) reconciles through its health query and cancels older answers. Unnotified completed downloads have a specific durable replay path, not general SSE history.
 
 `/healthz` returns 200 `{status:"ok"}` while HTTP answers. `/readyz` returns 200 `{status:"ready"}` after SQLite `SELECT 1` and a write/remove probe in `DATA_DIR`, or 503 `not_ready`; it is limited to **300 requests/minute/address**, then 429. `/metrics` reads counters and process state without upstream calls. Full health is more expensive: `fresh=1` or `fresh=true` on the manual route bypasses caches and may encode. See [health](../systems/health.md).

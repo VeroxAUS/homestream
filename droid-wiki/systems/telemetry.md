@@ -50,6 +50,12 @@ The navigation search text and browser-local spoiler preference are not catalog 
 
 Reports carry `homestream@<version>`, environment and bounded tags. Server adds `app=server` and optional request/device/media context. Renderer uses `app=web` in browsers or `app=desktop` in the shell, `process=renderer`, device kind and route template; main uses `app=desktop`, `process=main`, `device.kind=desktop` (`apps/web/src/telemetry/sentry.ts`, `apps/desktop/src/telemetry/sentry.ts`). Both main and renderer use the web Sentry project. Breadcrumbs cap at 50.
 
+### Desktop main-process breadcrumbs
+
+`startTelemetry` in `apps/desktop/src/shell/telemetry.ts` connects the logger callback to `Sentry.addBreadcrumb(mainBreadcrumb(level, message))` only after Sentry initializes successfully. `apps/desktop/src/logger.ts` sends **info, warn and error**, not debug. The callback receives the scrubbed message only, not the structured log fields. `mainBreadcrumb` in `apps/desktop/src/telemetry/sentry.ts` sets category **`main`** and maps logger `warn` to Sentry **`warning`**, retaining info/error levels. This distinguishes main-process context from renderer breadcrumbs without creating a new analytics event or a trace.
+
+The file sink still writes `desktop.log` when cloud telemetry is off. With no DSN, master opt-out or failed initialization there is no Sentry breadcrumb callback. Messages pass `createMainScrubber().text` before the callback, and Sentry's `beforeBreadcrumb` applies the shared breadcrumb sanitizer plus machine/user-name scrubbing again (`apps/desktop/src/telemetry/scrub.ts`). The 50-breadcrumb cap and zero main-process trace sampling remain unchanged. See [logging](../how-to-monitor/logging.md) and [desktop lifecycle](../apps/desktop/index.md).
+
 `sanitizeSentryEvent` in `packages/shared/src/sanitize.ts` removes request/server/user/auth/address data, scrubs nested strings, makes configured stack roots relative, drops culture context and trims device context to coarse hardware facts. Server-specific registered-secret/machine scrubbing feeds it through `apps/server/src/telemetry/scrub.ts`.
 
 After stripping incoming user data, the sanitizer deliberately sets:
@@ -98,23 +104,25 @@ Browser `apps/web/src/telemetry/posthog.ts` uses the slim SDK and flags extensio
 
 Follow `.factory/skills/homestream-telemetry/SKILL.md`: update the typed catalog and `docs/PRIVACY.md` together, preserve opt-outs/allowlists, and test malicious payloads and no-key behavior. Keep SDK work off Home/playback paths. Local profiling and cloud smoke commands are distinct activities; neither was run for this refresh.
 
-Server stub tests, shared sanitizer tests, renderer unit/e2e collectors and desktop wiring tests cover different boundaries. Main shell initialization is real code, not merely an option builder, but source inspection does not prove a live cloud event arrived.
+Server stub tests, shared sanitizer tests, renderer unit/e2e collectors and desktop wiring tests cover different boundaries. `apps/desktop/test/integration/telemetryWiring.test.ts` checks main-category level mapping, options/tags, no-key/opt-out behavior and scrubbed breadcrumbs; `apps/desktop/test/logger.test.ts` checks the info-and-above threshold and scrubbed messages. These test helpers/options rather than launching the actual Electron SDK adapter. Main shell initialization is real code, not merely an option builder, but source inspection does not prove a live cloud event arrived.
 
 ## Key source files
 
-| File                                            | Purpose                                           |
-| ----------------------------------------------- | ------------------------------------------------- |
-| `apps/server/src/telemetry/index.ts`            | Safe front/no-op, flags and shutdown              |
-| `apps/server/src/telemetry/sentry.ts`           | Restricted error integrations and sampler         |
-| `apps/server/src/telemetry/posthog.ts`          | Queue and flag transport                          |
-| `apps/server/src/telemetry/playbackObserver.ts` | Lifecycle metrics/events/breadcrumb bridge        |
-| `apps/web/src/telemetry/index.ts`               | Initial SDK-free gate                             |
-| `apps/web/src/telemetry/runtime.ts`             | Deferred clients and route/flag wiring            |
-| `apps/desktop/src/shell/telemetry.ts`           | Executed main setup, log sink, identity and flush |
-| `apps/desktop/src/telemetry/sentry.ts`          | Main options and tags                             |
-| `packages/shared/src/analytics.ts`              | Typed event/property catalog                      |
-| `packages/shared/src/sanitize.ts`               | Shared scrubber and inference controls            |
+| File                                                    | Purpose                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| `apps/server/src/telemetry/index.ts`                    | Safe front/no-op, flags and shutdown                      |
+| `apps/server/src/telemetry/sentry.ts`                   | Restricted error integrations and sampler                 |
+| `apps/server/src/telemetry/posthog.ts`                  | Queue and flag transport                                  |
+| `apps/server/src/telemetry/playbackObserver.ts`         | Lifecycle metrics/events/breadcrumb bridge                |
+| `apps/web/src/telemetry/index.ts`                       | Initial SDK-free gate                                     |
+| `apps/web/src/telemetry/runtime.ts`                     | Deferred clients and route/flag wiring                    |
+| `apps/desktop/src/shell/telemetry.ts`                   | Executed main setup, log sink, identity and flush         |
+| `apps/desktop/src/telemetry/sentry.ts`                  | Main options, tags and breadcrumb mapping                 |
+| `apps/desktop/src/logger.ts`                            | Scrubbed messages and info-and-above breadcrumb threshold |
+| `apps/desktop/test/integration/telemetryWiring.test.ts` | Offline main options, breadcrumb and privacy regressions  |
+| `packages/shared/src/analytics.ts`                      | Typed event/property catalog                              |
+| `packages/shared/src/sanitize.ts`                       | Shared scrubber and inference controls                    |
 
 ## Measured scope
 
-At `0a8f04f`, **9 production `.ts` files** under `apps/server/src/telemetry/` and **5 `.test.ts` files** under `apps/server/test/telemetry/` yield a **0.56 test/source file ratio**. Stub helpers, integration tests, flag registry outside the folder, browser/desktop/shared source and tests are excluded. Scoped default-branch history has **1 unique human author**, VeroxAUS. These are inventory counts, not coverage.
+At `663492c`, **9 production `.ts` files** under `apps/server/src/telemetry/` and **5 `.test.ts` files** under `apps/server/test/telemetry/` yield a **0.56 test/source file ratio**. Counts use committed paths from `git ls-tree -r --name-only HEAD`. Stub helpers, integration tests, flag registry outside the folder, browser/desktop/shared source and tests are excluded. Scoped `origin/main` history for those server telemetry folders has **1 unique human author** after excluding bots, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage.
