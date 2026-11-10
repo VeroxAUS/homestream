@@ -147,8 +147,11 @@ test.describe('nav search field', () => {
 
       await page.goto('/');
       await field(page).click();
+      const slowRequest = page.waitForRequest(
+        (sent) => sent.url().includes('/api/search') && new URL(sent.url()).searchParams.get('q') === slow,
+      );
       await page.keyboard.type(slow);
-      await sleep(page, 600);
+      await slowRequest;
       await field(page).fill(fast);
 
       await expect(result(page, /Stub Reloaded/)).toBeVisible();

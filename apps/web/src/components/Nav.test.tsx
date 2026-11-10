@@ -182,8 +182,10 @@ describe('navigation bar in the desktop app', () => {
     expect(desktopRule).toMatch(/-webkit-app-region:\s*drag/);
     const noDrag = /\.desktop a,\s*\.desktop button,\s*\.desktop input\s*\{([^}]*)\}/.exec(navCss)?.[1] ?? '';
     expect(noDrag).toMatch(/-webkit-app-region:\s*no-drag/);
-    const compact = /@media \(max-width: 1199px\)\s*\{[^@]*\.compact \.text\s*\{\s*display:\s*none/.test(healthPillCss);
+    // Strictly below 1200 px so a fractional viewport such as 1199.4 px still counts as compact.
+    const compact = /@media \(width < 1200px\)\s*\{[^@]*\.compact \.text\s*\{\s*display:\s*none/.test(healthPillCss);
     expect(compact).toBe(true);
+    expect(healthPillCss).not.toMatch(/max-width:\s*1199px/);
     expect(healthPillCss).toMatch(/@media \(max-width: 899px\)\s*\{\s*\.text\s*\{\s*display:\s*none/);
   });
 });

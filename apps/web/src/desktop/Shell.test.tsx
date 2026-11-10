@@ -97,6 +97,15 @@ describe('First run', () => {
     await screen.findByRole('heading', { name: 'Home' });
     expect(screen.queryByRole('heading', { name: 'Finish setting up' })).not.toBeInTheDocument();
   });
+
+  it('is never shown in a plain browser once the nav health pill has put the health answer in the cache', async () => {
+    mockApi({ 'GET /api/health': keys({}), 'GET /api/home': apiError(502, 'x', 'no') });
+    renderWithProviders(<App />, '/');
+    await screen.findByRole('link', { name: '1 problem' });
+    await screen.findByRole('heading', { name: 'Home' });
+    expect(screen.queryByRole('heading', { name: 'Finish setting up' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open config.env' })).not.toBeInTheDocument();
+  });
 });
 
 describe('Unreachable banner', () => {

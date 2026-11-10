@@ -3,7 +3,7 @@
 //   stub   points Sentry and PostHog at the local receivers of the stub hub and enables the telemetry test trigger
 // The developer's .env never leaks in: every telemetry variable is set explicitly for both builds.
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ports from './ports.json' with { type: 'json' };
 
@@ -13,6 +13,8 @@ if (!existsSync(fileURLToPath(new URL('../../server/dist/index.js', import.meta.
   console.error('Build the server first: pnpm --filter @homestream/server build');
   process.exit(1);
 }
+// The e2e servers keep their database (and its 10-minute TMDB answer cache) here; a run must not inherit the last one.
+rmSync(fileURLToPath(new URL('../reports/e2e-run', import.meta.url)), { recursive: true, force: true });
 const NO_TELEMETRY = {
   SENTRY_DSN_WEB: '',
   POSTHOG_API_KEY: '',
