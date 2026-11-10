@@ -8,6 +8,24 @@ Three advisory automations sit next to the required checks. None of them is a re
 | CI timing history and feedback | job `CI timing` in [`ci.yml`](../.github/workflows/ci.yml)  | every CI run                                   | none              |
 | Daily code-health review       | [`code-health.yml`](../.github/workflows/code-health.yml)   | once a day, manual dispatch                    | `FACTORY_API_KEY` |
 
+## Job layout and wall time
+
+`ci.yml` has to finish in under 10 minutes of wall time, and a run on main usually takes about 4 minutes. The jobs run in parallel, so the run is as long as its slowest job, not the sum of all of them:
+
+| Job (name)                | Required        | What it runs                                                                                                                                                                                                 | Typical time |
+| ------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `Linux checks`            | through `Linux` | format, lint, typecheck, knip, jscpd, dependency-cruiser, syncpack, large files, bundle budgets, `agents:check`, `docs:check`, `openapi:check`, `db:schema:check`, `flags:check`, `techdebt`, `.env.example` | 1 to 2 min   |
+| `Linux tests`             | through `Linux` | ffmpeg install, `pnpm test:coverage` (unit and integration tiers, web, desktop, shared), the merged test reports and their upload                                                                            | 3 to 4 min   |
+| `Linux secrets`           | through `Linux` | gitleaks over the full history                                                                                                                                                                               | under 30 s   |
+| `Linux`                   | yes             | a gate: `needs` the three jobs above, always runs (`if: always()`) and fails unless all three succeeded                                                                                                      | seconds      |
+| `Windows`                 | yes             | typecheck, the server unit-test subset, the Electron smoke tests                                                                                                                                             | 2 to 3 min   |
+| `Web e2e`                 | no              | Playwright against the built UI and a stub server                                                                                                                                                            | 2 to 3 min   |
+| `CI timing` (after those) | no              | timing record and comparison                                                                                                                                                                                 | 15 s         |
+
+Nothing was dropped or skipped when the old single `Linux` job was split: every step still runs on every push and pull request. Branch protection is unchanged, so `Linux` and `Windows` stay the only required checks. Because `Linux` fails when any of its three jobs failed, was cancelled or was skipped, a red `Linux checks`, `Linux tests` or `Linux secrets` still blocks the merge. The three jobs have no `if`, no `continue-on-error` and no `needs`, and `apps/server/test/scripts/workflows.test.ts` asserts this and that every check command is present. Look at the failed job to find the failing step; the `Linux` gate only prints which job did not succeed.
+
+The ffmpeg install was the one step that could blow the budget: it normally takes 15 to 20 seconds, but a stalled apt mirror made it take 395 seconds in run 42815775840 (642 s total against a 600 s budget). The `.deb` files are now cached with `actions/cache`, keyed by the runner image version, and installed with `dpkg -i`, so a run with a warm cache needs no mirror. A cold cache (the first run after a runner image update) still uses apt, now with shorter per-attempt time limits (60 s for `update`, 90 s for `install`, three attempts). If the cached install fails, the step falls back to apt.
+
 ## Droid review
 
 - **Pull requests to main** (same repository, not a draft): the job `Droid PR review` runs Factory's official [`Factory-AI/droid-action`](https://github.com/Factory-AI/droid-action) (pinned by commit SHA, release v13) with `automatic_review`. It posts inline review comments and one summary comment on the pull request (`use_sticky_comment` is on). The action still adds a "Droid finished" comment per push, so the job `Droid comment cleanup` runs `scripts/droid-pr-cleanup.mjs` afterwards and deletes the earlier ones; the pull request keeps only the newest. It authenticates with `FACTORY_API_KEY` and posts with the workflow token (`github_token`), so the Factory Droid GitHub App does not need to be installed.
@@ -21,7 +39,7 @@ Three advisory automations sit next to the required checks. None of them is a re
 
 The job `CI timing` in `ci.yml` waits for `Linux`, `Web e2e` and `Windows` (`if: !cancelled()`, `continue-on-error: true`) and runs `node scripts/ci-timing.mjs`:
 
-1. It reads the run, its jobs and their steps from the GitHub API (durations come from `started_at` and `completed_at`) and the per-test durations from the `test-reports` artifact of the Linux job (`reports/vitest.json`, falling back to `reports/junit.xml`). Tests under 5 ms are left out.
+1. It reads the run, its jobs and their steps from the GitHub API (durations come from `started_at` and `completed_at`) and the per-test durations from the `test-reports` artifact of the `Linux tests` job (`reports/vitest.json`, falling back to `reports/junit.xml`). Tests under 5 ms are left out.
 2. It builds one record (schema version 1) and compares it with the median of the last 10 successful runs on `main`.
 3. It writes the comparison to the job summary: total wall time, jobs and steps more than 20% slower than the median (and at least 2 seconds slower), and the top regressed tests (more than 20% and at least 20 ms).
 4. On a run on main (a push or a manual dispatch) it commits the record to the branch `ci-metrics`. On a pull request it creates or updates the one sticky comment.

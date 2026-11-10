@@ -25,17 +25,37 @@ env:
   HOMESTREAM_TELEMETRY: 'off'
 
 jobs:
-  # The job names below ("Linux", "Windows") are the required status checks of branch protection on main.
-  # Renaming a job means updating the protection rule, otherwise pushes are blocked.
+  # "Linux" and "Windows" are the required status checks of branch protection on main. Renaming a job means updating the
+  # protection rule, otherwise pushes are blocked.
+  #
+  # "Linux" is a gate over three jobs that run in parallel (static checks, tests, secret scan), so the critical path is the
+  # slowest of them and not their sum. It always runs and fails unless all three succeeded: a failed, cancelled or skipped
+  # job must never leave the required check green. The parallel jobs have no `if`, no `continue-on-error` and no `needs`.
   linux:
     name: Linux
+    needs: [linux-checks, linux-tests, linux-secrets]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every parallel Linux job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results of the Linux jobs: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::A Linux job finished with '$result'. Open the failed job of this run (Linux checks, Linux tests or Linux secrets)."
+              exit 1
+            fi
+          done
+
+  linux-checks:
+    name: Linux checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # gitleaks scans the full history.
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
@@ -58,33 +78,6 @@ jobs:
           restore-keys: |
             turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-${{ runner.os }}-
-
-      # apt mirrors are sometimes slow: every attempt has its own time limit and a failed one is retried after a pause.
-      - name: Install ffmpeg (software only; the tests that run it need no GPU)
-        timeout-minutes: 10
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          apt_opts='-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20'
-          for attempt in 1 2 3; do
-            if timeout 150 sudo apt-get $apt_opts update -qq && timeout 200 sudo apt-get $apt_opts install -y -qq --no-install-recommends ffmpeg; then
-              exit 0
-            fi
-            echo "apt attempt $attempt failed"
-            sleep $((attempt * 15))
-          done
-          exit 1
-
-      - name: Install gitleaks
-        run: |
-          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
-          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -fsSL -o "$RUNNER_TEMP/$archive" "$base/$archive"
-          curl -fsSL -o "$RUNNER_TEMP/checksums.txt" "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
-          (cd "$RUNNER_TEMP" && grep " $archive\$" checksums.txt | sha256sum --check -)
-          mkdir -p "$HOME/.local/bin"
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$HOME/.local/bin" gitleaks
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -141,6 +134,67 @@ jobs:
       - name: .env.example lists every known key
         run: pnpm --filter @homestream/server exec vitest run --project unit test/envExample.test.ts
 
+  linux-tests:
+    name: Linux tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Use a runner temp directory for test files
+        shell: bash
+        run: echo "HOMESTREAM_TEST_ROOT=${{ runner.temp }}/homestream-tests" >> "$GITHUB_ENV"
+
+      # The ffmpeg packages are cached as .deb files, keyed by the runner image, so a slow or stalled apt mirror cannot hold
+      # up a run once one run has filled the cache. A stalled mirror made this step take 395 s once (typically 15 to 20 s).
+      - name: Identify the runner image
+        id: image
+        run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/ffmpeg-debs
+          key: ffmpeg-debs-${{ runner.os }}-${{ steps.image.outputs.version }}
+
+      # apt mirrors are sometimes slow: every attempt has its own short time limit and a failed one is retried after a pause.
+      - name: Install ffmpeg (software only; the tests that run it need no GPU)
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          CACHE_HIT: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
+        run: |
+          debs="$HOME/ffmpeg-debs"
+          if [ "$CACHE_HIT" = true ] && ls "$debs"/*.deb > /dev/null 2>&1 && sudo dpkg -i "$debs"/*.deb && ffmpeg -version > /dev/null; then
+            echo "Installed ffmpeg from the cached packages"
+            exit 0
+          fi
+          apt_opts='-o Acquire::Retries=3 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15'
+          for attempt in 1 2 3; do
+            if timeout 60 sudo apt-get $apt_opts update -qq && timeout 90 sudo apt-get $apt_opts install -y -qq --no-install-recommends ffmpeg; then
+              rm -rf "$debs"
+              mkdir -p "$debs"
+              cp /var/cache/apt/archives/*.deb "$debs"/
+              exit 0
+            fi
+            echo "apt attempt $attempt failed"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       # Unit and integration tiers only: GPU (test/encode) and live (test/live) tests never run in CI, and no secret is
       # passed to this job. CI=true makes vitest retry twice and write the JUnit, JSON and flaky reports.
       - name: Tests with coverage thresholds
@@ -153,9 +207,6 @@ jobs:
       - name: Job summary (coverage, flaky tests, slowest tests)
         if: ${{ !cancelled() }}
         run: node scripts/ci-summary.mjs >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Secret scan of the full history (gitleaks)
-        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
 
       - name: Upload test reports
         if: ${{ !cancelled() }}
@@ -171,6 +222,30 @@ jobs:
             packages/*/coverage/coverage-summary.json
           if-no-files-found: warn
           retention-days: 14
+
+  linux-secrets:
+    name: Linux secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gitleaks scans the full history.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" "$base/$archive"
+          curl -fsSL -o "$RUNNER_TEMP/checksums.txt" "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " $archive\$" checksums.txt | sha256sum --check -)
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$HOME/.local/bin" gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Secret scan of the full history (gitleaks)
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --log-opts="--all"
 
   # Browser end-to-end tests of the web UI against the built UI and an isolated server with stub TMDB, gateway, Sentry and
   # PostHog (no keys, no playback). It runs next to Linux and Windows, so it does not lengthen the pipeline. Chromium is
@@ -255,7 +330,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Download the test reports of the Linux job
+      - name: Download the test reports of the Linux tests job
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

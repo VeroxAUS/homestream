@@ -37,6 +37,7 @@ const files = readdirSync(workflowsDir).filter((name) => name.endsWith('.yml'));
 const texts = new Map(files.map((name) => [name, readFileSync(path.join(workflowsDir, name), 'utf8')]));
 const workflows = new Map(files.map((name) => [name, parse(texts.get(name) ?? '') as Workflow]));
 const jobsOf = (name: string) => Object.entries(workflows.get(name)?.jobs ?? {});
+const linuxJobIds = ['linux-checks', 'linux-tests', 'linux-secrets'];
 
 describe('workflow hygiene', () => {
   it('has the workflows the repository relies on', () => {
@@ -101,8 +102,32 @@ describe('workflow hygiene', () => {
     expect(wiki).toContain('REQUIRED_CHECKS: Linux,Windows');
   });
 
-  it('the Linux job runs every readiness check as its own step, never GPU or live tests', () => {
-    const run = (jobsOf('ci.yml').find(([id]) => id === 'linux')?.[1].steps ?? [])
+  it('the required Linux check is a gate that fails unless every parallel Linux job succeeded', () => {
+    const jobs = Object.fromEntries(jobsOf('ci.yml'));
+    const gate = jobs.linux;
+    expect(gate?.needs).toEqual(expect.arrayContaining(linuxJobIds));
+    expect(gate?.needs).toHaveLength(linuxJobIds.length);
+    // A skipped, failed or cancelled needed job must not leave the gate skipped, because a skipped required check passes.
+    expect(gate?.if).toContain('always()');
+    expect(gate?.['continue-on-error']).toBeUndefined();
+    const step = (gate?.steps ?? []).find((s) => s.run?.includes('exit 1'));
+    expect(step?.if).toBeUndefined();
+    expect(step?.env?.RESULTS).toBe("${{ join(needs.*.result, ' ') }}");
+    expect(step?.run).toContain('success');
+    for (const id of linuxJobIds) {
+      const job = jobs[id];
+      expect(job?.name, id).toMatch(/^Linux .+/);
+      expect(job?.['runs-on'], id).toBe('ubuntu-latest');
+      expect(job?.if, `${id} must always run`).toBeUndefined();
+      expect(job?.['continue-on-error'], id).toBeUndefined();
+      expect(job?.needs, `${id} runs in parallel with the others`).toBeUndefined();
+      for (const s of job?.steps ?? []) expect(s['continue-on-error'], `${id}: ${s.name}`).toBeUndefined();
+    }
+  });
+
+  it('the parallel Linux jobs run every readiness check as its own step, never GPU or live tests', () => {
+    const run = linuxJobIds
+      .flatMap((id) => workflows.get('ci.yml')?.jobs[id]?.steps ?? [])
       .map((step) => step.run ?? '')
       .join('\n');
     for (const command of [
@@ -217,7 +242,6 @@ describe('workflow hygiene', () => {
     expect(timing?.if).toContain('!cancelled()');
     expect(timing?.['continue-on-error']).toBe(true);
     expect(['Linux', 'Windows']).not.toContain(timing?.name);
-    expect(jobs.linux?.needs).toBeUndefined();
     expect(jobs.windows?.needs).toBeUndefined();
     const run = (timing?.steps ?? []).map((step) => step.run ?? '').join('\n');
     expect(run).toContain('scripts/ci-timing.mjs');
