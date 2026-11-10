@@ -195,7 +195,7 @@
           <path d="M12 10v5M12 18v.5" stroke-linecap="round" />
         </svg>
         <h1>The server didn't start</h1>
-        <p>
+        <p id="message">
           HomeStream tried to start it 5 times in the last minute and then stopped trying. Your TV and other devices
           can't play anything until it runs.
         </p>
@@ -218,6 +218,8 @@
         var version = params.get('v');
         if (version) document.getElementById('version').textContent = 'v' + version;
         if (failed) {
+          var message = params.get('message');
+          if (message) document.getElementById('message').textContent = message;
           var hint = params.get('hint');
           if (hint) {
             document.getElementById('hint').hidden = false;

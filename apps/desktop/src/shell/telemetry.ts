@@ -6,7 +6,7 @@ import { createLogger, type Logger, type LogLevel } from '../logger.js';
 import { createDesktopAnalytics, type DesktopAnalytics } from '../telemetry/analytics.js';
 import { resolveTelemetryConfig, testRunId } from '../telemetry/config.js';
 import { createMainScrubber, type MainScrubber } from '../telemetry/scrub.js';
-import { buildMainSentryOptions } from '../telemetry/sentry.js';
+import { buildMainSentryOptions, mainBreadcrumb } from '../telemetry/sentry.js';
 
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
 
@@ -85,8 +85,7 @@ export function startTelemetry(input: TelemetryInput): MainTelemetry {
     scrub: scrubber.text,
     sink: openLogStream(logFile),
     breadcrumb: sentryActive
-      ? (level: LogLevel, message: string) =>
-          Sentry.addBreadcrumb({ category: 'desktop', level: level === 'warn' ? 'warning' : level, message })
+      ? (level: LogLevel, message: string) => Sentry.addBreadcrumb(mainBreadcrumb(level, message))
       : undefined,
   });
   const analytics = createDesktopAnalytics({

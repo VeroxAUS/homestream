@@ -17,6 +17,7 @@ import { createHandlers, isTrustedUrl, registerIpc, type ShellApi } from '../ipc
 import { KeepAwake } from '../keepAwake.js';
 import { loadingPageUrl, loadingViewFor, nextPage, type PageKind } from '../loadingPage.js';
 import { MiniPlayerState } from '../miniPlayer.js';
+import { guardPermissions } from '../permissions.js';
 import {
   planCloseNotice,
   planDownloadFailureToast,
@@ -168,12 +169,8 @@ export class Shell {
     return isTrustedUrl(url, this.deps.client.origin, this.loadingPage);
   }
 
-  /** Only fullscreen is granted; the web UI needs nothing else from the machine. */
   private guardSession(): void {
-    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) =>
-      callback(permission === 'fullscreen'),
-    );
-    session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'fullscreen');
+    guardPermissions(session.defaultSession, this.deps.client.origin);
   }
 
   private ensureMain(): BrowserWindow {

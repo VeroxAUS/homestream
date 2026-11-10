@@ -1,4 +1,5 @@
 import type { ElectronMainOptions } from '@sentry/electron/main';
+import type { LogLevel } from '../logger.js';
 import type { DesktopTelemetryConfig } from './config.js';
 import type { MainScrubber } from './scrub.js';
 
@@ -15,6 +16,14 @@ const KEPT_INTEGRATIONS = new Set([
   'ChildProcess',
   'Net',
 ]);
+
+/** A logger entry as a Sentry breadcrumb. Category `main` matches the tag `process=main` on every event. */
+export function mainBreadcrumb(
+  level: LogLevel,
+  message: string,
+): { category: 'main'; level: 'debug' | 'info' | 'warning' | 'error'; message: string } {
+  return { category: 'main', level: level === 'warn' ? 'warning' : level, message };
+}
 
 export interface MainSentrySetup {
   config: DesktopTelemetryConfig;

@@ -8,11 +8,20 @@ export interface LoadingView {
   port: number;
   code?: string;
   lastAttemptAt?: number;
+  /** Another program holds the port: the page names the port instead of saying the app tried five times. */
+  portInUse?: boolean;
 }
 
 export function loadingViewFor(status: SupervisorStatus, version: string, port: number): LoadingView {
   if (status.kind === 'failed') {
-    return { state: 'failed', version, port, code: status.code, lastAttemptAt: status.lastAttemptAt };
+    return {
+      state: 'failed',
+      version,
+      port,
+      code: status.code,
+      lastAttemptAt: status.lastAttemptAt,
+      portInUse: status.portInUse === true,
+    };
   }
   return { state: 'starting', version, port };
 }
@@ -21,6 +30,7 @@ export function loadingViewFor(status: SupervisorStatus, version: string, port: 
 export function loadingPageUrl(pageUrl: string, view: LoadingView): string {
   const params = new URLSearchParams({ state: view.state, v: view.version, port: String(view.port) });
   if (view.state === 'failed') {
+    if (view.portInUse) params.set('message', `Port ${view.port} is used by another program`);
     if (view.code) {
       params.set('code', view.code);
       params.set('hint', failureHint(view.code, view.port));

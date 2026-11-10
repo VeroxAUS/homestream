@@ -162,10 +162,48 @@ describe('spawn mode', () => {
     expect(supervisor.spawnedPid).toBe(100);
   });
 
-  it('spawns when another program holds the port too (and fails with its error code)', async () => {
-    const { world, supervisor } = setup('other');
+  it('spawns nothing and fails at once when another program holds the port', async () => {
+    const { world, supervisor, statuses } = setup('other');
+    const before = Date.now();
     await supervisor.start();
+    expect(world.children).toHaveLength(0);
+    expect(supervisor.status).toEqual({
+      kind: 'failed',
+      code: 'EADDRINUSE',
+      lastAttemptAt: before,
+      portInUse: true,
+    });
+    expect(statuses.map((status) => status.kind)).toEqual(['starting', 'failed']);
+    expect(supervisor.text).toBe('Server: failed \u2014 see logs');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(world.children).toHaveLength(0);
+  });
+
+  it('Retry spawns once the other program has left the port, and fails again while it stays', async () => {
+    const { world, supervisor, bringUp } = setup('other');
+    await supervisor.start();
+    await supervisor.retry();
+    expect(world.children).toHaveLength(0);
+    expect(supervisor.status).toMatchObject({ kind: 'failed', code: 'EADDRINUSE', portInUse: true });
+
+    world.answer = 'none';
+    await supervisor.retry();
     expect(world.children).toHaveLength(1);
+    expect(supervisor.status.kind).toBe('starting');
+    await bringUp();
+    expect(supervisor.status.kind).toBe('running');
+  });
+
+  it('keeps the crash wording for a server that started and died with EADDRINUSE output', async () => {
+    const { world, supervisor } = setup();
+    await supervisor.start();
+    for (let crash = 1; crash <= 6; crash += 1) {
+      world.children.at(-1)?.say('Error: listen EADDRINUSE: address already in use :::8600');
+      world.children.at(-1)?.exit({ code: 1, signal: null });
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+    expect(supervisor.status).toMatchObject({ kind: 'failed', code: 'EADDRINUSE' });
+    expect(supervisor.status).not.toHaveProperty('portInUse');
   });
 
   it('restarts after a crash with waits of 1, 2 and 5 seconds', async () => {

@@ -2,6 +2,7 @@ import { BrowserWindow, screen, shell, type WebPreferences } from 'electron';
 import type { WindowSnapshot } from '@homestream/shared';
 import { MINI_HEIGHT, MINI_MIN_HEIGHT, MINI_MIN_WIDTH, MINI_WIDTH, miniBounds } from '../miniPlayer.js';
 import type { Logger } from '../logger.js';
+import { placeWindow } from '../windowBounds.js';
 import {
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
@@ -81,6 +82,7 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     titleBarOverlay: { color: BACKGROUND, symbolColor: '#f5f5f7', height: 40 },
     webPreferences: webPreferences(options, false),
   });
+  placeWindow(window, resolved.bounds, options.logger);
   if (resolved.maximized) window.maximize();
   guardNavigation(window, options);
 

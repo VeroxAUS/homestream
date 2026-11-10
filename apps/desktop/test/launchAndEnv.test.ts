@@ -146,6 +146,23 @@ describe('startup page', () => {
     expect(url.searchParams.get('at')).toBe('1700000000000');
   });
 
+  it('names the port in the Failed URL only when another program holds it', () => {
+    const taken = new URL(
+      loadingPageUrl(
+        page,
+        loadingViewFor({ kind: 'failed', code: 'EADDRINUSE', lastAttemptAt: 1, portInUse: true }, '1.2.3', 8644),
+      ),
+    );
+    expect(taken.searchParams.get('message')).toBe('Port 8644 is used by another program');
+    expect(taken.searchParams.get('hint')).toContain('Close that program, or set a different PORT');
+    expect(taken.searchParams.get('code')).toBe('EADDRINUSE');
+
+    const crashed = new URL(
+      loadingPageUrl(page, loadingViewFor({ kind: 'failed', code: 'EADDRINUSE', lastAttemptAt: 1 }, '1.2.3', 8644)),
+    );
+    expect(crashed.searchParams.has('message')).toBe(false);
+  });
+
   it('decides the page from the server state', () => {
     const failed = { kind: 'failed', code: 'x', lastAttemptAt: 1 } as const;
     expect(nextPage('none', { kind: 'starting' })).toBe('starting');

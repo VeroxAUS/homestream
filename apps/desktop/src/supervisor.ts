@@ -10,7 +10,8 @@ export type SupervisorStatus =
   /** An attached server that stopped answering. The app spawns nothing on its own. */
   | { kind: 'lost' }
   | { kind: 'crashed'; attempt: number; retryAt: number }
-  | { kind: 'failed'; code: string; lastAttemptAt: number }
+  /** `portInUse`: another program holds the server port, so nothing was spawned (as opposed to a server that kept crashing). */
+  | { kind: 'failed'; code: string; lastAttemptAt: number; portInUse?: true }
   | { kind: 'stopped' };
 
 export interface SupervisorDeps {
@@ -168,11 +169,17 @@ export class Supervisor {
     this.shuttingDown = false;
     const generation = this.invalidate();
     this.set({ kind: 'starting' });
-    if ((await this.deps.probe()) === 'homestream') {
-      if (this.isCurrent(generation)) this.attach(generation);
-      return;
+    const answer = await this.deps.probe();
+    if (!this.isCurrent(generation)) return;
+    if (answer === 'homestream') {
+      this.attach(generation);
+    } else if (answer === 'other') {
+      // A server we spawn would only fail to bind, and retrying cannot free the port.
+      this.deps.logger.error('the server port is used by another program; not starting the server');
+      this.set({ kind: 'failed', code: 'EADDRINUSE', lastAttemptAt: Date.now(), portInUse: true });
+    } else {
+      this.spawnChild(generation);
     }
-    if (this.isCurrent(generation)) this.spawnChild(generation);
   }
 
   private async restartNow(quit: () => boolean): Promise<RestartResult> {

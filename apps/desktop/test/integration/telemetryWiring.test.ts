@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopAnalytics } from '../../src/telemetry/analytics.js';
 import { resolveTelemetryConfig } from '../../src/telemetry/config.js';
 import { createIdentityScrubber, createMainScrubber } from '../../src/telemetry/scrub.js';
-import { buildMainSentryOptions } from '../../src/telemetry/sentry.js';
+import { buildMainSentryOptions, mainBreadcrumb } from '../../src/telemetry/sentry.js';
 
 const posthog = vi.hoisted(() => ({
   instances: [] as unknown[],
@@ -87,6 +87,20 @@ describe('main-process telemetry wiring', () => {
     expect(sent).not.toHaveProperty('server_name');
     expect(sent).not.toHaveProperty('request');
     expect(sent.exception.values[0]?.stacktrace.frames[0]?.filename).toBe('dist/main.js');
+  });
+
+  it('turns logger entries into breadcrumbs of category main', () => {
+    expect(mainBreadcrumb('info', 'server is ready')).toEqual({
+      category: 'main',
+      level: 'info',
+      message: 'server is ready',
+    });
+    expect(mainBreadcrumb('warn', 'server exited')).toEqual({
+      category: 'main',
+      level: 'warning',
+      message: 'server exited',
+    });
+    expect(mainBreadcrumb('error', 'giving up').level).toBe('error');
   });
 
   it('scrubs breadcrumbs', () => {
