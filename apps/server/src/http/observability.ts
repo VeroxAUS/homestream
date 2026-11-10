@@ -22,7 +22,7 @@ const UNMATCHED_ROUTE = 'unmatched';
 /**
  * Request id on every response, one structured log line per request and the HTTP metrics.
  * Segment serving, the event stream and the monitoring endpoints are not counted or logged at info level: they are the
- * high-volume or self-referential traffic.
+ * high-volume or self-referential traffic. The event stream is hijacked and skips onResponse; its route logs its own line.
  */
 export function registerRequestObservability(app: FastifyInstance, ctx: AppContext): void {
   app.addHook('onRequest', (request, reply, done) => {

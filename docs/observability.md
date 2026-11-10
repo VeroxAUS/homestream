@@ -14,7 +14,7 @@ Everything here is asynchronous and cheap by design. Telemetry never blocks a re
 
 ## Logs
 
-`server.log` in `DATA_DIR` is one JSON object per line (pino). Each finished request logs one line at `info` with `reqId`, `method`, `route` (the route template, for example `/api/movie/:tmdbId`, never the raw URL), `statusCode` and `responseTimeMs`. Requests to the paths listed above log at `debug` only, so a Prometheus scrape does not fill the log. Every line passes through `redact()`, and pino additionally redacts authorization, cookie and token fields.
+`server.log` in `DATA_DIR` is one JSON object per line (pino). Each finished request logs one line at `info` with `reqId`, `method`, `route` (the route template, for example `/api/movie/:tmdbId`, never the raw URL), `statusCode` and `responseTimeMs`. Requests to the paths listed above log at `debug` only, so a Prometheus scrape does not fill the log. The event stream (`/api/events`) never finishes while the client is connected, so it logs one `event stream opened` line at `info` (same `reqId`, `route` and `statusCode`) when the subscription starts; heartbeats and events are not logged. Every line passes through `redact()`, and pino additionally redacts authorization, cookie and token fields.
 
 ## Metrics (`GET /metrics`)
 

@@ -30,6 +30,12 @@ export function registerEventRoutes(app: FastifyInstance, ctx: AppContext, optio
     raw.writeHead(200, headers);
     open.add(raw);
 
+    // Hijacked replies never reach onResponse, so the stream's only log line is written here, once per subscription.
+    request.log.info(
+      { method: request.method, route: request.routeOptions.url ?? '/api/events', statusCode: 200 },
+      'event stream opened',
+    );
+
     raw.write(`retry: 3000\n${frame('heartbeat', { ts: Date.now() })}`);
 
     const unsubscribe = ctx.bus.subscribe((event) => {

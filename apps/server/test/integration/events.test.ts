@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/events/bus.js';
+import { createLogger, type AppLogger } from '../../src/logger.js';
 import { clearSecrets, registerSecret } from '../../src/redact.js';
 import { makeTempDir, removeDir, startTestApp } from '../helpers.js';
 
@@ -99,5 +102,59 @@ describe('GET /api/events', () => {
     expect(tb).toContain('event: log');
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(app.ctx.bus.listenerCount).toBe(0);
+  });
+});
+
+describe('GET /api/events request log line', () => {
+  let root: string;
+  let appLogger: AppLogger;
+  let app: FastifyInstance;
+  let base: string;
+  let logFile: string;
+
+  beforeAll(async () => {
+    root = makeTempDir('sse-log');
+    const logDir = path.join(root, 'logs');
+    appLogger = createLogger({ dataDir: logDir, stdout: false });
+    logFile = path.join(logDir, 'server.log');
+    app = await startTestApp(root, {}, { heartbeatMs: 30, logger: appLogger.logger });
+    base = await app.listen({ port: 0, host: '127.0.0.1' });
+  });
+  afterAll(async () => {
+    await app.close();
+    await appLogger.close();
+    removeDir(root);
+  });
+
+  function logLines(): Array<Record<string, unknown>> {
+    return readFileSync(logFile, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  it('logs the stream with its X-Request-ID while it is open, before any shutdown', async () => {
+    const response = await fetch(`${base}/api/events`, { headers: { 'x-request-id': 'req-sse-open' } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-request-id')).toBe('req-sse-open');
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    await reader.read();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const lines = logLines().filter((entry) => entry.reqId === 'req-sse-open');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ method: 'GET', route: '/api/events', statusCode: 200 });
+    await reader.cancel();
+  });
+
+  it('writes one line per stream, not one per heartbeat or event', async () => {
+    const response = await fetch(`${base}/api/events`, { headers: { 'x-request-id': 'req-sse-quiet' } });
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    setTimeout(() => app.ctx.bus.emit('log', { message: 'hello' }), 20);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await reader.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(logLines().filter((entry) => entry.reqId === 'req-sse-quiet')).toHaveLength(1);
   });
 });

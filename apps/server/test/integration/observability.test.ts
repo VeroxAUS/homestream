@@ -157,7 +157,7 @@ describe('request log line', () => {
     expect(lines.find((entry) => entry.msg === 'request completed')?.statusCode).toBe(500);
   });
 
-  it('does not log health probes, metrics scrapes or the event stream at info level', async () => {
+  it('does not log health probes, or metrics scrapes at info level', async () => {
     await app.inject({ url: '/metrics', headers: { 'x-request-id': 'req-quiet-1' } });
     await app.inject({ url: '/healthz', headers: { 'x-request-id': 'req-quiet-2' } });
     await app.inject({ url: '/readyz', headers: { 'x-request-id': 'req-quiet-3' } });
