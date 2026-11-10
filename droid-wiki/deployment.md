@@ -65,7 +65,19 @@ Graceful close tears down workers, event streams, sessions, proxy and telemetry.
 
 `.github/workflows/ci.yml` defines required **Linux** and **Windows** checks, plus advisory **Web e2e**. It validates formatting, lint/types, boundaries, dependency consistency, code/debt/size gates, generated docs, offline tests/coverage and bundles. GPU/live tiers never run there.
 
-Linux carries the broad gates and sequential workspace coverage. Windows also builds server/web/desktop, installs the Electron binary into its runner-temp cache, and runs both real launch scenarios sequentially with `pnpm --filter @homestream/desktop smoke`:
+The required **Linux** job is a gate over three independent jobs in `.github/workflows/ci.yml`:
+
+| Job               | Responsibility                                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux checks**  | Formatting, lint/types, dead-code/duplication/boundaries, dependency consistency, size/bundle gates, agent/docs/generated exports, flags, debt and environment-key checks |
+| **Linux tests**   | Software FFmpeg installation, sequential workspace `pnpm test:coverage`, merged reports, summary and `test-reports` artifact                                              |
+| **Linux secrets** | Redacted Gitleaks scan of the full git history; this checkout fetches full history                                                                                        |
+
+The gate uses `needs` and `if: always()` and fails unless every dependency succeeded. Failed, cancelled or skipped dependencies cannot leave it green. The three jobs have no dependency, conditional skip or tolerated-failure setting. Branch protection still requires only **Linux** and **Windows**; inspect the failing child job for the actual check error (`.github/workflows/ci.yml`, `apps/server/test/scripts/workflows.test.ts`).
+
+**Linux tests** caches FFmpeg `.deb` packages by runner OS and image version. A valid warm cache installs through `dpkg` and verifies `ffmpeg`; a missing or failed cache falls back to apt. Cold-cache attempts cap update/install at 60/90 seconds, retry three times, and run inside an eight-minute step limit. `docs/ci.md` records typical whole-run time around four minutes and an under-ten-minute target, not a guarantee or a fresh measurement from this wiki refresh. Parallel jobs reduce the critical path rather than removing gates.
+
+Windows also builds server/web/desktop, installs the Electron binary into its runner-temp cache, and runs both real launch scenarios sequentially with `pnpm --filter @homestream/desktop smoke`:
 
 - First run uses server/DevTools 8616/8617 and checks the 20-member bridge, owned-server status, visible window/tray, setup screen and saved desktop setting (`apps/desktop/test/smoke/launch.smoke.ts`).
 - Configured launch uses 8618/8619, invented keys and the local web e2e stub hub on 8604–8607. It waits for the Home content mark, no setup screen, Trending Movies and poster text including “The Stub Matrix,” confirms a stub TMDB trending request, and checks that no session started (`apps/desktop/test/smoke/configured.smoke.ts`). The server fetch preloader redirects TMDB to loopback and rejects other non-loopback fetches.
@@ -82,11 +94,11 @@ Wiki-only changes are ignored by normal CI. Superseded PR runs can cancel; main 
 
 `docs/ci.md` defines three non-required automations, none of which writes application code to main:
 
-| Automation                             | Behavior                                                                                                                                                                                           |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/droid-review.yml`   | PR inline findings/summary with sticky cleanup; every main push gets commit review/summary. Generated-only pushes get a short summary without calling Droid. Fork/Dependabot secrets are withheld. |
-| CI timing job, `scripts/ci-timing.mjs` | Each main CI run appends a record to orphan `ci-metrics`; PRs update a sticky comparison against the median of ten successful main runs. History is retained rather than pruned.                   |
-| `.github/workflows/code-health.yml`    | Daily **18:30 UTC**/manual read-only review, one rolling `Code health` issue. Skips when no reviewable new commit exists; pushes no code or PR.                                                    |
+| Automation                             | Behavior                                                                                                                                                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/droid-review.yml`   | PR inline findings/summary with sticky cleanup; every main push gets commit review/summary. Generated-only pushes get a short summary without calling Droid. Fork/Dependabot secrets are withheld.                                      |
+| CI timing job, `scripts/ci-timing.mjs` | Each main CI run appends a record to orphan `ci-metrics`; PRs update a sticky comparison against the median of ten successful main runs. Test durations come from the **Linux tests** artifact. History is retained rather than pruned. |
+| `.github/workflows/code-health.yml`    | Daily **18:30 UTC**/manual read-only review, one rolling `Code health` issue. Skips when no reviewable new commit exists; pushes no code or PR.                                                                                         |
 
 ### Other workflows
 

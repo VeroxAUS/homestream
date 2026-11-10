@@ -43,6 +43,9 @@ Vitest uses jsdom, the shared-source alias and V8 coverage. It includes colocate
 | `apps/web/src/pages/PlayerControls.test.tsx`           | Keyboard/buttons, subtitles/audio, info and hidden chrome         |
 | `apps/web/src/pages/PlayerExtras.test.tsx`             | Native HLS fallback, pagehide and failed track changes            |
 | `apps/web/src/pages/PlayerFailures.test.tsx`           | Rejected browser operations and failure tolerance                 |
+| `apps/web/src/player/useHls.test.ts`                   | Status-0 retry predicate/bounds and redundant selection avoidance |
+| `apps/web/src/pages/PlayerSubtitleReload.test.tsx`     | Off/non-default subtitle preservation and replaced-stream guards  |
+| `apps/web/src/desktop/Shell.test.tsx`                  | Bridge-only setup even with cached missing-key health data        |
 | `apps/web/src/pages/ResumeFlow.test.tsx`               | Player exit updates cached Home/details progress                  |
 | `apps/web/src/events/events.test.tsx`                  | Health latest-answer ordering, cancellation and reconnect         |
 | `apps/web/src/desktop/MiniPlayer.test.tsx`             | Handoff, attached-session Retry and cleanup ownership             |
@@ -59,7 +62,9 @@ Other colocated tests cover Home/carousel, details, navigation, UUID fallback, s
 
 ## Isolated browser flow
 
-`apps/web/e2e/build.mjs` requires a built server and builds two UIs with telemetry inputs explicitly cleared before overrides: **plain** has no keys, **stub** targets local Sentry/PostHog receivers and enables the stub-only deliberate-error trigger.
+`apps/web/e2e/build.mjs` requires a built server and builds two UIs with explicit telemetry isolation. Each Vite child receives `{ ...process.env, ...env }`: the plain build overrides inherited web DSN, PostHog key/host, telemetry/stub switches, release-build switch, Sentry auth token, release and environment with empty strings. `apps/web/vite.config.ts` merges process variables after `.env`, so even a developer's configured environment cannot supply these values to **plain**. This is no-key isolation, not setting the telemetry switch to `off`. **Stub** starts from the same cleared values, then supplies loopback Sentry/PostHog settings, the stub-only deliberate-error trigger and the `e2e` Sentry environment. These are fixture-build settings, not changes to normal production telemetry defaults.
+
+Before building, `apps/web/e2e/build.mjs` removes only `apps/web/reports/e2e-run`, clearing the prior fixture databases and their 10-minute TMDB cache. The navigation-search abort test waits for the exact outgoing slow request before replacing it, rather than assuming a 600 ms sleep was enough; it then checks the newest result and the old request's abort. It does not wait for the slow response (`apps/web/e2e/nav-search.spec.ts`). See [search test synchronization](search.md#modification-entry-points-and-tests).
 
 Playwright starts a loopback hub and two real server processes. Servers have distinct data/transcode roots, nonexistent env-file paths, telemetry/mDNS off, random source-proxy ports and a **60 MB/s** download cap. `apps/web/e2e/ports.json` allocates **8602–8607**. One worker runs serially, with one retry in CI.
 
@@ -117,4 +122,4 @@ Chromium must be installed separately. Keep new component tests offline, preserv
 | `apps/web/e2e/support/desktopBridge.ts`   | Browser-side desktop settings double                  |
 | `apps/web/e2e/support/redirect-fetch.mjs` | Server fetch redirection/restriction                  |
 
-Tracked web scope at `bb09d63`: **119 production files**, **46 unit/component test files**, **10 browser specs**, **56/119 = 0.47** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites or live/GPU tests were run for this wiki update.
+Tracked web scope at `663492c`: **119 production files**, **48 unit/component test files**, **10 browser specs**, **58/119 = 0.49** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites or live/GPU tests were run for this wiki update.

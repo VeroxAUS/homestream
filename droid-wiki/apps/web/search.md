@@ -75,6 +75,8 @@ Change search timing/length constants in `apps/web/src/lib/searchUrl.ts`, input 
 
 `apps/web/src/components/NavSearch.test.tsx`, `apps/web/src/pages/SearchPage.test.tsx` and `apps/web/src/lib/searchUrl.test.ts` cover typing/history, threshold/debounce/Enter, abort/late answers, URL helpers and phone state. `apps/web/e2e/nav-search.spec.ts` adds real browser timing, Back/Forward, responsive layout, drag regions, desktop-like shortcuts and lazy-code checks against the isolated hub. These are committed test boundaries, not freshly executed results.
 
+The superseded-request browser test registers `page.waitForRequest` for the exact slow `/api/search?q=...` value **before typing**, waits until that request is sent, then replaces the field with the fast query. It does not wait for the slow response or use a fixed 600 ms readiness sleep. It then waits for the newest result, asserts `net::ERR_ABORTED` for the old request, and samples for stale results for 35 × 100 ms. Retry-specific query pairs and resetting the fixture database/cache before browser builds keep prior answers from bypassing the configured slow response (`apps/web/e2e/nav-search.spec.ts`, `apps/web/e2e/build.mjs`). These are test synchronization/isolation changes, not a new search debounce or product behavior; see [browser flow](build-and-tests.md#isolated-browser-flow).
+
 ## Key source files
 
 | File                                      | Purpose                                        |

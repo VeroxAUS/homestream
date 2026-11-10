@@ -43,7 +43,7 @@ graph LR
 
 Health is not a dashboard-only feature: navigation and desktop setup consume it globally. SSE opening fetches a baseline through the health Query; pushed answers cancel older requests. Polling runs only when the stream is not live. Device registration, SSE and telemetry wait for content and idle time, but visible-page requests do not (`apps/web/src/events/serverEvents.ts`, `apps/web/src/components/HealthPill.tsx`, `apps/web/src/lib/startup.ts`).
 
-The renderer uses the implemented preload bridge for desktop behavior, not cross-app imports. Window creation and server supervision belong to the [Electron shell](../desktop/index.md); the renderer integration is described [separately](desktop-integration.md).
+The renderer uses the implemented preload bridge for desktop behavior, not cross-app imports. First-run setup requires that bridge as well as missing required keys; ordinary browsers retain Home's normal loading/error/content states even if navigation has cached a missing-key health answer (`apps/web/src/desktop/useMissingKeys.ts`). Window creation and server supervision belong to the [Electron shell](../desktop/index.md); the renderer integration is described [separately](desktop-integration.md).
 
 ## Integration and modification points
 
@@ -70,6 +70,6 @@ Search typing updates the URL before the data request, while spoiler changes upd
 
 ## Measured scope
 
-At commit `bb09d63f4166d4ca2d7bdc47e14eea5c837d2875`, tracked web files contain **119 production TS/TSX files**, **46 unit/component test files** and **10 browser specs**: **56/119 = 0.47 test files per production file**. Unit/component files alone give **46/119 = 0.39**. Method: enumerate `git ls-files apps/web`; production means TS/TSX under `apps/web/src/` excluding declarations, test files and `apps/web/src/test/`; tests mean `*.test.ts(x)` plus `*.spec.ts`. CSS, fonts, fixture helpers and build configuration are excluded from the production denominator. This is a file inventory, not executed coverage or test-case counts.
+At commit `663492c256cb1f3c715f761a9d44e23db4c68b33`, tracked web files contain **119 production TS/TSX files**, **48 unit/component test files** and **10 browser specs**: **58/119 = 0.49 test files per production file**. Unit/component files alone give **48/119 = 0.40**. Method: enumerate `git ls-files apps/web`; production means TS/TSX under `apps/web/src/` excluding declarations, test files and `apps/web/src/test/`; tests mean `*.test.ts(x)` plus `*.spec.ts`. CSS, fonts, fixture helpers and build configuration are excluded from the production denominator. This is a file inventory, not executed coverage or test-case counts.
 
 Unique human authors: **1**, VeroxAUS, using the supplied verified `origin/main` history with bots excluded and `.github/CODEOWNERS` as the ownership cross-check. Subpage counts use the same file method and explicit narrower scopes.

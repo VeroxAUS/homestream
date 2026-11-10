@@ -38,7 +38,9 @@ Readiness limiting is opt-in for that route, not blanket API throttling. Playbac
 
 `createMainWindow`/`createMiniWindow` in `apps/desktop/src/shell/windows.ts` enable sandboxing/context isolation and disable Node integration. The preload in `apps/desktop/src/preload.cts` exposes named capabilities, not arbitrary IPC or filesystem access.
 
-`registerIpc` in `apps/desktop/src/ipc.ts` checks the sending frame's URL against the exact loopback origin or bundled startup page; handlers and the settings store validate arguments. This is URL-based trust, not per-window authorization: same-origin frames are not separately excluded. Navigation outside trusted URLs is blocked; new windows are denied, but **any HTTPS URL** requested through the new-window handler can be opened in the external browser, without a destination-host allowlist (`apps/desktop/src/shell/windows.ts`). The default session permits fullscreen only (`apps/desktop/src/shell/shell.ts`).
+`registerIpc` in `apps/desktop/src/ipc.ts` checks the sending frame's URL against the exact loopback origin or bundled startup page; handlers and the settings store validate arguments. This is URL-based trust, not per-window authorization: same-origin frames are not separately excluded. Navigation outside trusted URLs is blocked; new windows are denied, but **any HTTPS URL** requested through the new-window handler can be opened in the external browser, without a destination-host allowlist (`apps/desktop/src/shell/windows.ts`).
+
+Main and mini windows share default-session permission request/check handlers in `apps/desktop/src/permissions.ts`, installed by `apps/desktop/src/shell/shell.ts`. They allow fullscreen and limit keyboard lock to the server origin; other permissions are denied. These are session-level handlers, not independent per-window grants or device-selection/device-permission handlers. `apps/desktop/test/permissions.test.ts` covers the policy with fakes; no live Electron permission prompt was exercised during this refresh. This paragraph reflects `663492c` on 2026-11-10.
 
 Keep the trusted renderer/server boundary aligned with LAN exposure. See [windows and IPC](apps/desktop/windows-and-ipc.md) for handoff and sender limitations, rather than treating the bridge as a separate account system.
 
@@ -66,13 +68,13 @@ Account controls still matter: Sentry **Prevent Storing of IP Addresses** and Po
 
 `scripts/pre-commit-secrets.mjs` scans staged additions/blocked paths, uses Gitleaks when available and otherwise built-in patterns, and compares eligible local configuration literals without printing values. It is not a complete full-history scanner; fixture allowances are not permission to hide real secrets. `.gitleaks.toml` holds custom rules.
 
-| Automation                       | Scope                                               |
-| -------------------------------- | --------------------------------------------------- |
-| `lefthook.yml`                   | Staged secret scan and quality hooks                |
-| `.github/workflows/ci.yml`       | Linux full-history redacted Gitleaks scan           |
-| `.github/workflows/gitleaks.yml` | Push/PR, weekly and manual history scans            |
-| `.github/workflows/codeql.yml`   | JavaScript/TypeScript security-and-quality analysis |
-| `.github/dependabot.yml`         | Weekly dependency/action updates                    |
+| Automation                       | Scope                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `lefthook.yml`                   | Staged secret scan and quality hooks                                                                 |
+| `.github/workflows/ci.yml`       | Dedicated **Linux secrets** full-history redacted Gitleaks scan, required through the **Linux** gate |
+| `.github/workflows/gitleaks.yml` | Push/PR, weekly and manual history scans                                                             |
+| `.github/workflows/codeql.yml`   | JavaScript/TypeScript security-and-quality analysis                                                  |
+| `.github/dependabot.yml`         | Weekly dependency/action updates                                                                     |
 
 Wiki-only push/PR exclusions do not remove separate scheduled/manual security runs. Source workflow declarations are not proof that branch protection or external security settings are applied. In particular, the current CI file has no `pnpm audit` step despite that statement in `SECURITY.md`.
 

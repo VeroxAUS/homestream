@@ -8,7 +8,9 @@ The web build is also the implemented Electron renderer. `desktopBridge` and `in
 
 ## Setup, chrome and Settings
 
-`useMissingKeys` in `apps/web/src/desktop/useMissingKeys.ts` reads the shared health query only when a desktop bridge exists. `configKeys` in `apps/web/src/desktop/configKeys.ts` extracts validated key-presence records from the config check, sorted TMDB, gateway, TorBox, then unknown keys. The first-run screen appears only for **missing required** records; optional TorBox absence alone does not block Home.
+`useMissingKeys` in `apps/web/src/desktop/useMissingKeys.ts` enables its shared health query only when a desktop bridge exists, and separately gates interpretation of cached data on that bridge. Disabling a Query observer alone would still expose health cached by navigation. Without the bridge the hook returns `null`, so an ordinary browser keeps Home's normal content/loading/error UI and never gets the desktop setup screen or Open config control, even after the health pill has cached missing keys (`apps/web/src/desktop/Shell.test.tsx`). This does not make unconfigured server integrations work.
+
+`configKeys` in `apps/web/src/desktop/configKeys.ts` extracts validated key-presence records from the config check, sorted TMDB, gateway, TorBox, then unknown keys. With the bridge, the first-run screen appears only for **missing required** records; optional TorBox absence alone does not block Home.
 
 `FinishSetup` in `apps/web/src/desktop/FinishSetup.tsx` replaces Home, showing names and Set/Missing, **never secret values**. Open config delegates to the bridge. Check again requests a server restart, then makes up to **20** health checks with **1-second** waits, invalidating cached data once required keys are present. Restart refusal can display its message. The screen can also open the currently placeholder Health dashboard.
 
@@ -60,6 +62,7 @@ Extend bridge types in [shared](../../packages/shared.md), implement IPC in the 
 | File                                            | Purpose                                             |
 | ----------------------------------------------- | --------------------------------------------------- |
 | `apps/web/src/desktop/bridge.ts`                | Desktop/mini detection                              |
+| `apps/web/src/desktop/useMissingKeys.ts`        | Bridge-gated query and cached config interpretation |
 | `apps/web/src/desktop/FinishSetup.tsx`          | Missing-key guidance and restart/check loop         |
 | `apps/web/src/desktop/DesktopSettings.tsx`      | Renderer settings and About rows                    |
 | `apps/web/src/desktop/AppKeys.tsx`              | Search shortcuts and shortcut sheet                 |

@@ -10,7 +10,7 @@ The logger does not implement file rotation or size retention. Stream errors are
 
 `registerRequestObservability` in `apps/server/src/http/observability.ts` replaces automatic access logging. Completion fields are `reqId`, method, route template (or `unmatched`), status code and response time rounded to one decimal; it does not log raw queries.
 
-**HLS, `/metrics`, `/healthz`, `/readyz` and `/api/events`** are excluded from HTTP request metrics and use debug-level completion logging. Turning on debug increases high-volume media noise; keep it bounded.
+**HLS, `/metrics`, `/healthz`, `/readyz` and `/api/events`** are excluded from HTTP request metrics. HLS and probes use debug-level completion logging. The hijacked SSE reply bypasses `onResponse`: `apps/server/src/routes/events.ts` instead writes one info-level **`event stream opened`** line when each subscription starts, with `reqId`, `method`, route template and `statusCode: 200`. There is no completion duration, heartbeat log or per-event access log. Turning on debug increases high-volume media noise; keep it bounded.
 
 ## Request correlation
 
@@ -54,7 +54,7 @@ Connections unsubscribe/clear timers on close/error; server pre-close ends open 
 
 `apps/web/src/logger.ts` provides development-console logging and buffers up to **50 non-debug entries** until an optional telemetry sink attaches. The logger does not scrub that console/buffer itself; outbound breadcrumbs pass through the Sentry sanitizer in `apps/web/src/telemetry/sentry.ts`. This is not a browser log-file service, and secrets/user text must never enter the call sites.
 
-Desktop `startTelemetry` in `apps/desktop/src/shell/telemetry.ts` wires `apps/desktop/src/logger.ts` to **`DATA_DIR/desktop.log`**, sharing the main scrubber and optional Sentry breadcrumb sink. At startup, an existing log larger than **2 MiB** is renamed to `desktop.log.1`; it is not continuously size-rotated while the process runs. Sink/open failures degrade without taking down the shell.
+Desktop `startTelemetry` in `apps/desktop/src/shell/telemetry.ts` wires `apps/desktop/src/logger.ts` to **`DATA_DIR/desktop.log`**, sharing the main scrubber and optional Sentry breadcrumb sink. Main-process entries at info and above become Sentry breadcrumbs in category **`main`**, distinct from renderer category `log` (`apps/desktop/src/telemetry/sentry.ts`, `docs/observability.md`). At startup, an existing log larger than **2 MiB** is renamed to `desktop.log.1`; it is not continuously size-rotated while the process runs. Sink/open failures degrade without taking down the shell.
 
 Main initialization, restart/supervisor events and graceful quit are implemented; desktop logging is no longer an unwired helper. See [desktop](../apps/desktop/index.md).
 
@@ -64,18 +64,19 @@ Pino censors structured token/auth/cookie/URL/query fields and redacts the full 
 
 Local logs can still contain operational paths and session/device details. Desktop structured-field scrubbing handles top-level strings and Error messages, not arbitrary nested objects (`apps/desktop/src/logger.ts`); do not pass unreviewed nested payloads. Treat storage/backups as private and review output before sharing. Use fixed messages and small structured fields; persist only events worth keeping/displaying. See [security](../security.md), [configuration](../reference/configuration.md) and [data models](../reference/data-models.md).
 
-The behavior above was checked against source at **`0a8f04f` on 2026-11-08**. No running log sink or retention job was exercised.
+SSE opening logs and desktop breadcrumb wiring were refreshed against **`663492c` on 2026-11-10**; unaffected retention details retain their earlier source inspection. No running log sink or retention job was exercised. `apps/server/test/integration/events.test.ts` checks that the opening line exists while the stream remains connected and that heartbeats/events add no duplicate request lines.
 
 ## Key source files
 
-| File                                                 | Purpose                                        |
-| ---------------------------------------------------- | ---------------------------------------------- |
-| `apps/server/src/logger.ts`                          | Pino destinations, redaction and request mixin |
-| `apps/server/src/http/observability.ts`              | Completion fields/exclusions                   |
-| `apps/server/src/requestContext.ts`                  | ID validation and async scope                  |
-| `apps/server/src/events/record.ts`                   | Durable writes and pruning                     |
-| `apps/server/src/events/query.ts`                    | Filtering/read-time redaction                  |
-| `apps/server/src/routes/events.ts`                   | SSE framing and lifetime                       |
-| `apps/desktop/src/shell/telemetry.ts`                | Main log sink and startup rollover             |
-| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration                  |
-| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE                          |
+| File                                                 | Purpose                                           |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `apps/server/src/logger.ts`                          | Pino destinations, redaction and request mixin    |
+| `apps/server/src/http/observability.ts`              | Completion fields/exclusions                      |
+| `apps/server/src/requestContext.ts`                  | ID validation and async scope                     |
+| `apps/server/src/events/record.ts`                   | Durable writes and pruning                        |
+| `apps/server/src/events/query.ts`                    | Filtering/read-time redaction                     |
+| `apps/server/src/routes/events.ts`                   | SSE framing and lifetime                          |
+| `apps/desktop/src/shell/telemetry.ts`                | Main log sink and startup rollover                |
+| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration                     |
+| `apps/server/test/integration/events.test.ts`        | One correlated opening line per live subscription |
+| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE                             |

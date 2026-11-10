@@ -28,4 +28,4 @@ Four workspaces exist: `apps/server`, `apps/web`, `apps/desktop`, and `packages/
 
 Settings now separates device and desktop preferences from an About tab. Spoiler hiding is a browser-local choice, enabled by default, not a server setting (`apps/web/src/pages/SettingsPage.tsx`, `apps/web/src/lib/spoilers.ts`). These screens share the same implementation in the browser and desktop renderer.
 
-This wiki describes commit `bb09d63f4166d4ca2d7bdc47e14eea5c837d2875`. This incremental refresh preserves unaffected pages and their original measurement dates. [Statistics](../by-the-numbers.md) defines the current measurement scope, and [lore](../lore.md) follows git timestamps. Maintained docs and runbooks live under `docs/`; automated refresh is explained in `docs/wiki.md`.
+This wiki describes commit `663492c256cb1f3c715f761a9d44e23db4c68b33`. This incremental refresh preserves unaffected pages and their original measurement dates. [Statistics](../by-the-numbers.md) defines the current measurement scope, and [lore](../lore.md) follows git timestamps. Maintained docs and runbooks live under `docs/`; automated refresh is explained in `docs/wiki.md`.

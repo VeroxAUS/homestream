@@ -5,7 +5,7 @@ HomeStream implements request-ID correlation in `apps/server/src/requestContext.
 ## Follow a failure
 
 1. Read response `X-Request-ID`, or supply a valid short ID.
-2. Search `reqId` in `DATA_DIR/server.log` to join request completion with service/error logs in that async chain.
+2. Search `reqId` in `DATA_DIR/server.log` to join request completion, or the SSE subscription-opening line, with service/error logs in that async chain.
 3. If an unexpected HTTP failure was reported to enabled Sentry, search its `request_id` tag.
 4. Inspect domain events and session/activity snapshots separately for playback state.
 
@@ -16,6 +16,8 @@ HomeStream implements request-ID correlation in `apps/server/src/requestContext.
 Browser `apiFetch` in `apps/web/src/api/client.ts` adds request IDs and includes them in breadcrumbs/`ApiError.requestId`. Desktop `createServerClient` in `apps/desktop/src/serverHttp.ts` uses `withRequestId` from `apps/desktop/src/requestId.ts` for main-process server requests. This is working shell wiring, not an unused request helper. See [desktop supervision](../apps/desktop/supervisor.md).
 
 The browser wrapper creates a fresh UUID for each call and records that generated value; it does not read a rewritten response header back into `ApiError`. Raw `EventSource` in `apps/web/src/events/serverEvents.ts` is a separate SSE connection without the wrapper's custom header. Fetch correlation therefore does not imply every client transport shares one ID or trace.
+
+For `/api/events`, the server-generated or accepted ID is echoed in the response and bound to one info-level `event stream opened` line at subscription start. The hijacked reply bypasses ordinary completion logging, so do not wait for a completion line or expect `responseTimeMs`. Heartbeats and event delivery do not add access-log lines (`apps/server/src/routes/events.ts`, `apps/server/test/integration/events.test.ts`). This adds correlation, not distributed tracing.
 
 ## What Sentry actually does
 
@@ -33,7 +35,7 @@ Start with an explicit instrumentation plan rather than enabling all default int
 
 Preserve media/probe/SSE exclusions and scrub transactions through `sanitizeSentryEvent` in `packages/shared/src/sanitize.ts`. Add stub-collector payload tests and update `docs/PRIVACY.md`/`docs/observability.md` when actual outbound behavior changes. Measure playback/Home overhead before and after hot-path changes.
 
-This page is based on source inspection at **`0a8f04f`, 2026-11-08**, not a live trace capture or benchmark. Enablement and build-time/runtime opt-outs are in [configuration](../reference/configuration.md); the maintained operational reference is `docs/observability.md`.
+SSE correlation was refreshed at **`663492c`, 2026-11-10**; tracing configuration retains its earlier source inspection at `0a8f04f`, 2026-11-08. This is not a live trace capture or benchmark. Enablement and build-time/runtime opt-outs are in [configuration](../reference/configuration.md); the maintained operational reference is `docs/observability.md`.
 
 ## Key source files
 
@@ -41,6 +43,7 @@ This page is based on source inspection at **`0a8f04f`, 2026-11-08**, not a live
 | ---------------------------------------------------- | ------------------------------------------------- |
 | `apps/server/src/requestContext.ts`                  | ID validation and async scope                     |
 | `apps/server/src/http/observability.ts`              | Correlation header and completion instrumentation |
+| `apps/server/src/routes/events.ts`                   | Correlated SSE subscription-opening log           |
 | `apps/server/src/telemetry/sentry.ts`                | Restricted integrations and sampling              |
 | `apps/server/src/telemetry/playbackObserver.ts`      | Manual lifecycle breadcrumbs/reports              |
 | `apps/web/src/api/client.ts`                         | Renderer request correlation                      |

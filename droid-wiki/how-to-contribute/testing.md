@@ -29,6 +29,8 @@ graph TD
 
 Plain server `vitest run` selects all projects; root `pnpm test` therefore is not a safe substitute for `test:ci` (`apps/server/package.json`, `turbo.json`). Local HTTP stub servers are allowed in offline tests.
 
+CI runs coverage and uploads `test-reports` in **Linux tests**, independently of **Linux checks** and **Linux secrets**. The required **Linux** gate fails unless all three succeed. Software FFmpeg is cached as runner-image-specific packages; a cache failure falls back to bounded apt attempts (`.github/workflows/ci.yml`). The checked-in layout regression in `apps/server/test/scripts/workflows.test.ts` asserts that the parallel jobs remain unconditional and that required commands were not dropped. See [deployment](../deployment.md#ci-and-releases).
+
 ```powershell
 pnpm --filter @homestream/server exec vitest run --project unit test/net.test.ts
 pnpm --filter @homestream/server exec vitest run --project integration test/integration/progress-routes.test.ts
@@ -48,6 +50,8 @@ Server/shared tests live in their `test` directories; web tests sit beside sourc
 Web helpers supply fresh Query clients and method/path fetch stubs. Player tests use fake HLS and DOM/media controls, and desktop renderer tests use a typed bridge fake (`apps/web/src/test/render.tsx`, `apps/web/src/test/fakeHls.ts`, `apps/web/src/test/player.tsx`, `apps/web/src/test/desktopBridge.ts`). SSE cases model reconnects and interleaved health answers, not a live telemetry service (`apps/web/src/events/events.test.tsx`).
 
 Desktop unit tests exercise supervision, monitor races, IPC validation, settings, process launch, mini-player state, and telemetry without starting Electron. They also test smoke readiness/process/cleanup helpers with a VM facade and fake processes (`apps/desktop/test/smokeHarness.test.ts`). Cases reject setup, loading, error, missing-heading and empty-poster views; parse Windows/POSIX process tables and descendant cycles; and cover children outliving the launcher, gentle/forced stops, surviving kills, locked folders, missing PIDs and hub cleanup despite shell failure. They do not exercise a real Electron launch or real process teardown.
+
+Recent focused regressions cover a correlated SSE opening line while the connection stays open, with no heartbeat/event duplication (`apps/server/test/integration/events.test.ts`); status-0 HLS fragment retry and subtitle selection after reload (`apps/web/src/player/useHls.test.ts`, `apps/web/src/pages/PlayerSubtitleReload.test.tsx`); and desktop permission scope, bounds round trips and wrong-service startup classification (`apps/desktop/test/permissions.test.ts`, `apps/desktop/test/windowBounds.test.ts`, `apps/desktop/test/supervisor.test.ts`). These checked-in tests are evidence of intended cases, not a claim they ran during this documentation refresh.
 
 ## Real Electron smoke
 

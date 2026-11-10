@@ -25,11 +25,11 @@ The web routes implement browsing, search, title details, playback and Settings.
 
 `Nav` in `apps/web/src/components/Nav.tsx` has Home, one Dashboard link, Settings, the search field and health pill. Dashboard goes to Health and remains active on every dashboard route; there is no dashboard dropdown or separate Search link. `NavSearch` in `apps/web/src/components/NavSearch.tsx` is part of the initial shell, while results remain lazy. See [navigation search](search.md) for debounce, history, keyboard and phone behavior.
 
-`HealthPill` in `apps/web/src/components/HealthPill.tsx` displays real checks and request failures even though its dashboard destination is a placeholder. See [data and startup](data-and-startup.md#health-reconciliation) for health concurrency.
+`HealthPill` in `apps/web/src/components/HealthPill.tsx` displays real checks and request failures even though its dashboard destination is a placeholder. In desktop compact mode, `apps/web/src/components/HealthPill.module.css` hides only the visible text at **`width < 1200px`**, including fractional widths such as 1199.4 px; at 1200 px the compact rule no longer applies. The ordinary rule remains **`max-width: 899px`**. The status dot, full accessible name and tooltip remain. `apps/web/src/components/Nav.test.tsx` checks these CSS boundaries. See [data and startup](data-and-startup.md#health-reconciliation) for health concurrency.
 
 ## Home and search
 
-`HomePage` in `apps/web/src/pages/HomePage.tsx` renders a nonempty Continue Watching row, featured banner, Trending Movies, Trending Shows, Popular Movies and Popular Shows, in that order. Skeletons cover initial loading; a failed initial request offers Retry, and existing data can remain visible. The desktop missing-key check can replace Home with setup.
+`HomePage` in `apps/web/src/pages/HomePage.tsx` renders a nonempty Continue Watching row, featured banner, Trending Movies, Trending Shows, Popular Movies and Popular Shows, in that order. Skeletons cover initial loading; a failed initial request offers Retry, and existing data can remain visible. Only a desktop bridge plus missing required config records can replace Home with setup. `apps/web/src/desktop/useMissingKeys.ts` ignores cached config records without the bridge: a plain browser keeps ordinary Home/error UI, not desktop config-edit/restart controls. Missing keys can still prevent catalog requests from succeeding; this does not bypass server configuration. See [desktop setup](desktop-integration.md#setup-chrome-and-settings).
 
 `Banner` in `apps/web/src/components/Banner.tsx` defaults to a **9-second** rotation, pausing on hover, contained focus, reduced motion or offscreen state. Inactive slides are inert; arrows/dots wrap and keyboard dot navigation moves focus. The first `w1280` backdrop is high priority; its load/error permits the next image, and later selection permits current/next images. Movie Play opens playback; series use View show. Optional interval assignment is covered under [telemetry](../../systems/telemetry.md).
 
@@ -77,6 +77,8 @@ Change route/chrome composition centrally; reuse shared action and error compone
 | ------------------------------------------------------ | ----------------------------------------------- |
 | `apps/web/src/App.tsx`                                 | Route table                                     |
 | `apps/web/src/components/Layout.tsx`                   | Chrome, boundaries and notice hosts             |
+| `apps/web/src/components/HealthPill.module.css`        | Ordinary and compact status-text breakpoints    |
+| `apps/web/src/desktop/useMissingKeys.ts`               | Bridge-gated first-run eligibility              |
 | `apps/web/src/pages/HomePage.tsx`                      | Home and setup composition                      |
 | `apps/web/src/components/Banner.tsx`                   | Rotation, accessibility and image scheduling    |
 | `apps/web/src/pages/ShowDetailsPage.tsx`               | Season/episode state and pagination             |
@@ -91,4 +93,4 @@ Change route/chrome composition centrally; reuse shared action and error compone
 | `apps/web/src/pages/ShowDetailsPage.spoilers.test.tsx` | Completion/loading/local preference rules       |
 | `apps/web/src/notices/notices.test.tsx`                | Notice rendering and actions                    |
 
-Measured tracked scope: `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/notices/` contain **45 production files**, **18 unit/component tests**, **18/45 = 0.40** test-to-source file ratio. Browser specs are excluded from this narrower ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).
+Measured tracked scope: `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/notices/` contain **45 production files**, **19 unit/component tests**, **19/45 = 0.42** test-to-source file ratio. Browser specs are excluded from this narrower ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).
