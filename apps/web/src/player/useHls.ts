@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { logger } from '../logger';
 import { mapSubtitleTracks } from './tracks';
 
+const MAX_FRAGMENT_RETRIES = 90;
+
 export interface PlaybackFailure {
   message: string;
   hint: string;
@@ -12,6 +14,10 @@ export interface PlaybackFailure {
 /**
  * Subtitle segments that are not extracted yet answer 503 with `Retry-After: 1`. The default hls.js policy gives up
  * after a few seconds and loses those cues for good, so fragments are retried about 90 times, one second apart.
+ *
+ * hls.js treats status 0 as a CORS failure and gives up at once unless the browser is offline. Here it is an aborted
+ * or reset connection (a network blip, a server restart), so it is retried too; this applies to video fragments as
+ * well. 4xx answers stay final.
  */
 export function hlsConfig(startPosition: number): Partial<HlsConfig> {
   return {
@@ -22,7 +28,13 @@ export function hlsConfig(startPosition: number): Partial<HlsConfig> {
         maxTimeToFirstByteMs: 20_000,
         maxLoadTimeMs: 120_000,
         timeoutRetry: { maxNumRetry: 4, retryDelayMs: 0, maxRetryDelayMs: 0 },
-        errorRetry: { maxNumRetry: 90, retryDelayMs: 1000, maxRetryDelayMs: 2000 },
+        errorRetry: {
+          maxNumRetry: MAX_FRAGMENT_RETRIES,
+          retryDelayMs: 1000,
+          maxRetryDelayMs: 2000,
+          shouldRetry: (_config, retryCount, _isTimeout, response, hlsVerdict) =>
+            hlsVerdict || (response?.code === 0 && retryCount < MAX_FRAGMENT_RETRIES),
+        },
       },
     },
   };
@@ -32,10 +44,10 @@ export function hlsConfig(startPosition: number): Partial<HlsConfig> {
 export function applySubtitleSelection(hls: Hls, selection: SubtitleSelection | null): void {
   const id = selection?.mode === 'sidecar' ? mapSubtitleTracks(hls.subtitleTracks).get(selection.index) : undefined;
   if (id === undefined) {
-    hls.subtitleTrack = -1;
+    if (hls.subtitleTrack !== -1) hls.subtitleTrack = -1;
     return;
   }
-  hls.subtitleTrack = id;
+  if (hls.subtitleTrack !== id) hls.subtitleTrack = id;
   hls.subtitleDisplay = true;
 }
 
@@ -112,7 +124,13 @@ export function useHls({ videoRef, playlistUrl, startSec, selectionRef, onFatal 
     const onPlaying = () => setReloading(false);
     video.addEventListener('playing', onPlaying, { once: true });
 
-    hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => applySubtitleSelection(hls, selectionRef.current));
+    // hls.js picks its own default rendition right after this event returns and would overwrite a selection made
+    // inside the handler, so the choice is applied once the controller is done.
+    hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () =>
+      queueMicrotask(() => {
+        if (hlsRef.current === hls) applySubtitleSelection(hls, selectionRef.current);
+      }),
+    );
     hls.on(Hls.Events.MANIFEST_PARSED, () => void video.play().catch(() => undefined));
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal) return;

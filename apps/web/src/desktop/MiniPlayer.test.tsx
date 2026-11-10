@@ -246,7 +246,7 @@ describe('the mini player window', () => {
       { isMiniPlayer: true },
     );
     await videoOf();
-    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
     expect(FakeHls.last.subtitleTrack).toBe(0);
     expect(FakeHls.last.subtitleDisplay).toBe(true);
   });
@@ -254,7 +254,7 @@ describe('the mini player window', () => {
   it('keeps subtitles off when they were switched off in the main window', async () => {
     openAttached('/play/movie/278?attach=1&mini=1', { subtitle: null }, { isMiniPlayer: true });
     await videoOf();
-    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
     expect(FakeHls.last.subtitleTrack).toBe(-1);
   });
 

@@ -21,6 +21,8 @@ export class FakeHls {
   ];
   subtitleTrack = -1;
   subtitleDisplay = false;
+  /** What the real subtitle controller picks (the DEFAULT=YES rendition) right after it announces the renditions. */
+  defaultSubtitleTrack = 1;
   source: string | null = null;
   destroyed = false;
   recoverMediaError = vi.fn();
@@ -41,6 +43,7 @@ export class FakeHls {
   }
   emit(event: string, data: unknown = {}) {
     for (const handler of this.handlers.get(event) ?? []) handler(event, data);
+    if (event === FakeHls.Events.SUBTITLE_TRACKS_UPDATED) this.subtitleTrack = this.defaultSubtitleTrack;
   }
 
   static get last(): FakeHls {

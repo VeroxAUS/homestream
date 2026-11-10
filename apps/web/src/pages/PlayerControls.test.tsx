@@ -28,7 +28,7 @@ async function playing(routes: Parameters<typeof openPlayer>[0] = {}, positionSe
   const api = openPlayer({ ...GET_SESSION, ...routes });
   const video = (await screen.findByTestId('player-video')) as HTMLVideoElement;
   startVideo(video, positionSec);
-  act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+  await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
   return { ...api, video };
 }
 
@@ -196,7 +196,7 @@ describe('subtitles and audio', () => {
     await waitFor(() => expect(FakeHls.instances.length).toBe(before + 1));
     expect(FakeHls.last.config).toMatchObject({ startPosition: 77 });
     expect(FakeHls.last.source).toBe('/hls/s1/index.m3u8');
-    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
     expect(FakeHls.last.subtitleTrack).toBe(-1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
@@ -204,7 +204,7 @@ describe('subtitles and audio', () => {
     await waitFor(() => expect(calls.filter((call) => call.method === 'PATCH')).toHaveLength(2));
     expect(calls.filter((call) => call.method === 'PATCH')[1]?.body).toEqual({ subtitle: null });
     await waitFor(() => expect(FakeHls.instances.length).toBe(before + 2));
-    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
     expect(FakeHls.last.subtitleTrack).toBe(1);
   });
 

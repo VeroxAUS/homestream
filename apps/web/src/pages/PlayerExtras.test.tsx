@@ -138,7 +138,7 @@ describe('tracks', () => {
         Response.json(session({ selectedSubtitle: null, subtitleDefault: null }), { status: 201 }),
     });
     startVideo(await videoOf());
-    act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+    await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
     expect(FakeHls.last.subtitleTrack).toBe(-1);
     press('c');
     expect(FakeHls.last.subtitleTrack).toBe(1);

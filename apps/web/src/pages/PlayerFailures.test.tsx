@@ -36,7 +36,7 @@ async function playing(routes: Parameters<typeof openPlayer>[0] = {}) {
   const api = openPlayer(routes);
   const video = (await screen.findByTestId('player-video')) as HTMLVideoElement;
   startVideo(video, 100);
-  act(() => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
+  await act(async () => FakeHls.last.emit('hlsSubtitleTracksUpdated'));
   return { ...api, video };
 }
 
