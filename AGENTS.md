@@ -169,7 +169,7 @@ Telemetry is Sentry (errors) and PostHog (product analytics). The full descripti
 
 ### Web and desktop apps
 
-- **Keys are baked in at build time** for the web UI (`SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST` from the environment or `.env`). A build without them contains no key and makes no telemetry request. `HOMESTREAM_TELEMETRY=off` at build time, or `localStorage['homestream.telemetry']='off'` in one browser, disables it too. Never fetch keys at run time.
+- **Keys are baked in at build time** for the web UI (`SENTRY_DSN_WEB`, `POSTHOG_API_KEY`, `POSTHOG_HOST` from the environment or `.env`). A build without them contains no key and makes no telemetry request. `HOMESTREAM_TELEMETRY=off` at build time (the build then holds no key either), or `localStorage['homestream.telemetry']='off'` in one browser, disables it too. Every variable the web build reads is listed in the `build` task `env` of `turbo.json` (a test fails when one is missing), so it reaches `pnpm build`; the web build is never cached. Never fetch keys at run time.
 - **Never block Home.** `apps/web/src/telemetry/index.ts` is in the initial bundle and imports no Sentry or PostHog code. The `telemetry-*.js` chunk loads after the `hs:home-content` performance mark (`HOME_CONTENT_MARK`) and browser idle time. The Home screen must set that mark when its rows are rendered.
 - **Requests**: call the server through `apiFetch` / `apiGet` (`apps/web/src/api/client.ts`). It adds `X-Request-ID` and throws `ApiError`. Do not call `fetch` for `/api` directly.
 - **Logging**: use `logger` (`apps/web/src/logger.ts`, `apps/desktop/src/logger.ts` in the shell). Entries become Sentry breadcrumbs. Log no URLs with tokens, stream URLs or user text.

@@ -5,6 +5,18 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "HOMESTREAM_TELEMETRY",
+        "HOMESTREAM_TELEMETRY_STUB",
+        "HOMESTREAM_RELEASE_BUILD",
+        "POSTHOG_API_KEY",
+        "POSTHOG_HOST",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_DSN_WEB",
+        "SENTRY_ENVIRONMENT",
+        "SENTRY_ORG",
+        "SENTRY_RELEASE"
+      ],
       "outputs": ["dist/**"]
     },
     "typecheck": {

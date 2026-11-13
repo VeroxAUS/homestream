@@ -41,6 +41,20 @@ describe('telemetryFromEnv', () => {
     expect(telemetryFromEnv({ HOMESTREAM_TELEMETRY: value }, 'production', '0.1.0').off).toBe(true);
   });
 
+  it('bakes no key into an off build', () => {
+    const raw = telemetryFromEnv(
+      {
+        HOMESTREAM_TELEMETRY: 'off',
+        SENTRY_DSN_WEB: 'https://x@y.example.test/1',
+        POSTHOG_API_KEY: 'phc_x',
+        POSTHOG_HOST: 'http://127.0.0.1:9',
+      },
+      'production',
+      '0.1.0',
+    );
+    expect(raw).toMatchObject({ off: true, sentryDsn: null, posthogKey: null, posthogHost: null });
+  });
+
   it('does not treat other values as off', () => {
     expect(telemetryFromEnv({ HOMESTREAM_TELEMETRY: 'on' }, 'production', '0.1.0').off).toBe(false);
   });
