@@ -65,6 +65,7 @@ export default defineConfig({
         'smoke.spec.ts',
         'resume.spec.ts',
         'player-input.spec.ts',
+        'player-volume-keys.spec.ts',
         'details-api.spec.ts',
         'details-cast.spec.ts',
         'nav-search.spec.ts',

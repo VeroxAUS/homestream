@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { startServerEvents, stopServerEvents } from '../events/serverEvents';
 import { health, home, movieDetails, progress, showDetails } from '../test/fixtures';
@@ -115,6 +115,12 @@ describe('ToastHost', () => {
 });
 
 describe('download notices', () => {
+  // The routes are lazy chunks. Importing the player pulls in hls.js and its first transform can take longer than
+  // the 1 s findBy timeout when the whole suite runs in parallel, so load them before the first test starts.
+  beforeAll(async () => {
+    await Promise.all([import('../pages/HomePage'), import('../pages/SettingsPage'), import('../pages/PlayerPage')]);
+  });
+
   const API = {
     'GET /api/home': () => home(),
     'GET /api/health': () => health('ok'),

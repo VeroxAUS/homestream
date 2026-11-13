@@ -54,6 +54,13 @@ export function typesText(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && target.type !== 'range' && target.type !== 'checkbox';
 }
 
+const ARROW_SHORTCUTS: ReadonlySet<Shortcut> = new Set(['skipBack', 'skipForward', 'volumeUp', 'volumeDown']);
+
+/** A native range input steps itself with the arrows; the global seek and volume keys would fight it. */
+function isRangeInput(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement && target.type === 'range';
+}
+
 interface ShortcutHandlers {
   actions: PlayerActions;
   toggleSubtitles: () => void;
@@ -93,6 +100,7 @@ export function useShortcuts(handlers: ShortcutHandlers): void {
       if (event.defaultPrevented || typesText(event.target)) return;
       const shortcut = shortcutFor(event);
       if (!shortcut || (shortcut === 'miniPlayer' && !ref.current.miniPlayer)) return;
+      if (ARROW_SHORTCUTS.has(shortcut) && isRangeInput(event.target)) return;
       event.preventDefault();
       if (event.repeat && NO_REPEAT.has(shortcut)) return;
       run(shortcut);

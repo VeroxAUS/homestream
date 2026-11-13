@@ -155,6 +155,41 @@ describe('keyboard shortcuts', () => {
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => null });
   });
 
+  it.each(['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'])(
+    'leaves %s to the focused volume slider: no seek, no shortcut volume step, key not cancelled',
+    async (key) => {
+      const { video } = await playing();
+      video.volume = 0.5;
+      const slider = screen.getByRole('slider', { name: 'Volume' });
+      slider.focus();
+      const notCancelled = fireEvent.keyDown(slider, { key });
+      expect(notCancelled).toBe(true);
+      expect(video.currentTime).toBe(100);
+      expect(video.volume).toBe(0.5);
+    },
+  );
+
+  it('keeps the other shortcuts alive while the volume slider has focus', async () => {
+    const { video } = await playing();
+    const slider = screen.getByRole('slider', { name: 'Volume' });
+    slider.focus();
+    fireEvent.keyDown(slider, { key: 'k' });
+    expect(video.paused).toBe(true);
+    fireEvent.keyDown(slider, { key: 'm' });
+    expect(video.muted).toBe(true);
+  });
+
+  it('still seeks and steps the volume with the arrows while the seek bar has focus', async () => {
+    const { video } = await playing();
+    video.volume = 0.5;
+    const seek = screen.getByRole('slider', { name: 'Seek' });
+    seek.focus();
+    fireEvent.keyDown(seek, { key: 'ArrowRight' });
+    expect(video.currentTime).toBe(130);
+    fireEvent.keyDown(seek, { key: 'ArrowUp' });
+    expect(video.volume).toBeCloseTo(0.55);
+  });
+
   it('ignores keys typed into a text field and modified keys', async () => {
     const { video } = await playing();
     const field = document.createElement('input');
