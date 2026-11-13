@@ -18,7 +18,7 @@ function readJson(root: string, file: string): unknown {
   return JSON.parse(readText(root, file));
 }
 
-/** The variables the Vite build reads: `env.NAME` in the config files and the build-time telemetry helper. */
+/** The variables the Vite build reads through the `env` object of the config files and the telemetry helper. */
 function buildVariables(): string[] {
   const sources = ['vite.config.ts', 'vite.plugins.ts', 'src/telemetry/buildEnv.ts'];
   const names = new Set<string>();
