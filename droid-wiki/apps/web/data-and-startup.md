@@ -45,7 +45,7 @@ The spoiler preference is a separate `useSyncExternalStore` over browser storage
 
 These are scheduling budgets, not guaranteed startup duration. The Home setup/error states also allow content readiness; a direct player route without a mark can use the timeout fallback.
 
-`apps/web/src/telemetry/index.ts` imports no SDK at startup. Only a configured, non-opted-out build imports the runtime after this gate. Keys come from build-time environment/`.env` in `apps/web/src/telemetry/buildEnv.ts` and `apps/web/vite.config.ts`, never a runtime keys endpoint. No-key builds make no telemetry request; build-time telemetry-off or browser storage opt-out disables it. See [telemetry](../../systems/telemetry.md).
+`apps/web/src/telemetry/index.ts` imports no SDK at startup. Only a configured, non-opted-out build imports the runtime after this gate. Keys come from build-time environment/`.env` in `apps/web/src/telemetry/buildEnv.ts` and `apps/web/vite.config.ts`, never a runtime keys endpoint. Test mode and build-time telemetry-off set the embedded Sentry DSN, PostHog key and PostHog host to `null`, even when the build environment supplies values. No-key builds make no telemetry request. Browser storage opt-out disables telemetry at runtime; it does not rebuild or strip an already-built asset. See [build environment policy](build-and-tests.md#build-environment) and [telemetry](../../systems/telemetry.md). The content/idle gate is unchanged.
 
 ## Health reconciliation
 
@@ -87,5 +87,6 @@ Centralize query keys/schema validation, preserve cancellation when changing hea
 | `apps/web/src/lib/searchUrl.ts`       | Shared URL/search constants and focus marker           |
 | `apps/web/src/lib/spoilers.ts`        | Reactive browser-local preference                      |
 | `apps/web/src/telemetry/index.ts`     | Deferred SDK-free facade                               |
+| `apps/web/src/telemetry/buildEnv.ts`  | Build-time telemetry configuration and key stripping   |
 
-Measured tracked `apps/web/src/api/`, `apps/web/src/device/`, `apps/web/src/events/`, `apps/web/src/lib/` scope: **20 production files**, **9 tests**, **9/20 = 0.45** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope).
+Measured tracked `apps/web/src/api/`, `apps/web/src/device/`, `apps/web/src/events/`, `apps/web/src/lib/` scope at `663492c`: **20 production files**, **9 tests**, **9/20 = 0.45** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope).

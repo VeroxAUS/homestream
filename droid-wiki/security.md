@@ -58,6 +58,8 @@ Fixtures use invented tokens, `example.test` and documentation addresses. Revoke
 
 `createTelemetry` in `apps/server/src/telemetry/index.ts` enables matching clients only with keys; `HOMESTREAM_TELEMETRY=off` overrides them. Browser keys are build-time, with a per-browser storage opt-out. Desktop initializes main clients before readiness in `apps/desktop/src/main.ts`; it is no longer an unwired helper.
 
+Test-mode and master-off web builds embed neither a Sentry DSN, a PostHog key nor a PostHog host (`apps/web/src/telemetry/buildEnv.ts`). A per-browser opt-out does not remove values already built into assets. The root `turbo.json` declares the web build's environment inputs, and `apps/web/turbo.json` disables web build caching to prevent restoring stale key-bearing output; Vite empties the output directory on a fresh build (`apps/web/vite.config.ts`). This is a renderer build guarantee, not removal of server or Electron runtime credentials. See [build and tests](apps/web/build-and-tests.md).
+
 `sanitizeSentryEvent` in `packages/shared/src/sanitize.ts` removes identity/request data, scrubs addresses/tokens/URLs and relativizes configured stack roots. It explicitly sets `sdk.settings.infer_ip: "never"` and `user: { geo: {} }`; the empty geo suppresses ingestion fallback lookup and must remain.
 
 `sanitizeEventProperties` in `packages/shared/src/analytics.ts` permits only typed catalog properties. **Scrubbed TMDB media titles are the sole allowed free text**, not user-entered text. Enabled playback analytics can reveal media IDs/titles; anonymous identity does not mean content-free data.

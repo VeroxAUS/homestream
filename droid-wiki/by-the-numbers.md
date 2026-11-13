@@ -1,8 +1,8 @@
 # By the numbers
 
-Collected **2026-11-10** (trusted system date), from committed tree **`663492c256cb1f3c715f761a9d44e23db4c68b33`**. Working-tree wiki edits are excluded. HomeStream has four workspaces and 38,237 physical source lines under the rules below; these are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).
+Collected **2026-11-13** (trusted system date), from committed tree **`0b766e2f21a19468e04d0a9c7352c635a4357c87`**. Working-tree wiki edits are excluded. HomeStream has four workspaces and 38,269 physical source lines under the rules below; these are repository measurements, not individual productivity scores. See [architecture](overview/architecture.md) and [lore](lore.md).
 
-The measured HEAD records **2026-11-11 08:19:08 +11:00** (**2026-11-10 21:19:08 UTC**). November 11 below is a commit-metadata bucket in UTC+11, not a later collection date or an independently verified wall-clock event.
+The measured commit records **2026-11-14 04:58:33 +11:00** (**2026-11-13 17:58:33 UTC**). November 14 below is a commit-metadata bucket in UTC+11, not a later collection date or an independently verified wall-clock event.
 
 ## Measurement scope
 
@@ -14,7 +14,7 @@ Inventory reads `git ls-tree -rz <commit>` and UTF-8 blobs through `git cat-file
 - Generated exports `docs/openapi.json`, `docs/schema.sql`, and filenames containing `.generated.`. The implementation `apps/server/src/docs/generated.ts` remains included.
 - NUL-containing or non-UTF-8 blobs from text totals.
 
-There are **890 tracked paths**; exclusions leave **828 paths**, comprising **810 text files** and **18 binary assets** (17 desktop PNGs and one web font).
+There are **893 tracked paths**; exclusions leave **831 paths**, comprising **813 text files** and **18 binary assets** (17 desktop PNGs and one web font).
 
 A **physical line** is one Python `str.splitlines()` element, including comments, blank lines, and an unterminated final line. **Nonblank lines** remove whitespace-only lines but retain comments. Neither measure is code-only LOC/SLOC; no code-only claim is made.
 
@@ -29,15 +29,15 @@ Assign each included text path to the first matching class:
 
 | Class                          | Text files | Physical lines |
 | ------------------------------ | ---------: | -------------: |
-| Source                         |        425 |         38,237 |
-| Test/support                   |        281 |         44,953 |
-| Configuration/tool data        |         70 |          5,069 |
+| Source                         |        425 |         38,269 |
+| Test/support                   |        283 |         45,225 |
+| Configuration/tool data        |         71 |          5,091 |
 | Documentation and root license |         34 |          2,921 |
-| **Total**                      |    **810** |     **91,180** |
+| **Total**                      |    **813** |     **91,506** |
 
-Test/source ratios are **0.66:1 by files** and **1.18:1 by physical lines**. Helpers and fixtures count; these are not coverage or test-quality measurements.
+Test/source ratios are **0.67:1 by files** and **1.18:1 by physical lines**. Helpers and fixtures count; these are not coverage or test-quality measurements.
 
-Since the previous measured tree (`bb09d63`), **six commits** add **two source files / 140 net physical source lines** and **four test/support files / 493 net physical test/support lines**. Configuration/tool data grows by 75 lines and documentation by 20, for **728 net included text lines**. The delta covers HLS network/subtitle recovery, desktop permissions and window bounds, browser setup/health behavior, correlated SSE logging, and parallel Linux CI jobs—not a new workspace or runtime subsystem. Source graph size rises by two nodes and five edges; desktop exports rise by six slots. Workspace manifests and the dependency lockfile are unchanged.
+Since the previous measured tree (`663492c256cb1f3c715f761a9d44e23db4c68b33`), **five commits** comprise four bugfix/test commits and a wiki refresh. Outside the wiki, **17 files change, with 348 additions and 22 deletions**. Source gains **32 net physical lines and no files**; test/support gains **two files / 272 net physical lines**; configuration/tool data gains **one file / 22 net lines**; documentation has no net line change. That is **326 net included text lines**. The changes cover first-season caching, native volume-range arrow keys, lazy-route test setup, and telemetry build environment/cache safeguards—not a new workspace or runtime subsystem. Fresh AST measurements confirm unchanged source graph and export counts. Workspace manifests and the dependency lockfile are unchanged.
 
 ### Lines by language
 
@@ -48,23 +48,23 @@ xychart-beta horizontal
     title "Committed physical lines, including comments and blanks"
     x-axis ["TypeScript", "TSX", "JavaScript", "CSS", "HTML"]
     y-axis "Physical lines" 0 --> 65000
-    bar [64288, 9760, 5905, 3419, 944]
+    bar [64541, 9801, 5916, 3419, 944]
 ```
 
 | Extension-based language                  |   Files | Physical lines | Nonblank lines |
 | ----------------------------------------- | ------: | -------------: | -------------: |
-| TypeScript (`.ts`, `.mts`, `.cts`)        |     541 |         64,288 |         58,134 |
-| TSX                                       |      85 |          9,760 |          8,917 |
-| JavaScript (`.js`, `.mjs`, `.cjs`)        |      44 |          5,905 |          5,419 |
+| TypeScript (`.ts`, `.mts`, `.cts`)        |     543 |         64,541 |         58,360 |
+| TSX                                       |      85 |          9,801 |          8,954 |
+| JavaScript (`.js`, `.mjs`, `.cjs`)        |      44 |          5,916 |          5,428 |
 | CSS                                       |      42 |          3,419 |          2,964 |
 | Markdown                                  |      33 |          2,247 |          1,617 |
-| JSON                                      |      29 |          1,893 |          1,893 |
+| JSON                                      |      30 |          1,914 |          1,914 |
 | YAML                                      |      20 |          1,565 |          1,394 |
 | Other text, including extensionless files |      11 |          1,035 |            841 |
 | HTML                                      |       3 |            944 |            940 |
 | Text (`.txt`)                             |       1 |             93 |             75 |
 | JSONC                                     |       1 |             31 |             31 |
-| **Total**                                 | **810** |     **91,180** |     **82,225** |
+| **Total**                                 | **813** |     **91,506** |     **82,518** |
 
 ### Four workspace packages
 
@@ -72,8 +72,8 @@ xychart-beta horizontal
 
 | Workspace         | Source files | Source lines | Test/support files | Test lines | Test/source files | Test/source lines |
 | ----------------- | -----------: | -----------: | -----------------: | ---------: | ----------------: | ----------------: |
-| `apps/server`     |          149 |       16,702 |                176 |     29,639 |              1.18 |              1.77 |
-| `apps/web`        |          164 |       10,698 |                 71 |     10,768 |              0.43 |              1.01 |
+| `apps/server`     |          149 |       16,724 |                176 |     29,673 |              1.18 |              1.77 |
+| `apps/web`        |          164 |       10,708 |                 73 |     11,006 |              0.45 |              1.03 |
 | `apps/desktop`    |           37 |        3,620 |                 24 |      3,528 |              0.65 |              0.97 |
 | `packages/shared` |           15 |        1,462 |                 10 |      1,018 |              0.67 |              0.70 |
 
@@ -100,7 +100,7 @@ Server has **19 immediate source subdirectories**. Web has **11**: `apps/web/src
 
 ## Activity
 
-All **119 commits reachable from the measured commit** count, including the root and wiki automation. The checkout is not shallow. Available history runs from **2026-11-05 10:51:13 +11:00** (`c0781bd`) to **2026-11-11 08:19:08 +11:00** (`663492c`), about 141.5 hours.
+All **124 commits reachable from the measured commit** count, including the root and wiki automation. The checkout is not shallow. Available history runs from **2026-11-05 10:51:13 +11:00** (`c0781bd`) to **2026-11-14 04:58:33 +11:00** (`0b766e2`), about 210.1 hours.
 
 Buckets use **committer timestamps normalized to UTC+11**, not author timestamps. ISO weeks start Monday. Latest buckets are partial through the measured commit, not an inferred collection time.
 
@@ -109,13 +109,13 @@ Buckets use **committer timestamps normalized to UTC+11**, not author timestamps
 | 2026-08          |       0 | 2026-W43          |       0 |
 | 2026-09          |       0 | 2026-W44          |       0 |
 | 2026-10          |       0 | 2026-W45          |     113 |
-| 2026-11, partial |     119 | 2026-W46, partial |       6 |
+| 2026-11, partial |     124 | 2026-W46, partial |      11 |
 
-Daily totals are **12 on November 5**, **32 on November 6**, **48 on November 7**, **21 on November 8**, **1 on November 9**, **3 on November 10**, and **2 on November 11**. Empty buckets mean no commits in the available history, not proof of no earlier private development. This short history cannot establish a steady development rate.
+Daily totals are **12 on November 5**, **32 on November 6**, **48 on November 7**, **21 on November 8**, **1 on November 9**, **3 on November 10**, **3 on November 11**, **zero on November 12 and 13**, and **4 on November 14**. Empty buckets mean no commits in the available history, not proof of no earlier private development. This short history cannot establish a steady development rate.
 
 ### Ninety-day churn
 
-The window is **2026-08-13 08:19:08 through 2026-11-11 08:19:08 +11:00** (inclusive), ending at the measured commit. All 119 commits fall inside it.
+The window is **2026-08-16 04:58:33 through 2026-11-14 04:58:33 +11:00** (inclusive), ending at the measured commit's timestamp rather than the collection date. All 124 commits fall inside it.
 
 For every commit, sum numeric additions and deletions from `git diff-tree --root --no-commit-id --numstat --no-renames -r <commit>`, applying the inventory path exclusions and omitting binary rows. Root additions, formatting, and moves count; moves are deletion plus addition. All recorded commits have zero or one parent, so no merge-parent policy is needed. Current-file rows require the path to remain in the measured text inventory.
 
@@ -130,18 +130,18 @@ For every commit, sum numeric additions and deletions from `git diff-tree --root
 | `apps/server/test/encode/progressive-subtitles.test.ts` |   582 |     190 |   772 |                     5 |
 | `apps/server/test/encode/hls-encode.test.ts`            |   526 |     171 |   697 |                     4 |
 
-Directory totals also include historical paths that were deleted or moved:
+Total included numeric churn is **115,728 added + deleted lines**. Directory totals also include historical paths that were deleted or moved:
 
 | Directory, recursively | Added + deleted lines |
 | ---------------------- | --------------------: |
-| `apps/server/test`     |                44,109 |
-| `apps/server/src`      |                22,768 |
-| `apps/web/src`         |                21,019 |
+| `apps/server/test`     |                44,147 |
+| `apps/server/src`      |                22,800 |
+| `apps/web/src`         |                21,152 |
 | `scripts`              |                 7,474 |
 | `apps/desktop/test`    |                 3,784 |
 | `apps/desktop/src`     |                 3,276 |
-| `apps/web/e2e`         |                 2,449 |
-| `docs`                 |                 2,231 |
+| `apps/web/e2e`         |                 2,592 |
+| `docs`                 |                 2,233 |
 | `packages/shared/src`  |                 1,512 |
 | `.github`              |                 1,548 |
 | `packages/shared/test` |                 1,094 |
@@ -150,16 +150,16 @@ The manager's lead partly reflects its **November 7 decomposition** (`2d60a28`):
 
 ## Bot and recorded AI attribution
 
-Denominator: **all 119 reachable commits**. Inspect metadata internally without publishing identities or individual rankings. A bot author has the literal `[bot]` in author name or email. A bot co-author has a line matching `^Co-authored-by:\s*(.*)$` case-insensitively whose value contains `[bot]`, also case-insensitively.
+Denominator: **all 124 reachable commits**. Inspect metadata internally without publishing identities or individual rankings. A bot author has the literal `[bot]` in author name or email, matched case-insensitively. A bot co-author has a line matching `^Co-authored-by:\s*(.*)$` case-insensitively whose value contains `[bot]`, also case-insensitively.
 
 | Counted indicator                                           | Commits | Percentage |
 | ----------------------------------------------------------- | ------: | ---------: |
-| Bot co-author line                                          |     114 |     95.80% |
-| Bot author                                                  |       5 |      4.20% |
-| Either indicator, union without double-counting             |     119 |    100.00% |
-| Co-author line specifically containing `factory-droid[bot]` |     114 |     95.80% |
+| Bot co-author line                                          |     118 |     95.16% |
+| Bot author                                                  |       6 |      4.84% |
+| Either indicator, union without double-counting             |     124 |    100.00% |
+| Co-author line specifically containing `factory-droid[bot]` |     118 |     95.16% |
 
-**114/119 (95.80%) is a lower bound on explicitly recorded AI-assisted commits**, not AI-written lines or a fraction of engineering effort. Missing trailers can leave assistance unrecorded; a present trailer does not quantify its extent. The broader 100% bot-attribution union also includes automation authorship and is **not** a 100% AI-usage claim.
+**118/124 (95.16%) is a lower bound on explicitly recorded AI-assisted commits**, not AI-written lines or a fraction of engineering effort. Missing trailers can leave assistance unrecorded; a present trailer does not quantify its extent. The broader 100% bot-attribution union also includes automation authorship and is **not** a 100% AI-usage claim.
 
 ## Complexity proxies
 
@@ -167,25 +167,25 @@ These static measurements are not cyclomatic/cognitive complexity, runtime call 
 
 ### Average source-file size
 
-All counts use the source text classification. Rows are recursive; drill-downs overlap parents.
+All counts use the source text classification: **425 files / 38,269 physical lines**, averaging **90.0 lines/file** overall. Rows are recursive; drill-downs overlap parents.
 
 | Directory                     | Files | Physical lines | Mean lines/file |
 | ----------------------------- | ----: | -------------: | --------------: |
-| `apps/server/src`             |   149 |         16,702 |           112.1 |
-| `apps/web/src`                |   163 |         10,686 |            65.6 |
+| `apps/server/src`             |   149 |         16,724 |           112.2 |
+| `apps/web/src`                |   163 |         10,696 |            65.6 |
 | `apps/desktop/src`            |    33 |          3,166 |            95.9 |
 | `packages/shared/src`         |    15 |          1,462 |            97.5 |
 | `scripts`                     |    60 |          5,755 |            95.9 |
 | `apps/server/src/playback`    |    42 |          5,688 |           135.4 |
 | `apps/server/src/sourceproxy` |     9 |          1,757 |           195.2 |
 | `apps/server/src/downloads`   |     4 |            988 |           247.0 |
-| `apps/web/src/player`         |    33 |          2,687 |            81.4 |
+| `apps/web/src/player`         |    33 |          2,695 |            81.7 |
 | `apps/web/src/desktop`        |    20 |          1,447 |            72.3 |
 | `apps/desktop/src/shell`      |     6 |            886 |           147.7 |
 
 ### Deepest local import chains
 
-As in the previous measured tree, this refresh uses the **already-installed TypeScript 6.0.3 parser** on committed blobs. Nodes are classified source files ending `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`, or `.cjs`. Visit AST import/export declarations with literal module specifiers, literal dynamic `import()` calls, and literal import-type nodes; include type-only edges and deduplicate each directed pair.
+This refresh **freshly parses committed blobs with the available TypeScript 6.0.3 parser**, using the previous measured tree's methodology. Nodes are classified source files ending `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`, or `.cjs`. Visit AST import/export declarations with literal module specifiers, literal dynamic `import()` calls, and literal import-type nodes; include type-only edges and deduplicate each directed pair.
 
 Resolve relative specifiers against the committed node set in this order: exact path; `.js` → `.ts`, `.js` → `.tsx`, `.cjs` → `.cts`, `.mjs` → `.mts`; appended `.ts`, `.tsx`, `.mts`, `.cts`, `.mjs`, `.js`; then `/index.ts`, `/index.tsx`, `/index.js`. Map bare `@homestream/shared` to `packages/shared/src/index.ts`; other external imports terminate the graph.
 
@@ -232,7 +232,7 @@ Type-only imports and the shared barrel contribute to depth. This is **not** a 2
 
 ### Exported symbols per workspace
 
-Create an in-memory TypeScript program over those committed script nodes, with `target: Latest`, `module: ESNext`, `moduleResolution: Bundler`, `allowJs: true`, `noLib: true`, and the same local resolver. No standard library or external dependency source is loaded. For each workspace's non-test `src/` module, call `checker.getSymbolAtLocation(sourceFile)`, then `checker.getExportsOfModule(symbol)`.
+Freshly create an in-memory TypeScript program over those committed script nodes, with `target: Latest`, `module: ESNext`, `moduleResolution: Bundler`, `allowJs: true`, `noLib: true`, and the same local resolver. No standard library or external dependency source is loaded. For each workspace's non-test `src/` module, call `checker.getSymbolAtLocation(sourceFile)`, then `checker.getExportsOfModule(symbol)`.
 
 Count each exported **`(module path, export name)` slot** once. Type/value merges and overloads therefore count once within a module; default counts as `default`; local star re-exports are expanded. Distinct spellings are the union of those names within a workspace, not globally unique semantic identities.
 
@@ -250,13 +250,14 @@ Count each exported **`(module path, export name)` slot** once. Type/value merge
 Run from the repository root, substituting the fixed hash rather than a moving HEAD:
 
 ```sh
-git ls-tree -rz 663492c256cb1f3c715f761a9d44e23db4c68b33
+git ls-tree -rz 0b766e2f21a19468e04d0a9c7352c635a4357c87
 git rev-parse --is-shallow-repository
-git log 663492c256cb1f3c715f761a9d44e23db4c68b33 --reverse --format='%h|%cI|%s'
-git rev-list 663492c256cb1f3c715f761a9d44e23db4c68b33
+git log 0b766e2f21a19468e04d0a9c7352c635a4357c87 --reverse --format='%h|%cI|%s'
+git rev-list 0b766e2f21a19468e04d0a9c7352c635a4357c87
+git diff --numstat 663492c256cb1f3c715f761a9d44e23db4c68b33 0b766e2f21a19468e04d0a9c7352c635a4357c87 -- . ':!droid-wiki'
 git diff-tree --root --no-commit-id --numstat --no-renames -r 2d60a28
 ```
 
 Read committed blobs with `git cat-file --batch`; apply the exact exclusions and ordered classification; count Python `splitlines()` and nonblank lines. Bucket every reachable commit's committer timestamp in UTC+11. For churn, apply the stated 90-day window to numeric diff rows; require current inventory membership only for the file table. Apply the explicit AST/resolution rules above, detect cycles, then memoize longest directed paths; sort paths and outgoing edges for deterministic ties. Export counts use the stated TypeScript checker API.
 
-Temporary Python/Node measurement data lived outside the tracked tree and was removed after use; no helper files remain in the repository. This statistics refresh installed no dependencies, ran no application tests, and started no server, encoder, GPU task, or upstream service.
+Python 3 and Node 24.22.3 measurement programs ran from shell heredocs, keeping blob data and ASTs in memory; no temporary helper files were created. The required TypeScript 6.0.3 dependency was available when parsing, so no baseline counts were carried forward without a fresh parse. This statistics refresh installed no dependencies, ran no application tests, and started no server, encoder, GPU task, or upstream service.

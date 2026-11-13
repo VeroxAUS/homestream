@@ -2,18 +2,18 @@
   "mode": "incremental",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "663492c256cb1f3c715f761a9d44e23db4c68b33",
-  "baseCommit": "bb09d63f4166d4ca2d7bdc47e14eea5c837d2875",
+  "commitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
+  "baseCommit": "663492c256cb1f3c715f761a9d44e23db4c68b33",
   "delta": {
-    "files": 52,
-    "insertions": 1253,
-    "deletions": 475,
-    "changedLines": 1728,
-    "outsideWiki": { "files": 38, "insertions": 825, "deletions": 97 }
+    "files": 42,
+    "insertions": 790,
+    "deletions": 1593,
+    "changedLines": 2383,
+    "outsideWiki": { "files": 17, "insertions": 348, "deletions": 22 }
   },
-  "summary": "HomeStream is a LAN media server in a TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB metadata, AIOStreams discovery, FFmpeg/NVENC encoding, a loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite implements browsing, navigation search, title details, spoiler protection, HLS playback, Settings and desktop renderer views. Electron 45 adds tray, supervision and a mini player. Shared Zod schemas, desktop IPC contracts and telemetry sanitizers connect the runtimes.",
+  "summary": "HomeStream is a LAN media server in a TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB metadata, AIOStreams discovery, FFmpeg/NVENC encoding, a loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite implements browsing, search, title details, spoiler protection, HLS playback, Settings and desktop renderer views. Electron 45 adds tray, supervision and a mini player. Shared Zod schemas, desktop IPC contracts and telemetry sanitizers connect the runtimes.",
   "architecture": "buildApp constructs services and thin routes; server main starts listeners and workers. PlaybackManager owns session slots, candidate fallback, encoding, HLS and subtitles. Session creation returns either 201 playback or 202 download tracking. Query hooks validate HTTP responses through the API wrapper; Home content and idle gate background startup. Desktop distinguishes attached and owned server processes; typed preload IPC is allowlisted.",
-  "patterns": "Strict TypeScript, full repo-root source references, shared Zod contracts, AppError envelopes and redaction. Tests isolate random ports and temp directories. Never use real keys or upstream calls for wiki generation. Video always re-encodes, streamId is auto, devices are not accounts, deployment is LAN-only. Telemetry is optional, scrubbed, manual and nonblocking. Preserve unchanged wiki pages byte-for-byte. Domain pages start with a heading then Active contributors: VeroxAUS; derive ownership from .github/CODEOWNERS and origin/main history, excluding bots.",
+  "patterns": "Strict TypeScript, full repo-root source references, shared Zod contracts, AppError envelopes and redaction. Tests isolate random ports and temp directories. No real keys or upstream calls for wiki generation. Video always re-encodes; streamId is auto; devices are not accounts; deployment is LAN-only. Telemetry is optional, scrubbed, manual and nonblocking. Preserve unchanged wiki pages byte-for-byte. Domain bylines use VeroxAUS from origin/main and CODEOWNERS, excluding bots.",
   "glossary": [
     "session",
     "session slot",
@@ -31,15 +31,18 @@
     "spoiler protection"
   ],
   "changes": [
-    "HLS status-0 fragment failures remain eligible for client retries below 90 attempts; no HTTP status is rewritten. Selected subtitle state is reapplied after rendition discovery on stream reload.",
-    "Desktop Escape/fullscreen ordering, DIP window-bound round trips, shared-session permission request/check handlers, early wrong-service port classification and info-and-above main-process Sentry breadcrumbs. There are no separate device-permission/device-selection handlers.",
-    "Compact health text hides strictly below 1200px, first-run setup requires a desktop bridge, navigation-search browser test waits for its outgoing request, and browser-test builds explicitly disable inherited telemetry.",
-    "SSE logs event stream opened once at subscription start with request correlation, not per heartbeat/event.",
-    "Linux is now a fail-closed gate over parallel checks/tests/secrets jobs; software ffmpeg packages are cached by runner image."
+    "Show-details misses append season/1, move it into tv:<id>:season:1 and strip it from the show row. Missing appended data or a missing/expired season row follows the normal season-fetch path. HTTP contracts and database schema do not change.",
+    "Native range inputs retain arrow-key defaults instead of also running global seek/volume shortcuts. The seek bar is a custom div with role=slider, so document-level arrow shortcuts still apply there; non-arrow shortcuts remain available on the volume input. Browser regression tests hold media requests and start no encoder.",
+    "Download-notice tests preload lazy routes before assertions rather than increasing assertion timeouts.",
+    "Root Turbo build env declares all ten web-build variables. apps/web/turbo.json disables build caching. Test/off telemetry builds contain no Sentry key, PostHog key or PostHog host. Tests compare env reads/declarations and guard cache:false."
   ],
   "coverage": {
-    "apps": "Enumerated apps/server, apps/web, apps/desktop; existing apps pages cover all. apps/tv is planned only and absent.",
-    "packages": "Enumerated packages/shared; packages/shared.md covers all 15 source modules.",
+    "apps": {
+      "server": "apps/server.md",
+      "web": "apps/web/index.md and focused subpages",
+      "desktop": "apps/desktop/index.md and focused subpages"
+    },
+    "packages": { "shared": "packages/shared.md" },
     "serverDirectories": {
       "db": "reference/data-models.md",
       "docs": "api/index.md and how-to-contribute/tooling.md",
@@ -51,7 +54,7 @@
       "http": "how-to-monitor/logging.md and tracing.md",
       "metrics": "how-to-monitor/metrics.md",
       "network": "systems/network.md",
-      "playback": "systems/playback/index.md, encoding.md, lifecycle.md, subtitles.md",
+      "playback": "systems/playback/index.md and focused subpages",
       "prefetch": "features/prefetch.md",
       "progress": "features/viewing-progress.md",
       "routes": "api/index.md",
@@ -69,26 +72,22 @@
       "device": "apps/web/data-and-startup.md",
       "events": "apps/web/data-and-startup.md",
       "lib": "apps/web/data-and-startup.md and settings-and-spoilers.md",
-      "notices": "apps/web/screens.md",
-      "pages": "apps/web/screens.md, player.md, settings-and-spoilers.md",
+      "notices": "apps/web/screens.md and build-and-tests.md",
+      "pages": "apps/web/screens.md, player.md and settings-and-spoilers.md",
       "player": "apps/web/player.md",
       "styles": "apps/web/screens.md and build-and-tests.md",
-      "telemetry": "systems/telemetry.md",
+      "telemetry": "systems/telemetry.md and apps/web/build-and-tests.md",
       "test": "apps/web/build-and-tests.md and how-to-contribute/testing.md",
       "directFiles": "apps/web/index.md and build-and-tests.md"
     },
     "desktopDirectories": {
       "shell": "apps/desktop/windows-and-ipc.md",
       "telemetry": "systems/telemetry.md",
-      "directFiles": "apps/desktop/index.md, supervisor.md, windows-and-ipc.md; new permissions.ts and windowBounds.ts belong here, not new subsystems"
+      "directFiles": "apps/desktop/index.md, supervisor.md and windows-and-ipc.md"
     },
-    "automationAndInfrastructure": "scripts and scripts/lib: tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: getting-started and deployment; .factory/skills: tooling and testing; docs/runbooks: debugging and reference."
+    "automationAndInfrastructure": "scripts and scripts/lib: how-to-contribute/tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: overview/getting-started.md; .factory/skills: tooling and testing; docs/runbooks: debugging and reference."
   },
-  "pagePolicy": "Retain the 56-page tree. No new or removed subsystem; no missing documented source path identified. Refresh by-the-numbers. Preserve lore because this delta is bug fixes and CI restructuring rather than a new product era. No maintainers page for solo human ownership. No unsupported trivia, dependency-freshness or dead-code claims.",
-  "validationPlan": "Run existing format:check, docs:check and agents:check. They exclude generated wiki, so explicitly format and audit wiki headings, relative links/anchors, source paths, page ordering/indexes/depth/size and Mermaid parsing. Skip application, GPU, live and Electron suites for documentation-only output.",
-  "preflight": { "factoryUpload": "allowed", "fullHistory": true, "qaConfigPresent": false },
-  "warnings": [
-    "Phase 3.5 requires a QA skill. Run /install-qa to set one up, then re-run wiki generation.",
-    "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe; video rendering was skipped in non-interactive mode. No prior playable video exists."
-  ]
+  "pagePolicy": "Retain the 56-page tree. No new or deleted subsystem; audit referenced source paths during assembly. Refresh by-the-numbers. Preserve lore for this minor bug-fix delta. Keep dated unchanged subsystem inventories. No maintainers page for solo human ownership. No new dead-code, dependency-freshness or trivia claims.",
+  "validationPlan": "Run existing format:check, docs:check and agents:check when dependencies are available. Explicitly audit generated wiki headings, relative links and anchors, full source paths, page ordering, indexes, depth, size and Mermaid syntax because normal docs tooling excludes droid-wiki. Skip application/GPU/live/Electron tests for documentation-only output.",
+  "preflight": { "factoryUpload": "allowed", "fullHistory": true, "qaConfigPresent": false }
 }

@@ -34,4 +34,6 @@ Never log raw gateway/CDN URLs, credentials, or user text. Use redaction and str
 
 Browser telemetry keys are build-time values. SDK imports stay outside the initial bundle, and registration, SSE, and telemetry wait for rendered content and idle time (`apps/web/src/main.tsx`, `apps/web/src/lib/startup.ts`, `apps/web/src/telemetry/index.ts`). Preserve the limits in `apps/web/.size-limit.json`.
 
+Declare every environment variable read by the web build in the root `turbo.json` build task. The web override in `apps/web/turbo.json` disables build caching: Vite also reads `.env`, and restoring cached output could leave files containing earlier keys beside a newer build. `apps/web/src/telemetry/buildEnv.ts` clears both keys and the PostHog host for test or telemetry-off builds; `apps/web/src/telemetry/turboEnv.test.ts` guards the declarations and no-cache policy.
+
 Do not change product rules: video is always re-encoded, clients request `streamId: "auto"`, devices are not accounts, and deployment is LAN-only. Measure hot paths before and after changes (`AGENTS.md`). See [testing](testing.md), [security](../security.md), and [development workflow](development-workflow.md).

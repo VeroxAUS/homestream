@@ -1,8 +1,8 @@
 {
   "mode": "incremental",
-  "commitHash": "663492c256cb1f3c715f761a9d44e23db4c68b33",
-  "baseCommit": "bb09d63f4166d4ca2d7bdc47e14eea5c837d2875",
-  "reason": "1728 changed lines, within the 10000-line incremental threshold. Preserve the existing 56-page tree and unchanged pages verbatim.",
+  "commitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
+  "baseCommit": "663492c256cb1f3c715f761a9d44e23db4c68b33",
+  "reason": "2383 changed lines; 370 outside the generated wiki. Retain the existing 56-page tree. Keep every page not listed for update byte-for-byte.",
   "create": [],
   "remove": [],
   "update": [
@@ -10,7 +10,7 @@
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "brief": "Update the documented revision; preserve established vocabulary.",
+      "brief": "Update the documented source revision and preserve shared vocabulary.",
       "sources": ["apps/server/src/app.ts", "apps/web/src/App.tsx", "apps/desktop/src/main.ts"],
       "related": ["overview/architecture.md", "by-the-numbers.md"]
     },
@@ -18,15 +18,28 @@
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "brief": "Refresh measured physical-line and workspace counts from the statistics report.",
-      "sources": ["pnpm-workspace.yaml", "apps", "packages", "scripts"],
-      "related": ["by-the-numbers.md"]
+      "brief": "Describe first-season cache separation and refresh aggregate statistics from the data report.",
+      "sources": ["apps/server/src/tmdb/service.ts", "apps", "packages", "scripts"],
+      "related": ["features/catalog.md", "by-the-numbers.md"]
+    },
+    {
+      "path": "how-to-contribute/patterns-and-conventions.md",
+      "title": "Patterns and conventions",
+      "criticality": "normal",
+      "brief": "Document web build env declarations, disabled web caching and key-free off builds.",
+      "sources": [
+        "turbo.json",
+        "apps/web/turbo.json",
+        "apps/web/src/telemetry/buildEnv.ts",
+        "apps/web/src/telemetry/turboEnv.test.ts"
+      ],
+      "related": ["systems/telemetry.md", "apps/web/build-and-tests.md"]
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "brief": "Recompute committed-tree size, history, bot attribution, churn, import chains and exports using the existing declared methodology.",
+      "brief": "Recompute committed-tree inventory, activity, churn, bot attribution, import graph and exported symbols using the prior methodology. Provide architecture totals separately.",
       "sources": ["apps", "packages", "scripts", ".github"],
       "related": ["overview/architecture.md", "lore.md"]
     },
@@ -34,191 +47,105 @@
       "path": "apps/web/index.md",
       "title": "Web app",
       "criticality": "critical",
-      "brief": "Refresh web inventory and summarize current browser versus desktop behavior. Read changed web code; retain focused subpages.",
+      "brief": "Update the inventory from committed paths after inspecting changed web sources; preserve focused subpage structure.",
       "sources": ["apps/web/src", "apps/web/e2e"],
-      "related": ["apps/web/player.md", "apps/web/desktop-integration.md"]
+      "related": ["apps/web/player.md", "apps/web/build-and-tests.md"]
     },
     {
       "path": "apps/web/player.md",
       "title": "Player",
       "criticality": "normal",
-      "brief": "Explain status-0 network-fragment retry classification and preserving subtitle selection on reload with exact limits from source.",
+      "brief": "Explain native volume range arrow defaults, seek-bar ownership and retained non-arrow shortcuts. Link real-browser regression coverage without claiming it was run.",
       "sources": [
-        "apps/web/src/player/useHls.ts",
-        "apps/web/src/player/useHls.test.ts",
-        "apps/web/src/pages/PlayerSubtitleReload.test.tsx"
+        "apps/web/src/player/useShortcuts.ts",
+        "apps/web/src/pages/PlayerControls.test.tsx",
+        "apps/web/e2e/player-volume-keys.spec.ts"
       ],
-      "related": ["systems/playback/subtitles.md", "apps/web/build-and-tests.md"]
-    },
-    {
-      "path": "apps/web/screens.md",
-      "title": "Screens",
-      "criticality": "normal",
-      "brief": "Update the compact health-pill breakpoint and browser/desktop first-run distinction.",
-      "sources": ["apps/web/src/components/HealthPill.module.css", "apps/web/src/desktop/useMissingKeys.ts"],
-      "related": ["apps/web/desktop-integration.md"]
-    },
-    {
-      "path": "apps/web/search.md",
-      "title": "Navigation search",
-      "criticality": "normal",
-      "brief": "Document outgoing-request readiness in the abort e2e without inventing a product search change.",
-      "sources": ["apps/web/e2e/nav-search.spec.ts"],
-      "related": ["apps/web/build-and-tests.md"]
-    },
-    {
-      "path": "apps/web/desktop-integration.md",
-      "title": "Desktop integration",
-      "criticality": "normal",
-      "brief": "Explain that setup requires the bridge; ordinary browsers remain usable without integration keys.",
-      "sources": ["apps/web/src/desktop/useMissingKeys.ts", "apps/web/src/desktop/Shell.test.tsx"],
-      "related": ["apps/desktop/index.md"]
+      "related": ["apps/web/build-and-tests.md", "systems/playback/index.md"]
     },
     {
       "path": "apps/web/build-and-tests.md",
       "title": "Build and tests",
       "criticality": "normal",
-      "brief": "Refresh test inventory and describe forced telemetry isolation in plain browser builds and new regressions.",
+      "brief": "Document Turbo env/cache policy, key-free off builds, lazy route preload in notices tests, first-season stub coverage and range-input browser tests.",
       "sources": [
-        "apps/web/e2e/build.mjs",
-        "apps/web/src/pages/PlayerSubtitleReload.test.tsx",
-        "apps/web/e2e/nav-search.spec.ts"
+        "turbo.json",
+        "apps/web/turbo.json",
+        "apps/web/src/telemetry/turboEnv.test.ts",
+        "apps/web/src/notices/notices.test.tsx",
+        "apps/web/e2e/details-api.spec.ts",
+        "apps/web/playwright.config.ts"
       ],
-      "related": ["how-to-contribute/testing.md"]
+      "related": ["systems/telemetry.md", "features/catalog.md"]
     },
     {
-      "path": "apps/desktop/index.md",
-      "title": "Desktop shell",
-      "criticality": "critical",
-      "brief": "Read current main/shell changes, refresh inventory and summarize permissions, bounds and startup behavior; retain focused subpages.",
-      "sources": ["apps/desktop/src", "apps/desktop/test", "apps/desktop/README.md"],
-      "related": ["apps/desktop/supervisor.md", "apps/desktop/windows-and-ipc.md"]
-    },
-    {
-      "path": "apps/desktop/supervisor.md",
-      "title": "Server supervision",
+      "path": "apps/web/data-and-startup.md",
+      "title": "Data and startup",
       "criticality": "normal",
-      "brief": "Explain early wrong-service port classification before readiness timeout, with regression evidence.",
-      "sources": [
-        "apps/desktop/src/supervisor.ts",
-        "apps/desktop/src/loadingPage.ts",
-        "apps/desktop/test/supervisor.test.ts"
-      ],
-      "related": ["apps/desktop/windows-and-ipc.md"]
+      "brief": "Clarify build-time key stripping and cross-link the build policy without changing documented startup gates.",
+      "sources": ["apps/web/src/telemetry/buildEnv.ts", "apps/web/vite.config.ts"],
+      "related": ["apps/web/build-and-tests.md", "systems/telemetry.md"]
     },
     {
-      "path": "apps/desktop/windows-and-ipc.md",
-      "title": "Windows and IPC",
+      "path": "features/catalog.md",
+      "title": "Catalog",
       "criticality": "normal",
-      "brief": "Explain Escape ordering, content/window DIP conversion and shared-session permission request/check handlers using the new helpers and tests; do not imply separate device handlers.",
+      "brief": "Update exact appended show sections, separate season cache row, old-cache/missing-section fallback and regression references.",
       "sources": [
-        "apps/desktop/src/permissions.ts",
-        "apps/desktop/src/windowBounds.ts",
-        "apps/desktop/src/shell/windows.ts",
-        "apps/desktop/test/permissions.test.ts",
-        "apps/desktop/test/windowBounds.test.ts"
+        "apps/server/src/tmdb/service.ts",
+        "apps/server/test/integration/catalog-routes.test.ts",
+        "apps/web/e2e/details-api.spec.ts"
       ],
-      "related": ["apps/web/desktop-integration.md", "security.md"]
+      "related": ["reference/data-models.md", "apps/web/screens.md"]
     },
     {
       "path": "systems/telemetry.md",
       "title": "Telemetry",
       "criticality": "normal",
-      "brief": "Update desktop main breadcrumbs wiring with privacy and threshold details from changed code.",
+      "brief": "Explain key-free test/off builds, strict env passthrough and disabled web build cache with regression source references.",
       "sources": [
-        "apps/desktop/src/shell/telemetry.ts",
-        "apps/desktop/src/telemetry/sentry.ts",
-        "apps/desktop/test/integration/telemetryWiring.test.ts"
+        "apps/web/src/telemetry/buildEnv.ts",
+        "apps/web/src/telemetry/turboEnv.test.ts",
+        "apps/web/turbo.json",
+        "turbo.json"
       ],
-      "related": ["how-to-monitor/logging.md"]
+      "related": ["apps/web/build-and-tests.md", "security.md"]
     },
     {
-      "path": "api/index.md",
-      "title": "API",
+      "path": "reference/data-models.md",
+      "title": "Data models",
       "criticality": "normal",
-      "brief": "Add one-per-subscription SSE request logging without changing the HTTP contract.",
-      "sources": [
-        "apps/server/src/routes/events.ts",
-        "apps/server/src/http/observability.ts",
-        "apps/server/test/integration/events.test.ts"
-      ],
-      "related": ["how-to-monitor/logging.md", "how-to-monitor/tracing.md"]
-    },
-    {
-      "path": "deployment.md",
-      "title": "Deployment",
-      "criticality": "normal",
-      "brief": "Describe fail-closed parallel Linux jobs, package cache and unchanged branch protection; distinguish declared timings from measurements.",
-      "sources": [".github/workflows/ci.yml", "docs/ci.md"],
-      "related": ["how-to-contribute/testing.md", "how-to-contribute/development-workflow.md"]
+      "brief": "Document separate season-one raw-cache row without implying any SQLite migration or HTTP contract change.",
+      "sources": ["apps/server/src/tmdb/service.ts", "docs/database.md"],
+      "related": ["features/catalog.md"]
     },
     {
       "path": "security.md",
       "title": "Security",
       "criticality": "normal",
-      "brief": "Link verified session-level desktop permission policy and identify the dedicated Linux secrets job.",
-      "sources": ["apps/desktop/src/permissions.ts", ".github/workflows/ci.yml"],
-      "related": ["apps/desktop/windows-and-ipc.md"]
-    },
-    {
-      "path": "how-to-monitor/logging.md",
-      "title": "Logging",
-      "criticality": "normal",
-      "brief": "Correct SSE logging exclusion wording and explain request ID at subscription open plus desktop main breadcrumbs.",
-      "sources": ["apps/server/src/routes/events.ts", "apps/server/src/http/observability.ts", "docs/observability.md"],
-      "related": ["how-to-monitor/tracing.md", "systems/telemetry.md"]
-    },
-    {
-      "path": "how-to-monitor/tracing.md",
-      "title": "Tracing",
-      "criticality": "normal",
-      "brief": "Document correlation of long-lived SSE at open, preserving zero SSE trace sampling.",
-      "sources": ["apps/server/src/routes/events.ts", "apps/server/src/http/observability.ts"],
-      "related": ["how-to-monitor/logging.md"]
-    },
-    {
-      "path": "how-to-contribute/index.md",
-      "title": "Contributing",
-      "criticality": "normal",
-      "brief": "Clarify that required Linux is a gate over three jobs, not a single execution job.",
-      "sources": ["AGENTS.md", ".github/workflows/ci.yml"],
-      "related": ["deployment.md"]
-    },
-    {
-      "path": "how-to-contribute/development-workflow.md",
-      "title": "Development workflow",
-      "criticality": "normal",
-      "brief": "Explain debugging the failing parallel Linux job while retaining required Linux/Windows names.",
-      "sources": [".github/workflows/ci.yml", "docs/ci.md"],
-      "related": ["deployment.md"]
-    },
-    {
-      "path": "how-to-contribute/testing.md",
-      "title": "Testing",
-      "criticality": "normal",
-      "brief": "Update Linux coverage job placement and point to focused new offline regression tests.",
-      "sources": [".github/workflows/ci.yml", "apps/server/test/integration/events.test.ts"],
-      "related": ["apps/web/build-and-tests.md", "apps/desktop/windows-and-ipc.md"]
-    },
-    {
-      "path": "how-to-contribute/tooling.md",
-      "title": "Tooling",
-      "criticality": "normal",
-      "brief": "Update CI job layout and report artifact origin.",
-      "sources": [".github/workflows/ci.yml", "docs/ci.md"],
-      "related": ["deployment.md"]
+      "brief": "Clarify that telemetry-off web builds embed no keys and that web build caching is disabled to avoid stale key-bearing assets.",
+      "sources": ["apps/web/src/telemetry/buildEnv.ts", "apps/web/turbo.json", "turbo.json"],
+      "related": ["systems/telemetry.md", "apps/web/build-and-tests.md"]
     }
   ],
   "keepUnchanged": [
     "overview/getting-started.md",
     "overview/glossary.md",
     "lore.md",
+    "how-to-contribute/index.md",
+    "how-to-contribute/development-workflow.md",
+    "how-to-contribute/testing.md",
     "how-to-contribute/debugging.md",
-    "how-to-contribute/patterns-and-conventions.md",
+    "how-to-contribute/tooling.md",
     "apps/index.md",
     "apps/server.md",
+    "apps/web/screens.md",
+    "apps/web/search.md",
     "apps/web/settings-and-spoilers.md",
-    "apps/web/data-and-startup.md",
+    "apps/web/desktop-integration.md",
+    "apps/desktop/index.md",
+    "apps/desktop/supervisor.md",
+    "apps/desktop/windows-and-ipc.md",
     "systems/index.md",
     "systems/playback/index.md",
     "systems/playback/encoding.md",
@@ -229,20 +156,22 @@
     "systems/gateway.md",
     "systems/health.md",
     "features/index.md",
-    "features/catalog.md",
     "features/stream-selection.md",
     "features/prefetch.md",
     "features/downloads.md",
     "features/viewing-progress.md",
     "packages/index.md",
     "packages/shared.md",
+    "api/index.md",
+    "deployment.md",
     "how-to-monitor/index.md",
+    "how-to-monitor/logging.md",
     "how-to-monitor/metrics.md",
+    "how-to-monitor/tracing.md",
     "how-to-monitor/alerting.md",
     "cleanup-opportunities.md",
     "reference/index.md",
     "reference/configuration.md",
-    "reference/data-models.md",
     "reference/dependencies.md"
   ]
 }

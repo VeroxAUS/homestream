@@ -29,6 +29,16 @@ Hidden source maps are enabled only for `HOMESTREAM_RELEASE_BUILD=1`, nonempty `
 
 `apps/web/src/components/NavSearch.tsx` stays in the initial shell. Focus or phone expansion calls the same dynamic import used by the lazy Search route (`apps/web/src/pages/searchRoute.ts`), warming that route without eagerly loading HLS or telemetry. `apps/web/e2e/nav-search.spec.ts` checks that the field is present at the content mark and that first use adds Search code, not player/telemetry code.
 
+## Build environment
+
+Turbo's strict environment mode passes declared variables to tasks. The root `turbo.json` build task declares all ten variables read by the web build: `HOMESTREAM_TELEMETRY`, `HOMESTREAM_TELEMETRY_STUB`, `HOMESTREAM_RELEASE_BUILD`, `POSTHOG_API_KEY`, `POSTHOG_HOST`, `SENTRY_AUTH_TOKEN`, `SENTRY_DSN_WEB`, `SENTRY_ENVIRONMENT`, `SENTRY_ORG` and `SENTRY_RELEASE`.
+
+`apps/web/turbo.json` extends that root configuration and sets web `build.cache` to `false`. Web builds must run instead of restoring cached `dist` output: Vite also reads `.env`, and restoring outputs over an existing directory could leave older key-bearing assets beside the restored files. This override is web-specific, not a repository-wide cache ban.
+
+`apps/web/src/telemetry/turboEnv.test.ts` scans `env.NAME` reads in `apps/web/vite.config.ts`, `apps/web/vite.plugins.ts` and `apps/web/src/telemetry/buildEnv.ts`, compares that set in both directions with the root build declarations, and checks the web cache override. When adding a build variable, update the declaration and preserve this regression guard.
+
+`telemetryFromEnv` in `apps/web/src/telemetry/buildEnv.ts` sets the embedded Sentry DSN, PostHog key and PostHog host to `null` in test mode or a telemetry-off build, even if supplied externally. `apps/web/src/telemetry/buildEnv.test.ts` covers off-build stripping and test-mode isolation. This is stronger than only disabling runtime requests; browser storage opt-out does not remove values from existing assets. See [telemetry](../../systems/telemetry.md) for the runtime/privacy policy.
+
 ## Unit and component tests
 
 Vitest uses jsdom, the shared-source alias and V8 coverage. It includes colocated TS/TSX tests under `apps/web/src/` and excludes tests, `apps/web/src/test/` helpers and declarations from instrumented production scope. `apps/web/coverage-thresholds.json` requires **98% lines, 99% functions, 90% branches and 97% statements**; these are configured gates, not freshly observed coverage.
@@ -57,8 +67,14 @@ Vitest uses jsdom, the shared-source alias and V8 coverage. It includes colocate
 | `apps/web/src/lib/spoilers.test.ts`                    | Local persistence, storage events and blocked-storage fallback    |
 | `apps/web/src/pages/SettingsPage.test.tsx`             | Hash tabs, keyboard/ARIA, device save and About separation        |
 | `apps/web/src/notices/notices.test.tsx`                | Download outcomes and toast timing/actions                        |
+| `apps/web/src/telemetry/turboEnv.test.ts`              | Build env declarations and disabled web build caching             |
+| `apps/web/src/telemetry/buildEnv.test.ts`              | Build-time configuration, key-free test/off modes                 |
 
 Other colocated tests cover Home/carousel, details, navigation, UUID fallback, shared responsive hooks and telemetry sanitization. Small fixtures are not proof of browser image scheduling or CSS hit-testing; those checks belong in Playwright.
+
+The download-notice suite preloads the lazy Home, Settings and Player routes together in `beforeAll` in `apps/web/src/notices/notices.test.tsx`. This moves initial route/hls.js transformation before assertions instead of extending the normal one-second `findBy` timeout. It changes test setup, not production route loading.
+
+`apps/web/src/pages/PlayerControls.test.tsx` asserts that all four arrows on the focused Volume range remain uncancelled and do not run global seek/volume actions. It also checks K/M on that input and arrows on the custom Seek slider. jsdom does not implement native range stepping; the browser spec below covers that behavior.
 
 ## Isolated browser flow
 
@@ -68,26 +84,31 @@ Before building, `apps/web/e2e/build.mjs` removes only `apps/web/reports/e2e-run
 
 Playwright starts a loopback hub and two real server processes. Servers have distinct data/transcode roots, nonexistent env-file paths, telemetry/mDNS off, random source-proxy ports and a **60 MB/s** download cap. `apps/web/e2e/ports.json` allocates **8602–8607**. One worker runs serially, with one retry in CI.
 
-`apps/web/e2e/support/hub.mjs` supplies metadata/artwork, a gateway manifest with **empty stream lists**, telemetry collectors and feature-flag replies. Its TMDB fixture now supports appended movie credits/show aggregate credits, recommendations/similar titles, season episodes, and image URLs with the real `/t/p/<size>/` shape. `GET/DELETE /__requests` inspects/clears upstream request records; `POST/DELETE /__search-delays` controls slow-search fixtures. These are loopback test-hub endpoints, not production API routes.
+`apps/web/e2e/support/hub.mjs` supplies metadata/artwork, a gateway manifest with **empty stream lists**, telemetry collectors and feature-flag replies. Its TMDB fixture supports appended movie credits/show aggregate credits, recommendations/similar titles, season episodes, and image URLs with the real `/t/p/<size>/` shape. It includes `season/1` on show details only when requested in `append_to_response`, reusing the same fixture as the standalone season endpoint. `GET/DELETE /__requests` inspects/clears upstream request records; `POST/DELETE /__search-delays` controls slow-search fixtures. These are loopback test-hub endpoints, not production API routes.
+
+`apps/web/e2e/details-api.spec.ts` requests show details followed by season one, checks for nonempty episodes and no standalone upstream season call, and requires any logged show-detail call to append `season/1`. An earlier test may already have cached the show, so this check permits zero new detail calls; server cache/fallback rules are documented under [catalog](../../features/catalog.md).
 
 The Node fetch shim in `apps/web/e2e/support/redirect-fetch.mjs` redirects TMDB requests and refuses other non-loopback fetch destinations; it is a server-process fetch guard, not a general browser firewall. `apps/web/e2e/support/seed.ts` clears/writes progress and play-history rows in the **plain test server's database only**; serial execution prevents these fixtures from racing each other. `apps/web/e2e/support/desktopBridge.ts` installs a browser-side bridge double; it does not start Electron.
 
-There are **10 specs**, assigned explicitly in `apps/web/playwright.config.ts`:
+There are **11 specs**, assigned explicitly in `apps/web/playwright.config.ts`:
 
-| Spec                                    | Project and boundary                                                                                      |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `apps/web/e2e/smoke.spec.ts`            | Plain: built UI, request IDs, deep links, device registration, no-key behavior                            |
-| `apps/web/e2e/resume.spec.ts`           | Plain: seeded progress/history, Continue Watching/removal; intercepted session POST positions             |
-| `apps/web/e2e/player-input.spec.ts`     | Plain: fabricated/held session and HLS requests; real Chromium hit-testing of busy/error controls         |
-| `apps/web/e2e/details-api.spec.ts`      | Plain: real local API serialization, appended metadata and cache reuse against stub TMDB                  |
-| `apps/web/e2e/details-cast.spec.ts`     | Plain: row order, empty/older payloads, initials, links, lazy images and viewport image budget            |
-| `apps/web/e2e/nav-search.spec.ts`       | Plain: debounce, abort/newest answer, history, phone breakpoints, desktop-like drag regions and shortcuts |
-| `apps/web/e2e/spoilers.spec.ts`         | Plain: local preference persistence, unfinished/completed episodes, DOM omission, still sizes and Up next |
-| `apps/web/e2e/settings-tabs.spec.ts`    | Plain: hash startup/history, keyboard, styling and responsive About layout                                |
-| `apps/web/e2e/settings-content.spec.ts` | Plain: device save, control/fact separation, browser versus bridge-double content                         |
-| `apps/web/e2e/telemetry.spec.ts`        | Telemetry: scrubbed local reports, template page views, opt-out and interval assignment                   |
+| Spec                                      | Project and boundary                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `apps/web/e2e/smoke.spec.ts`              | Plain: built UI, request IDs, deep links, device registration, no-key behavior                            |
+| `apps/web/e2e/resume.spec.ts`             | Plain: seeded progress/history, Continue Watching/removal; intercepted session POST positions             |
+| `apps/web/e2e/player-input.spec.ts`       | Plain: fabricated/held session and HLS requests; real Chromium hit-testing of busy/error controls         |
+| `apps/web/e2e/player-volume-keys.spec.ts` | Plain: native range arrow steps without seeking; global seek/volume arrows when focus is elsewhere        |
+| `apps/web/e2e/details-api.spec.ts`        | Plain: real local API serialization, appended metadata and cache reuse against stub TMDB                  |
+| `apps/web/e2e/details-cast.spec.ts`       | Plain: row order, empty/older payloads, initials, links, lazy images and viewport image budget            |
+| `apps/web/e2e/nav-search.spec.ts`         | Plain: debounce, abort/newest answer, history, phone breakpoints, desktop-like drag regions and shortcuts |
+| `apps/web/e2e/spoilers.spec.ts`           | Plain: local preference persistence, unfinished/completed episodes, DOM omission, still sizes and Up next |
+| `apps/web/e2e/settings-tabs.spec.ts`      | Plain: hash startup/history, keyboard, styling and responsive About layout                                |
+| `apps/web/e2e/settings-content.spec.ts`   | Plain: device save, control/fact separation, browser versus bridge-double content                         |
+| `apps/web/e2e/telemetry.spec.ts`          | Telemetry: scrubbed local reports, template page views, opt-out and interval assignment                   |
 
 **No browser spec starts a real server playback session, encoder or playable media stream.** Player-layout browser coverage exists, but these are not real HLS decode, GPU, upstream or Electron end-to-end playback tests.
+
+The volume-key spec uses Chromium's real range defaults with browser-intercepted session responses and held HLS requests. It waits for each volume-driven slider render, checks **0.01** native steps, and counts media `currentTime` setter calls to detect unintended seeks. With focus elsewhere it expects two seek assignments and the global **0.05** volume step. Setter calls demonstrate shortcut dispatch, not successful media seeking.
 
 ## Commands and modification points
 
@@ -106,20 +127,26 @@ Chromium must be installed separately. Keep new component tests offline, preserv
 
 ## Key source files
 
-| File                                      | Purpose                                               |
-| ----------------------------------------- | ----------------------------------------------------- |
-| `apps/web/vite.config.ts`                 | Proxy, lazy output, telemetry build config and Vitest |
-| `apps/web/vite.plugins.ts`                | Precompression and font preload                       |
-| `apps/web/.size-limit.json`               | Asset ceilings                                        |
-| `apps/web/src/bundleBudget.test.ts`       | Player ceiling and README consistency                 |
-| `apps/web/coverage-thresholds.json`       | Coverage ratchet                                      |
-| `apps/web/src/test/render.tsx`            | Fetch and provider test seams                         |
-| `apps/web/src/test/fakeHls.ts`            | HLS controller double                                 |
-| `apps/web/e2e/build.mjs`                  | Plain/stub build isolation                            |
-| `apps/web/playwright.config.ts`           | Server lifecycle and browser projects                 |
-| `apps/web/e2e/support/hub.mjs`            | Mock services and telemetry receivers                 |
-| `apps/web/e2e/support/seed.ts`            | Shared isolated SQLite fixture writes                 |
-| `apps/web/e2e/support/desktopBridge.ts`   | Browser-side desktop settings double                  |
-| `apps/web/e2e/support/redirect-fetch.mjs` | Server fetch redirection/restriction                  |
+| File                                      | Purpose                                                |
+| ----------------------------------------- | ------------------------------------------------------ |
+| `apps/web/vite.config.ts`                 | Proxy, lazy output, telemetry build config and Vitest  |
+| `apps/web/vite.plugins.ts`                | Precompression and font preload                        |
+| `apps/web/.size-limit.json`               | Asset ceilings                                         |
+| `apps/web/src/bundleBudget.test.ts`       | Player ceiling and README consistency                  |
+| `turbo.json`                              | Strict build environment declarations                  |
+| `apps/web/turbo.json`                     | Web-only build cache override                          |
+| `apps/web/src/telemetry/turboEnv.test.ts` | Build-variable and cache regression guards             |
+| `apps/web/src/telemetry/buildEnv.ts`      | Key-free telemetry configuration for test/off builds   |
+| `apps/web/coverage-thresholds.json`       | Coverage ratchet                                       |
+| `apps/web/src/test/render.tsx`            | Fetch and provider test seams                          |
+| `apps/web/src/test/fakeHls.ts`            | HLS controller double                                  |
+| `apps/web/e2e/build.mjs`                  | Plain/stub build isolation                             |
+| `apps/web/playwright.config.ts`           | Server lifecycle and browser projects                  |
+| `apps/web/e2e/support/hub.mjs`            | Mock services and telemetry receivers                  |
+| `apps/web/e2e/support/seed.ts`            | Shared isolated SQLite fixture writes                  |
+| `apps/web/e2e/support/desktopBridge.ts`   | Browser-side desktop settings double                   |
+| `apps/web/e2e/support/redirect-fetch.mjs` | Server fetch redirection/restriction                   |
+| `apps/web/e2e/player-volume-keys.spec.ts` | Held-media Chromium range/shortcut regression          |
+| `apps/web/e2e/details-api.spec.ts`        | Real local API and appended first-season stub coverage |
 
-Tracked web scope at `663492c`: **119 production files**, **48 unit/component test files**, **10 browser specs**, **58/119 = 0.49** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites or live/GPU tests were run for this wiki update.
+Committed web scope at `0b766e2`: **119 production files**, **49 unit/component test files**, **11 browser specs**, **60/119 = 0.50** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). No builds, application suites or live/GPU tests were run for this wiki update.

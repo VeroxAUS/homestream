@@ -16,6 +16,10 @@ HomeStream optionally reports scrubbed Sentry errors, typed PostHog events and f
 
 Browser `localStorage['homestream.telemetry']='off'` disables its runtime on reload. An already-built UI does not change when server environment variables change.
 
+`telemetryFromEnv` in `apps/web/src/telemetry/buildEnv.ts` replaces the Sentry DSN, PostHog key and PostHog host with `null` in test mode or when the trimmed master setting matches `off`, `0`, `false`, `no` or `disabled` case-insensitively. This strips those values before Vite injects the renderer configuration; a browser-local opt-out instead disables a build that may still contain its configured keys. `apps/web/src/telemetry/buildEnv.test.ts` covers the key-free off-build behavior.
+
+The root `turbo.json` lists every web-build environment read in the build task's `env`, so strict-mode `pnpm build` receives them. `apps/web/turbo.json` disables caching for the web build: Vite also reads `.env`, and restoring a cached output can leave older key-bearing assets alongside the restored files. A fresh Vite build empties `dist` (`apps/web/vite.config.ts`). `apps/web/src/telemetry/turboEnv.test.ts` compares reads against declarations in both directions and guards `cache: false`. See [build and tests](../apps/web/build-and-tests.md).
+
 Server PostHog creates a random installation ID in SQLite settings when constructed (`apps/server/src/db/settings.ts`). Browser uses its anonymous localStorage SDK identity without identify calls. Desktop keeps a random `install-id` in Electron user data; shell startup creates/loads it. None is an account or capability-registration device ID.
 
 ```mermaid
@@ -115,6 +119,9 @@ Server stub tests, shared sanitizer tests, renderer unit/e2e collectors and desk
 | `apps/server/src/telemetry/posthog.ts`                  | Queue and flag transport                                  |
 | `apps/server/src/telemetry/playbackObserver.ts`         | Lifecycle metrics/events/breadcrumb bridge                |
 | `apps/web/src/telemetry/index.ts`                       | Initial SDK-free gate                                     |
+| `apps/web/src/telemetry/buildEnv.ts`                    | Build-time config and stripping keys in test/off builds   |
+| `apps/web/src/telemetry/turboEnv.test.ts`               | Build env declarations and web no-cache regression        |
+| `apps/web/turbo.json`                                   | Web build cache override                                  |
 | `apps/web/src/telemetry/runtime.ts`                     | Deferred clients and route/flag wiring                    |
 | `apps/desktop/src/shell/telemetry.ts`                   | Executed main setup, log sink, identity and flush         |
 | `apps/desktop/src/telemetry/sentry.ts`                  | Main options, tags and breadcrumb mapping                 |
