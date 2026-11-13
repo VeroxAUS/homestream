@@ -160,9 +160,34 @@ describe('catalog routes with a fake TMDB', () => {
     ]);
     const call = fake.calls.find((entry) => entry.startsWith('/3/tv/1396?'));
     expect(new URL(`http://x${call}`).searchParams.get('append_to_response')).toBe(
-      'external_ids,aggregate_credits,recommendations,similar',
+      'external_ids,aggregate_credits,recommendations,similar,season/1',
     );
     expect(fake.calls.filter((entry) => entry.startsWith('/3/tv/1396'))).toHaveLength(1);
+  });
+
+  it('opening a show fills season 1 from the same TMDB request, so cached details cost no season request', async () => {
+    await app.inject('/api/tv/1396');
+    const before = fake.calls.length;
+    const first = await app.inject('/api/tv/1396/season/1');
+    expect(first.statusCode).toBe(200);
+    expect(first.json().episodes.map((e: { name: string }) => e.name)).toEqual(['Pilot', 'Cat in the Bag']);
+    await app.inject('/api/tv/1396');
+    expect(fake.calls.length).toBe(before);
+    expect(fake.calls.some((call) => call.startsWith('/3/tv/1396/season/1'))).toBe(false);
+  });
+
+  it('does not keep the embedded season inside the cached show row', async () => {
+    await app.inject('/api/tv/1396');
+    const row = app.ctx.db.prepare("SELECT json FROM tmdb_cache WHERE key = 'tv:v2:1396'").get() as { json: string };
+    expect(JSON.parse(row.json)).not.toHaveProperty('season/1');
+  });
+
+  it('still fetches season 1 on its own when the show response carries none', async () => {
+    fake.ignoreAppendedSeason = true;
+    await app.inject('/api/tv/1396');
+    const season = await app.inject('/api/tv/1396/season/1');
+    expect(season.statusCode).toBe(200);
+    expect(fake.calls.filter((call) => call.startsWith('/3/tv/1396/season/1'))).toHaveLength(1);
   });
 
   it('a title TMDB has no credits for still answers with empty cast and similar', async () => {

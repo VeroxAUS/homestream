@@ -20,6 +20,13 @@ const RETRY_DELAY_MS = 300;
 /** Bump when the details request or its normalized fields change, so rows cached in the old shape are not served. */
 const DETAILS_CACHE_VERSION = 'v2';
 
+/** The show page opens season 1 first, so the show details request carries it instead of a second call. */
+const FIRST_SEASON_SECTION = 'season/1';
+
+function seasonKey(tmdbId: number, seasonNumber: number): string {
+  return `tv:${tmdbId}:season:${seasonNumber}`;
+}
+
 export type FetchLike = (
   url: string,
   init: { headers: Record<string, string>; signal: AbortSignal },
@@ -124,7 +131,8 @@ export class TmdbService {
       `tv:${DETAILS_CACHE_VERSION}:${tmdbId}`,
       `Show ${tmdbId}`,
       `/tv/${tmdbId}`,
-      { append_to_response: 'external_ids,aggregate_credits,recommendations,similar' },
+      { append_to_response: `external_ids,aggregate_credits,recommendations,similar,${FIRST_SEASON_SECTION}` },
+      (value) => this.moveFirstSeason(tmdbId, value),
     );
     const show = normalizeShow(raw, images);
     if (!show) throw this.notFound(`Show ${tmdbId}`);
@@ -135,7 +143,7 @@ export class TmdbService {
     const images = await this.images();
     const label = `Season ${seasonNumber} of show ${tmdbId}`;
     const raw = await this.cachedOrNotFound(
-      `tv:${tmdbId}:season:${seasonNumber}`,
+      seasonKey(tmdbId, seasonNumber),
       label,
       `/tv/${tmdbId}/season/${seasonNumber}`,
     );
@@ -164,13 +172,25 @@ export class TmdbService {
     label: string,
     path: string,
     params: Record<string, string> = {},
+    prepare?: (value: unknown) => unknown,
   ): Promise<unknown> {
     try {
-      return await this.cached(key, TTL_MS.details, path, params);
+      return await this.cached(key, TTL_MS.details, path, params, prepare);
     } catch (error) {
       if (error instanceof TmdbNotFound) throw this.notFound(label);
       throw error;
     }
+  }
+
+  /**
+   * Stores the `season/1` section that rides along with the show details as its own season row, and returns the show
+   * without it. A show without a season 1 has no such section; its season request is then made (and 404s) on demand.
+   */
+  private moveFirstSeason(tmdbId: number, value: unknown): unknown {
+    if (typeof value !== 'object' || value === null || !(FIRST_SEASON_SECTION in value)) return value;
+    const { [FIRST_SEASON_SECTION]: season, ...show } = value as Record<string, unknown>;
+    if (typeof season === 'object' && season !== null) this.cache.set(seasonKey(tmdbId, 1), season, TTL_MS.details);
+    return show;
   }
 
   private async cached(
@@ -178,6 +198,7 @@ export class TmdbService {
     ttlMs: number,
     path: string,
     params: Record<string, string> = {},
+    prepare: (value: unknown) => unknown = (value) => value,
   ): Promise<unknown> {
     this.requireToken();
     const hit = this.cache.get(key);
@@ -192,8 +213,9 @@ export class TmdbService {
 
     const request = this.request(path, params)
       .then((value) => {
-        this.cache.set(key, value, ttlMs);
-        return value;
+        const stored = prepare(value);
+        this.cache.set(key, stored, ttlMs);
+        return stored;
       })
       .finally(() => this.inflight.delete(key));
     this.inflight.set(key, request);

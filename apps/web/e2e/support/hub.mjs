@@ -173,22 +173,33 @@ function tmdb(url) {
         external_ids: { imdb_id: 'tt0001399' },
         seasons,
         ...related(foundShow.id, SHOW_CREDITS, 'aggregate_credits', searchParams),
+        ...(SHOWS.some((s) => s.id === foundShow.id) && asks(searchParams, 'season/1')
+          ? { 'season/1': firstSeason() }
+          : {}),
       },
     ];
   }
   const season = /^\/tv\/(\d+)\/season\/(\d+)$/.exec(pathname);
   if (season && SHOWS.some((s) => s.id === Number(season[1])) && Number(season[2]) === 1) {
-    const episodes = SEASON_EPISODES.map((e) => ({
-      episode_number: e.n,
-      name: e.name,
-      overview: e.overview,
-      still_path: e.still,
-      runtime: e.runtime,
-      air_date: `2011-04-${16 + e.n}`,
-    }));
-    return [200, { season_number: 1, name: 'Season 1', episodes }];
+    return [200, firstSeason()];
   }
   return [404, { status_message: 'The resource you requested could not be found.' }];
+}
+
+function firstSeason() {
+  const episodes = SEASON_EPISODES.map((e) => ({
+    episode_number: e.n,
+    name: e.name,
+    overview: e.overview,
+    still_path: e.still,
+    runtime: e.runtime,
+    air_date: `2011-04-${16 + e.n}`,
+  }));
+  return { season_number: 1, name: 'Season 1', episodes };
+}
+
+function asks(searchParams, section) {
+  return (searchParams.get('append_to_response') ?? '').split(',').includes(section);
 }
 
 /** Like TMDB's append_to_response: only the sections the request asked for are included; titles without data get empty ones. */

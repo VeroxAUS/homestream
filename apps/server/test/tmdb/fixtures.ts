@@ -95,6 +95,8 @@ export interface FakeTmdb {
   fetch: FetchLike;
   calls: string[];
   failWith?: { status: number } | 'network';
+  /** Answer show details without the appended `season/1` section, as TMDB does when a show has no season 1. */
+  ignoreAppendedSeason?: boolean;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -119,7 +121,14 @@ export function makeFakeTmdb(): FakeTmdb {
       if (path === '/search/multi') return json(SEARCH_MULTI);
       if (path === '/movie/278') return json(MOVIE_DETAILS);
       if (path === '/movie/604') return json(movieRow(604));
-      if (path === '/tv/1396') return json(SHOW_DETAILS);
+      if (path === '/tv/1396') {
+        const asked = (parsed.searchParams.get('append_to_response') ?? '').split(',');
+        return json(
+          asked.includes('season/1') && !fake.ignoreAppendedSeason
+            ? { ...SHOW_DETAILS, 'season/1': SEASON_ONE }
+            : SHOW_DETAILS,
+        );
+      }
       if (path === '/tv/1396/season/1') return json(SEASON_ONE);
       return json({ status_code: 34 }, 404);
     },

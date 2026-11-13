@@ -68,4 +68,19 @@ test.describe('details API with cast and similar titles (stub TMDB)', () => {
     expect(await Promise.all(again.map((response) => response.json()))).toEqual(bodies);
     expect(await hubRequests(request)).toEqual([]);
   });
+
+  test('season 1 rides along with the show details, so opening a cached show adds no season request', async ({
+    request,
+  }) => {
+    await request.delete(`${HUB}/__requests`);
+    expect((await request.get('/api/tv/1399')).ok()).toBe(true);
+    const season = await request.get('/api/tv/1399/season/1');
+    expect(season.ok()).toBe(true);
+    expect(((await season.json()) as { episodes: unknown[] }).episodes.length).toBeGreaterThan(0);
+    const log = await hubRequests(request);
+    expect(log.filter((entry) => entry.path.startsWith('/tv/1399/season'))).toEqual([]);
+    for (const call of log.filter((entry) => entry.path.startsWith('/tv/1399'))) {
+      expect(call.path).toMatch(/append_to_response=[^&]*season(%2F|\/)1/);
+    }
+  });
 });
