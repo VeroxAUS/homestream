@@ -25,10 +25,10 @@ IMDb identity bridges to [stream selection](stream-selection.md). Probed media, 
 
 Movie/show details fetch their extras in the **same TMDB details request**, not separate credits/recommendation calls (`apps/server/src/tmdb/service.ts`):
 
-| Details path | Exact `append_to_response` value                         |
-| ------------ | -------------------------------------------------------- |
-| Movie        | `external_ids,credits,recommendations,similar`           |
-| Show         | `external_ids,aggregate_credits,recommendations,similar` |
+| Details path | Exact `append_to_response` value                                  |
+| ------------ | ----------------------------------------------------------------- |
+| Movie        | `external_ids,credits,recommendations,similar`                    |
+| Show         | `external_ids,aggregate_credits,recommendations,similar,season/1` |
 
 Image configuration is fetched/cached separately. Posters use w342, backdrops w1280, episode stills w300 and cast profiles w185 (`apps/server/src/tmdb/normalize.ts`).
 
@@ -39,6 +39,10 @@ The public `similar` list first normalizes **recommendations** as the title's me
 `MAX_CAST`, `MAX_SIMILAR`, `MovieDetailsSchema` and `ShowDetailsSchema` in `packages/shared/src/catalog.ts` enforce those bounds. The current server always emits both arrays; schema defaults supply `[]` when fields are missing/undefined from an older server. Explicit null or oversized arrays are invalid, not silently truncated by the schema. Normalization itself performs the truncation.
 
 Movie/show raw-cache keys include details version **v2** (`movie:v2:<id>` and `tv:v2:<id>`), so a still-fresh old unversioned row cannot suppress the new fields. Seasons retain their existing key format and 24-hour TTL (`apps/server/src/tmdb/service.ts`).
+
+On a show-details cache miss, `TmdbService.show` also asks for **`season/1`**, matching the UI's initially selected season. Before caching the show, `moveFirstSeason` writes the appended object under **`tv:<id>:season:1`** with the details TTL and removes it from the show object. The browser still calls the normal season endpoint; that call can now use the separate cache row without another TMDB request. No season payload is added to the public show-details shape (`apps/server/src/tmdb/service.ts`, `packages/shared/src/catalog.ts`).
+
+This preparation runs only on a fresh show fetch, not on a show-cache hit. A previously cached v2 show therefore does not backfill season 1 until refreshed. If TMDB omits the section, or the season row is missing or expired, the season endpoint follows its normal independent fetch and not-found handling. The server does not append other seasons or duplicate the season inside the stored show row (`apps/server/src/tmdb/service.ts`). See [data models](../reference/data-models.md).
 
 `apps/server/src/routes/catalog.ts` delegates Home assembly and attaches only pending download tracking to details. Rendering cast/similar rows, navigation search and spoiler protection belongs to [screens](../apps/web/screens.md). The server still returns complete episode descriptions/stills; spoiler hiding is browser-local, not a metadata or database filter (`apps/web/src/lib/spoilers.ts`, `apps/web/src/components/EpisodeRow.tsx`, `apps/web/src/components/EpisodePanel.tsx`).
 
@@ -81,7 +85,7 @@ A token is required even for cached reads. Missing configuration yields 503. Net
 
 Change shapes in `apps/server/src/tmdb/normalize.ts`, transport/cache use in `apps/server/src/tmdb/service.ts`, and banner policy separately in `apps/server/src/home/featured.ts`. Coordinate contracts in `packages/shared/src/catalog.ts`. See [progress](viewing-progress.md) and [downloads](downloads.md) for local enrichments rather than duplicating their state logic.
 
-`apps/server/test/tmdb/normalize.test.ts` covers cast billing/bounds, aggregate-role fallback, similar fallback and malformed data. `packages/shared/test/catalog.test.ts` checks older-payload defaults and array rejection; `apps/server/test/integration/catalog-routes.test.ts` checks appended requests, cache reuse and old-key bypass. Featured rules and watched-history Home behavior are covered by `apps/server/test/home/featured.test.ts` and `apps/server/test/integration/progress-routes.test.ts`.
+`apps/server/test/tmdb/normalize.test.ts` covers cast billing/bounds, aggregate-role fallback, similar fallback and malformed data. `packages/shared/test/catalog.test.ts` checks older-payload defaults and array rejection; `apps/server/test/integration/catalog-routes.test.ts` checks appended requests, cache reuse, old-key bypass, separate season-one storage and independent fetching when the appended section is absent. `apps/web/e2e/details-api.spec.ts` verifies that the existing season endpoint returns episodes without a separate upstream season request against the stub hub in `apps/web/e2e/support/hub.mjs`. Featured rules and watched-history Home behavior are covered by `apps/server/test/home/featured.test.ts` and `apps/server/test/integration/progress-routes.test.ts`.
 
 ## Key source files
 

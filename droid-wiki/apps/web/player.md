@@ -71,6 +71,12 @@ The video-state hook, reload flag and pending track PATCH determine buffering UI
 | P             | Desktop pop-out or mini-player expand; ignored in a browser |
 | Escape        | Close menu, close info, exit fullscreen, then leave         |
 
+These arrow shortcuts apply outside native range inputs. When a native `input[type=range]` has focus, `useShortcuts` returns before cancelling the arrow event or running global seek/volume actions. The Volume input in `apps/web/src/player/ControlBar.tsx` therefore keeps the browser's **0.01-step** arrow behavior instead of also seeking or applying the global **0.05** volume step. Other shortcuts remain available on that input, including K and M.
+
+The Seek control in `apps/web/src/player/SeekBar.tsx` is a focusable `div` with `role="slider"`, not a native range input. It retains the shared document-level keyboard handling: Left/Right seek and Up/Down adjust volume. Its pointer handlers still own drag preview and release-to-seek. `apps/web/src/pages/PlayerControls.test.tsx` checks uncancelled volume-arrow events, retained K/M behavior and focused Seek shortcuts.
+
+`apps/web/e2e/player-volume-keys.spec.ts` adds real Chromium checks for native volume steps without seeks and for global arrows when focus is elsewhere. It fabricates the session response, holds HLS requests, waits for each painted slider value and counts `currentTime` setter calls rather than claiming successful media seeks. No real playback session or encoder starts; see [browser test boundaries](build-and-tests.md#isolated-browser-flow).
+
 Text-entry targets and Ctrl/Alt/Meta combinations are ignored; toggle keys do not repeat. Space key-up is consumed to avoid also clicking a focused button. Chrome hides after **3 seconds** of inactivity, stays visible when paused/buffering or menus/info/track changes require it, and returns on input.
 
 Clock events write directly to the DOM rather than repeatedly rendering the playback tree (`apps/web/src/player/useVideoState.ts`, `apps/web/src/player/SeekBar.tsx`). Auto-hide changes the stage's `data-chrome` attribute, throttles activity resets and keeps controls visible for hover or keyboard-visible focus (`apps/web/src/player/useIdleChrome.ts`, `apps/web/src/player/idleHider.ts`).
@@ -106,11 +112,14 @@ Preserve cleanup ordering, metadata gating and handoff release when changing hoo
 | `apps/web/src/player/useTrackSwitching.ts`         | Audio/subtitle handoff                                 |
 | `apps/web/src/player/useSessionLifetime.ts`        | Paused pings and exactly-once teardown                 |
 | `apps/web/src/player/useVideoState.ts`             | Discrete media state and DOM-only clock subscription   |
+| `apps/web/src/player/useShortcuts.ts`              | Global shortcuts and native-range arrow exclusion      |
+| `apps/web/src/player/SeekBar.tsx`                  | Custom slider, pointer preview and release-to-seek     |
 | `apps/web/src/desktop/MiniVolume.tsx`              | Shared video volume/mute in mini mode                  |
 | `apps/web/src/pages/PlayerPage.test.tsx`           | Starts, progress, late results and fatal Retry         |
 | `apps/web/src/pages/PlayerControls.test.tsx`       | Input, tracks, info and chrome                         |
 | `apps/web/src/pages/PlayerExtras.test.tsx`         | Pagehide, native fallback and PATCH failure            |
 | `apps/web/src/pages/PlayerSubtitleReload.test.tsx` | Subtitle choice after reload and stale-instance guards |
 | `apps/web/e2e/player-input.spec.ts`                | Browser-intercepted layout hit-testing                 |
+| `apps/web/e2e/player-volume-keys.spec.ts`          | Native arrow steps and global shortcuts in Chromium    |
 
-Measured tracked scope: `apps/web/src/player/` has **27 production files**, **4 tests**; adding the five dedicated player-page suites under `apps/web/src/pages/` gives **9/27 = 0.33** test-to-source file ratio. The route file itself and mini-player files are excluded from this denominator. Unique human authors **1**; see [inventory method](index.md#measured-scope). Browser fixtures do not run a real encoder or prove media playback; see [test boundaries](build-and-tests.md#isolated-browser-flow).
+Measured tracked scope at `663492c`: `apps/web/src/player/` has **27 production files**, **4 tests**; adding the five dedicated player-page suites under `apps/web/src/pages/` gives **9/27 = 0.33** test-to-source file ratio. The route file itself, mini-player files and browser specs are excluded from this denominator. Unique human authors **1**; see [inventory method](index.md#measured-scope). Browser fixtures do not run a real encoder or prove media playback; see [test boundaries](build-and-tests.md#isolated-browser-flow).
