@@ -116,30 +116,25 @@ export function planCloseNotice(settings: DesktopSettings): ToastSpec | null {
   };
 }
 
-function escapeXml(text: string): string {
-  return text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+/** Native toast button, in the order of `ToastSpec.actions` (Electron reports a pressed button by that index). */
+export interface ToastButton {
+  type: 'button';
+  text: string;
 }
 
-/** Arguments are fixed words, never data from the server. */
-const ARGUMENTS: Record<ToastAction['id'], string> = { open: 'hs-open', health: 'hs-health', dismiss: 'hs-dismiss' };
+export function toastButtons(spec: ToastSpec): ToastButton[] {
+  return spec.actions.map((action) => ({ type: 'button', text: action.label }));
+}
+
+/** What the user did to a shown toast, as Electron reports it. */
+export type ToastInteraction = { kind: 'body' } | { kind: 'button'; index: number };
 
 /**
- * Windows toast XML with real buttons. Only the title text and fixed words go in: no URL, file name or key.
- * Dismiss uses the system activation, so it just closes the toast.
+ * The action the shell must run, or `null` when nothing may happen (Dismiss, "Got it", an unknown button).
+ * Every toast control is a plain foreground button or the body, so Windows reports a Dismiss press as a
+ * normal activation; only this decision keeps it from showing the window.
  */
-export function toastXml(spec: ToastSpec): string {
-  const [primary] = spec.actions;
-  const launch = primary && primary.id !== 'dismiss' ? ARGUMENTS[primary.id] : ARGUMENTS.dismiss;
-  const actions = spec.actions
-    .map((action) => {
-      const activation = action.id === 'dismiss' ? 'system' : 'foreground';
-      const args = action.id === 'dismiss' ? 'dismiss' : ARGUMENTS[action.id];
-      return `<action content="${escapeXml(action.label)}" arguments="${args}" activationType="${activation}"/>`;
-    })
-    .join('');
-  return (
-    `<toast launch="${launch}" activationType="foreground">` +
-    `<visual><binding template="ToastGeneric"><text>${escapeXml(spec.title)}</text><text>${escapeXml(spec.body)}</text></binding></visual>` +
-    `<actions>${actions}</actions></toast>`
-  );
+export function toastActionFor(spec: ToastSpec, interaction: ToastInteraction): 'open' | 'health' | null {
+  const action = interaction.kind === 'body' ? spec.actions[0] : spec.actions[interaction.index];
+  return action && action.id !== 'dismiss' ? action.id : null;
 }

@@ -41,6 +41,12 @@ pnpm --filter @homestream/desktop smoke           # launch smoke test: needs the
 
 Tests never start Electron: main-process logic takes its Electron and network dependencies as arguments, so it runs under plain Node in CI.
 
+## Toasts
+
+Toasts use Electron's own `actions` buttons, not custom toast XML. Windows reports every press (body, Play, Dismiss) as a normal activation, and a custom `activationType="system"` Dismiss still reached the `click` handler, which opened the window. Electron sends a button press as an `action` event with the button index, and only the body as `click`, so `toastActionFor` (`src/notifications.ts`) decides what each press does: body and Play open the title, Dismiss and "Got it" do nothing.
+
+Known limit for the packaging follow-up: Electron registers the running executable as the toast's COM server. Clicking a toast after HomeStream quit starts that executable. In the dev build this is `electron.exe` without the app path, so it opens Electron's default window. A packaged build starts HomeStream itself; check this once on the installed app (quit from the tray, then click an old toast).
+
 ## Electron install
 
 `electron` downloads its binary into a cache on first use. Keep that cache off the C: drive:

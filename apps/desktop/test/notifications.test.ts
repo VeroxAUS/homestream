@@ -7,8 +7,9 @@ import {
   planReadyToast,
   planSessionFailureToast,
   routeForMediaKey,
+  toastActionFor,
+  toastButtons,
   toastTitleText,
-  toastXml,
 } from '../src/notifications.js';
 
 const settings = DEFAULT_DESKTOP_SETTINGS;
@@ -78,21 +79,35 @@ describe('text and routes', () => {
   });
 });
 
-describe('toastXml', () => {
-  it('has real buttons and only the title and fixed words', () => {
-    const toast = planReadyToast({ ...ready, title: 'A <b>"Fish"</b> & Co' } as DownloadEvent, {
-      settings,
-      windowFocused: false,
-    });
-    const xml = toastXml(toast!);
-    expect(xml).toContain('<action content="Play" arguments="hs-open" activationType="foreground"/>');
-    expect(xml).toContain('<action content="Dismiss" arguments="dismiss" activationType="system"/>');
-    expect(xml).toContain('launch="hs-open"');
-    expect(xml).not.toMatch(/<b>|"Fish"</);
-    expect(xml).not.toMatch(/https?:|\.mkv|\/movie\/|token|key/i);
+describe('toast buttons', () => {
+  const ctx = { settings, windowFocused: false };
+
+  it('are plain buttons in the order of the actions, with no custom XML', () => {
+    expect(toastButtons(planReadyToast(ready, ctx)!)).toEqual([
+      { type: 'button', text: 'Play' },
+      { type: 'button', text: 'Dismiss' },
+    ]);
+    expect(toastButtons(planCloseNotice(settings)!)).toEqual([{ type: 'button', text: 'Got it' }]);
   });
 
-  it('only closes for a notice with a single dismiss button', () => {
-    expect(toastXml(planCloseNotice(settings)!)).toContain('launch="hs-dismiss"');
+  it('map the body and Play to open, and Dismiss to nothing', () => {
+    const toast = planReadyToast(ready, ctx)!;
+    expect(toastActionFor(toast, { kind: 'body' })).toBe('open');
+    expect(toastActionFor(toast, { kind: 'button', index: 0 })).toBe('open');
+    expect(toastActionFor(toast, { kind: 'button', index: 1 })).toBeNull();
+    expect(toastActionFor(toast, { kind: 'button', index: 7 })).toBeNull();
+  });
+
+  it('map Open Health to health and keep its Dismiss inert', () => {
+    const toast = planSessionFailureToast(failedSession, ctx)!;
+    expect(toastActionFor(toast, { kind: 'body' })).toBe('health');
+    expect(toastActionFor(toast, { kind: 'button', index: 0 })).toBe('health');
+    expect(toastActionFor(toast, { kind: 'button', index: 1 })).toBeNull();
+  });
+
+  it('do nothing for the close notice, body or button', () => {
+    const toast = planCloseNotice(settings)!;
+    expect(toastActionFor(toast, { kind: 'body' })).toBeNull();
+    expect(toastActionFor(toast, { kind: 'button', index: 0 })).toBeNull();
   });
 });
