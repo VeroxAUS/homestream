@@ -34,10 +34,10 @@ export class ReaderHolds {
     return this.byToken.get(token) ?? null;
   }
 
-  setLead(owner: string, leadSec: number): void {
+  setLead(owner: string, leadSec: number, closeLeadSec = leadSec): void {
     const readers = this.ensure(owner);
     readers.lead = leadSec;
-    if (readers.window.update(leadSec)) this.onRelease();
+    if (readers.window.update(leadSec, closeLeadSec)) this.onRelease();
   }
 
   /** A start, seek or encoder restart: measured from here, so the next stretch downloads freely again. */

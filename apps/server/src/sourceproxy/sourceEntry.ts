@@ -196,8 +196,8 @@ export class SourceEntry implements BlockOwner {
    * Records one owner's encoder lead over its player. The byte cache is shared between the sessions playing a stream, but
    * each session's reader waits at its own window.
    */
-  setLead(owner: string, leadSec: number): void {
-    this.holds.setLead(owner, leadSec);
+  setLead(owner: string, leadSec: number, closeLeadSec = leadSec): void {
+    this.holds.setLead(owner, leadSec, closeLeadSec);
   }
 
   /** A start, seek or encoder restart: measured from here, so the next stretch downloads freely again. */

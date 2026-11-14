@@ -1,5 +1,5 @@
 import type { NetworkSession } from '@homestream/shared';
-import { leadSeconds } from '../network/readAhead.js';
+import { holdLeadSec, leadSeconds } from '../network/readAhead.js';
 import type { PlaybackContext } from './context.js';
 import { encoderWarm, extractorLimit, isHeavySource, limitLabel, type LimitLabel } from './extractorSchedule.js';
 import { SEGMENT_SECONDS } from './playlist.js';
@@ -36,7 +36,9 @@ export class ReadAheadPacing {
   }
 
   syncReadAhead(rec: SessionRecord): void {
-    rec.source.setLead(this.leadSec(rec));
+    const lead = this.leadSec(rec);
+    const bytesPerSec = rec.probe.durationSec > 0 ? rec.source.sizeBytes / rec.probe.durationSec : 0;
+    rec.source.setLead(lead, holdLeadSec(lead, this.recentSpeed(rec), bytesPerSec));
     rec.subtitles?.syncHolds();
   }
 

@@ -55,8 +55,11 @@ export interface SourceHandle {
   extractorRunUrl(runId: number): string;
   /** Holds or releases the reads of an extractor run (see `extractorRunUrl`). */
   setExtractorHold(runId: number, held: boolean): void;
-  /** Seconds of encoded video ahead of the player; the encoder's reads stop at the read-ahead window and resume below the resume lead. */
-  setLead(leadSec: number): void;
+  /**
+   * Seconds of encoded video ahead of the player; the encoder's reads stop at the read-ahead window and resume below the
+   * resume lead. `closeLeadSec` is the lead expected once the reads have stopped (default `leadSec`); it only closes the window.
+   */
+  setLead(leadSec: number, closeLeadSec?: number): void;
   /** Encoder start, seek or restart: the window is measured from here again, and an input cut by `cutEncoderInput` reopens. */
   resetReadAhead(): void;
   /** Tears down this owner's encoder reads and refuses new ones, so an encoder being discarded is not blocked on a read. */
@@ -269,8 +272,8 @@ export class SourceProxy {
       setExtractorHold: (runId, held) => {
         if (!released) entry.setExtractorHold(owner, runId, held);
       },
-      setLead: (leadSec) => {
-        if (!released) entry.setLead(owner, leadSec);
+      setLead: (leadSec, closeLeadSec) => {
+        if (!released) entry.setLead(owner, leadSec, closeLeadSec);
       },
       resetReadAhead: () => {
         if (released) return;
