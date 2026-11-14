@@ -14,11 +14,15 @@ The full-window HLS player starts or attaches to a server session, drives a vide
 
 `startSession` in `apps/web/src/player/sessionApi.ts` sends `POST /api/sessions` with title fields, capability profile, **`streamId: "auto"`**, optional `startPositionSec` and **no subtitle field**. The server applies its default-subtitle policy.
 
-| Answer                    | Client behavior                                                                                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **201 session**           | Validate session, mount playback using the server's playlist URL and reported start position                                                                      |
-| **202 download tracking** | Validate download, update/invalidate details via `apps/web/src/player/downloading.ts`, show “Downloading, try again later,” return to details without opening HLS |
-| Error                     | Show message/hint, Retry, Back to details and Health-dashboard access                                                                                             |
+| Answer                    | Client behavior                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **201 session**           | Validate session, mount playback using the server's playlist URL and reported start position                                                                            |
+| **202 download tracking** | Validate download, update/invalidate details via `apps/web/src/player/downloading.ts`, show state-appropriate informational copy, return to details without opening HLS |
+| Error                     | Show message/hint, Retry, Back to details and Health-dashboard access                                                                                                   |
+
+`useDownloadingHandoff` in `apps/web/src/pages/PlayerPage.tsx` checks detailed `download.state`. For `pending`, the toast says **Waiting for TorBox**, with detail `Sent "<title>" to TorBox, but it is not confirmed yet. HomeStream keeps checking and will let you know when it's ready.` The label/detail helper lives in `apps/web/src/lib/downloadWording.ts`, shared with the [details badge](screens.md#details-and-actions); neither claims a confirmed start or fabricates a percentage. Confirmed states retain **Downloading, try again later** and the normal caching detail. The notice has no actions and uses the informational five-second lifetime.
+
+`markDownloading` writes the returned download into an existing movie/show details cache (replacing only the matching episode entry for shows), then invalidates that title query. This makes the correct badge available immediately rather than waiting for refetch. `apps/web/src/pages/PlayerPage.test.tsx` covers both ordinary downloading and unconfirmed 202 handoffs, including leaving the player and rendering details. The 202 is tracking, not playable media; server checks and timeout policy are documented under [downloads](../../features/downloads.md).
 
 Retry after a startup failure starts another attempt. Retry after a fatal playing-stream failure first snapshots the current position and ends the old session. `waitForStop` in `apps/web/src/player/sessionApi.ts` waits for that shutdown promise or **4 seconds**, then permits replacement, preventing a race against the old encoder slot. Retry clicks are deduplicated while draining. An attached desktop session has a separate give-up path that also drains a failed attachment before normal startup; see [desktop integration](desktop-integration.md#session-handoff-and-retry).
 
@@ -105,6 +109,8 @@ Preserve cleanup ordering, metadata gating and handoff release when changing hoo
 | File                                               | Purpose                                                |
 | -------------------------------------------------- | ------------------------------------------------------ |
 | `apps/web/src/pages/PlayerPage.tsx`                | Target, start/attach state and retry transitions       |
+| `apps/web/src/player/downloading.ts`               | Immediate details-cache update and title invalidation  |
+| `apps/web/src/lib/downloadWording.ts`              | Unconfirmed 202 toast label and detail                 |
 | `apps/web/src/player/Playback.tsx`                 | Video, overlays and draining Retry                     |
 | `apps/web/src/player/sessionApi.ts`                | Start/PATCH/DELETE/progress/prefetch helpers           |
 | `apps/web/src/player/useHls.ts`                    | HLS instance, native fallback and recovery             |

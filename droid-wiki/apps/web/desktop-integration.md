@@ -14,6 +14,10 @@ The web build is also the implemented Electron renderer. `desktopBridge` and `in
 
 `FinishSetup` in `apps/web/src/desktop/FinishSetup.tsx` replaces Home, showing names and Set/Missing, **never secret values**. Open config delegates to the bridge. Check again requests a server restart, then makes up to **20** health checks with **1-second** waits, invalidating cached data once required keys are present. Restart refusal can display its message. The screen can also open the currently placeholder Health dashboard.
 
+The check loop is mount-aware: cleanup marks the screen unmounted and cancels its current wait, clearing the timeout **and resolving the waiting promise** so the loop can leave. A mounted guard prevents subsequent health-refetch iterations and late checking/message state updates. `apps/web/src/desktop/FinishSetup.test.tsx` uses fake timers to verify that unmount reduces pending timers and advancing another five seconds does not trigger a second health refetch.
+
+This is wait/loop cancellation, **not an abort of an in-flight `restartServer()` or `refetchQueries()`**. An already-running refetch may finish, read the cache and invalidate queries if the keys are now complete; cleanup does not undo those effects (`apps/web/src/desktop/FinishSetup.tsx`). The test uses a fake bridge and does not demonstrate process-restart cancellation.
+
 `DesktopSettings` in `apps/web/src/desktop/DesktopSettings.tsx` adds a Desktop card after This device on the **Settings** tab: Start with Windows, start minimized, close-to-tray versus quit, ready/failure notification switches, hardware acceleration, restart/status, logs and Quit. Persistence/status operations go through `apps/web/src/desktop/useDesktopSettings.ts`; changes are sent immediately, without a Save button, and status refreshes every **2 seconds** while mounted. Hardware acceleration takes effect after restart.
 
 The separate **About** tab shows the desktop version and Electron 45, read-only server facts and a disabled Check for updates control because updates are not configured (`apps/web/src/pages/settings/AboutPanel.tsx`). A browser has no Desktop card or update control. The spoiler preference remains local in both runtimes; [Settings and spoilers](settings-and-spoilers.md) covers shared tabs and device controls. Panels stay mounted while hidden, so selecting About does not stop the Desktop status interval.
@@ -64,6 +68,7 @@ Extend bridge types in [shared](../../packages/shared.md), implement IPC in the 
 | `apps/web/src/desktop/bridge.ts`                | Desktop/mini detection                              |
 | `apps/web/src/desktop/useMissingKeys.ts`        | Bridge-gated query and cached config interpretation |
 | `apps/web/src/desktop/FinishSetup.tsx`          | Missing-key guidance and restart/check loop         |
+| `apps/web/src/desktop/FinishSetup.test.tsx`     | Unmount clears wait and prevents subsequent checks  |
 | `apps/web/src/desktop/DesktopSettings.tsx`      | Renderer settings and About rows                    |
 | `apps/web/src/desktop/AppKeys.tsx`              | Search shortcuts and shortcut sheet                 |
 | `apps/web/src/desktop/useUnreachable.ts`        | Health/error-to-supervisor status view              |
@@ -76,4 +81,4 @@ Extend bridge types in [shared](../../packages/shared.md), implement IPC in the 
 | `apps/web/src/desktop/MiniVolume.test.tsx`      | Mini volume/mute and bidirectional snapshot values  |
 | `apps/web/src/desktop/DesktopSettings.test.tsx` | Settings bridge interactions                        |
 
-Measured tracked `apps/web/src/desktop/` scope: **15 production files**, **4 tests**, **4/15 = 0.27** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). These renderer tests use a fake bridge, not a launched Electron application.
+Measured tracked `apps/web/src/desktop/` scope at `3c31c45`: **15 production files**, **5 tests**, **5/15 = 0.33** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope). These renderer tests use a fake bridge, not a launched Electron application.

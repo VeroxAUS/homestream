@@ -54,6 +54,10 @@ A failed run retries once from **20 seconds before committed head**, overlapping
 
 `ExtractorWindows` in `apps/server/src/playback/extractorWindow.ts` applies time hysteresis per run. The default window holds at **176 seconds** ahead (configured 180 minus four seconds pipeline allowance) and resumes below **120 seconds**. The [source proxy](../source-proxy.md) separately bounds extractor byte lead over its own session's encoder; neither bound is merely a fixed rate.
 
+A hold must not prevent the demuxer from opening its input. `pumpRange` in `apps/server/src/sourceproxy/serve.ts` skips its time/byte-gap wait in the header (`pos < headTarget`, at most **16 MiB**) and tail-index region (`pos >= Math.max(headTarget, size - TAIL_BYTES)`, with **8 MiB** TAIL_BYTES from `apps/server/src/sourceproxy/sourceEntry.ts`). The comparison uses the current pump position, not the original request start, and applies even when edge bytes need remote fetching. Middle-file reads remain held, including cached reads; applicable remote pacing and the shared bandwidth gate remain in force at the edges.
+
+`apps/server/test/sourceproxy/sessionSharing.test.ts` verifies an extractor gets matching final 4 MiB index bytes from a 400 MiB source while its slower encoder is still far behind. Its middle-file lead tests and `apps/server/test/sourceproxy/readAheadWindow.test.ts` retain byte-gap/time-hold coverage. The header and time-held edge cases follow from the shared pump condition, not dedicated assertions in those tests.
+
 Local rate policy in `apps/server/src/playback/extractorSchedule.ts` proposes:
 
 - Unlimited when video is done or at least 15 seconds ahead.
@@ -63,7 +67,7 @@ Local rate policy in `apps/server/src/playback/extractorSchedule.ts` proposes:
 
 Warm means ten produced segments, or at least three with preferred recent/average speed ≥2×. A fresh stretch ends at target+72 seconds or after **25 seconds** measured from the later of launch and heavy-encoder warm time.
 
-The proxy raises finite rates to at least **20% of aggregate cap**; the shared gate protects at-risk video before that extractor priority share. These are policies, not throughput measurements. Cached bytes bypass local pacing but still obey reader holds. See [network controls](../network.md).
+The proxy raises finite rates to at least **20% of aggregate cap**; the shared gate protects at-risk video before that extractor priority share. These are policies, not throughput measurements. Cached bytes bypass local pacing but still obey reader holds in the file's middle; header/tail reads have the pump exemption described above. See [network controls](../network.md).
 
 ## HTTP and bitmap behavior
 
@@ -85,19 +89,21 @@ Change automatic defaults separately from explicit validation. Preserve interval
 
 ## Key source files
 
-| File                                                         | Purpose                                   |
-| ------------------------------------------------------------ | ----------------------------------------- |
-| `apps/server/src/playback/defaultSubtitle.ts`                | Automatic selection                       |
-| `apps/server/src/playback/subtitleExtractor.ts`              | Worker orchestration                      |
-| `apps/server/src/playback/subtitleRun.ts`                    | One worker, tails and coverage clock      |
-| `apps/server/src/playback/subtitleStore.ts`                  | Session cues/coverage                     |
-| `apps/server/src/playback/subtitleHandoff.ts`                | HTTP readiness and failure behavior       |
-| `apps/server/src/playback/extractorSchedule.ts`              | Heavy-source warm-up and rate policy      |
-| `apps/server/test/playback/defaultSubtitle.test.ts`          | Language, forced and text/bitmap defaults |
-| `apps/server/test/playback/subtitleExtractorPreroll.test.ts` | Segment-aligned start and retry overlap   |
-| `apps/server/test/playback/extractorSchedule.test.ts`        | Rate/burst/worker limits                  |
-| `apps/server/test/playback/subtitleRunRegistry.test.ts`      | Session-specific orphan marker            |
+| File                                                         | Purpose                                             |
+| ------------------------------------------------------------ | --------------------------------------------------- |
+| `apps/server/src/playback/defaultSubtitle.ts`                | Automatic selection                                 |
+| `apps/server/src/playback/subtitleExtractor.ts`              | Worker orchestration                                |
+| `apps/server/src/playback/subtitleRun.ts`                    | One worker, tails and coverage clock                |
+| `apps/server/src/playback/subtitleStore.ts`                  | Session cues/coverage                               |
+| `apps/server/src/playback/subtitleHandoff.ts`                | HTTP readiness and failure behavior                 |
+| `apps/server/src/playback/extractorSchedule.ts`              | Heavy-source warm-up and rate policy                |
+| `apps/server/src/sourceproxy/serve.ts`                       | Edge-region bootstrap despite holds                 |
+| `apps/server/test/sourceproxy/sessionSharing.test.ts`        | Tail-index exemption and byte-lead regression tests |
+| `apps/server/test/playback/defaultSubtitle.test.ts`          | Language, forced and text/bitmap defaults           |
+| `apps/server/test/playback/subtitleExtractorPreroll.test.ts` | Segment-aligned start and retry overlap             |
+| `apps/server/test/playback/extractorSchedule.test.ts`        | Rate/burst/worker limits                            |
+| `apps/server/test/playback/subtitleRunRegistry.test.ts`      | Session-specific orphan marker                      |
 
 ## Measured scope
 
-At **`0a8f04f`**, scoped `git ls-tree` counts **42 playback `.ts` source / 35 playback-plus-encode `*.test.ts` files**, ratio **0.83**. This is playback-wide, overlapping the other playback pages; helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. Tests were inspected, not executed.
+Historical snapshot dated **2026-11-08**, revision **`0a8f04f`**: scoped `git ls-tree` counts **42 playback `.ts` source / 35 playback-plus-encode `*.test.ts` files**, ratio **0.83**. This is playback-wide, overlapping the other playback pages; helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. Tests were inspected, not executed.

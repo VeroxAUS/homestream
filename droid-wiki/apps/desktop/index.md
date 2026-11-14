@@ -34,6 +34,8 @@ An initial non-HomeStream answer on the server port now produces a failed startu
 
 Read [server supervision](supervisor.md) for ownership, crash recovery and activity correctness, and [windows and IPC](windows-and-ipc.md) for renderer trust and handoff.
 
+Native notifications use Electron action buttons, with indexed decisions and a once-only interaction binding rather than custom XML. Dismiss and Got it never open a window; body activation uses the first action (`apps/desktop/src/notifications.ts`, `apps/desktop/src/toastBinding.ts`, `apps/desktop/src/shell/toasts.ts`). Detailed event/cleanup semantics and the post-quit development-runtime limit stay in [windows and IPC](windows-and-ipc.md#native-toast-actions-and-lifetime).
+
 ## Settings and configuration
 
 `apps/desktop/src/settings.ts` recovers missing or malformed fields independently rather than discarding all valid preferences. Defaults come from `packages/shared/src/desktop.ts`: minimized startup, tray close, ready/failure notifications and hardware acceleration enabled; close notice not yet shown.
@@ -109,6 +111,8 @@ Start policy changes in the injectable module, add its unit regression, then cha
 | `apps/desktop/src/requestId.ts`               | Request correlation                                        |
 | `apps/desktop/src/permissions.ts`             | Fullscreen and origin-scoped keyboard-lock policy          |
 | `apps/desktop/src/windowBounds.ts`            | Observed window-bound correction                           |
+| `apps/desktop/src/toastBinding.ts`            | Once-only body/button interaction binding                  |
+| `apps/desktop/test/toastBinding.test.ts`      | Indexed actions, inert dismiss and duplicate reports       |
 | `apps/desktop/test/permissions.test.ts`       | Shared request/check-handler and hostile-origin cases      |
 | `apps/desktop/test/windowBounds.test.ts`      | Border inflation, shifted placement and bounded correction |
 | `apps/desktop/test/settingsFile.test.ts`      | Preference and write-failure regressions                   |
@@ -122,4 +126,4 @@ Start policy changes in the injectable module, add its unit regression, then cha
 
 ## Measured scope
 
-At `663492c`, committed `apps/desktop/src/` has **33 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **21 test files** (19 `.test.ts`, two `.smoke.ts`), plus three excluded helpers: `apps/desktop/test/smoke/cdp.ts`, `apps/desktop/test/smoke/harness.ts` and `apps/desktop/test/smoke/teardown.ts`. Test/source file ratio: **0.64** (21/33, rounded to two decimals). Counts use `git ls-tree -r --name-only HEAD`, classifying source by `.ts`/`.cts` beneath `apps/desktop/src/` and tests by `.test.ts`/`.smoke.ts` beneath `apps/desktop/test/`, excluding configs/assets/build outputs and nonsuite helpers. Scoped `git log origin/main --format='%aN' -- apps/desktop` history has **1 unique human author** after excluding bots, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage or a claim that tests were run for this documentation.
+At `3c31c453d49a737e9d51ba39c6bd41bfc4dbd092`, committed `apps/desktop/src/` has **34 TypeScript source files**, including the `.cts` preload; `apps/desktop/test/` has **22 test files** (20 `.test.ts`, two `.smoke.ts`), plus three excluded helpers: `apps/desktop/test/smoke/cdp.ts`, `apps/desktop/test/smoke/harness.ts` and `apps/desktop/test/smoke/teardown.ts`. Test/source file ratio: **0.65** (22/34, rounded to two decimals). Counts use `git ls-tree -r --name-only 3c31c453d49a737e9d51ba39c6bd41bfc4dbd092`, classifying source by `.ts`/`.cts` beneath `apps/desktop/src/` and tests by `.test.ts`/`.smoke.ts` beneath `apps/desktop/test/`, excluding configs/assets/build outputs and nonsuite helpers. Scoped `git log origin/main --format='%aN' -- apps/desktop` history has **1 unique human author** after excluding bots, VeroxAUS, matching `.github/CODEOWNERS`. These are inventory counts, not coverage or a claim that tests were run for this documentation.

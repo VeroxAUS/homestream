@@ -16,6 +16,8 @@ These terms connect shared contracts, the server pipeline, and client playback. 
 | Source proxy       | Loopback HTTP service hiding expiring links and sharing ranged bytes, `apps/server/src/sourceproxy/proxy.ts`                |
 | Prefetch           | Warming bytes and probe results without encoding, `apps/server/src/prefetch/service.ts`                                     |
 | Download           | Tracking upstream TorBox caching, not storing the entire title locally, `apps/server/src/downloads/service.ts`              |
+| Unconfirmed start  | Detailed download state `pending`: sent to TorBox but not confirmed, `packages/shared/src/downloads.ts`                     |
+| metaDL             | TorBox looking up a torrent's file list; 30 minutes without progress fails tracking, `apps/server/src/downloads/rules.ts`   |
 | Placeholder        | Gateway downloading clip that must not become a playback session, `apps/server/src/playback/placeholder.ts`                 |
 | Media key          | Movie or episode identity joining history and progress, `apps/server/src/db/plays.ts`                                       |
 | Continue watching  | Resume items and aired next episodes derived from saved progress, `apps/server/src/progress/service.ts`                     |

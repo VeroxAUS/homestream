@@ -62,11 +62,17 @@ Demand reads validate the upstream range start, obey downstream backpressure, av
 
 Run IDs in different owners do not collide. Unowned probe/plain extractor requests are not time-held. Byte-gap hold begins **strictly beyond half the effective per-source budget**, default 192 MiB, and releases at/below half that distance, default 96 MiB. Effective budget is the smaller global/per-source cap. Without a main reader there is no byte-gap hold.
 
-Remote holds apply before cache delivery too. Upstream stretches end at block boundaries so complete cached blocks survive; the loopback reader stays connected while held. A discard cut is intentionally different: it destroys responses and returns 503 to reconnects until the next launch reset. Other owners and extractor reads remain unaffected. See [playback lifecycle](playback/lifecycle.md).
+In the file's **middle**, remote time/byte-gap holds apply before cache delivery too. `pumpRange` in `apps/server/src/sourceproxy/serve.ts` bypasses its hold wait when the current byte position satisfies `pos < entry.headTarget` or `pos >= Math.max(entry.headTarget, entry.size - TAIL_BYTES)`. `HEAD_BYTES` is **16 MiB**, `TAIL_BYTES` is **8 MiB**, and `headTarget` is the smaller of head size and resource size (`apps/server/src/sourceproxy/sourceEntry.ts`). The header endpoint is exclusive and the tail start is inclusive. Files no larger than the head target have no middle hold region.
+
+This lets a held subtitle demuxer open the header and seek to the tail index before sequential extraction. It applies to remote readers generally, not just extractor URLs, and does not depend on those regions already being cached. The condition is checked at each pump iteration, not once for the entire requested range. Cached chunks and upstream stretches are not byte-by-byte hold barriers: upstream draining still checks holds and finishes at block boundaries. Edge reads still obey applicable remote pacing and the download gate.
+
+`apps/server/test/sourceproxy/sessionSharing.test.ts` specifically checks a run reading the final **4 MiB of a 400 MiB** source while its encoder is far behind: the index read completes with matching bytes before the encoder finishes. The same file checks middle-file byte-lead holds and release; `apps/server/test/sourceproxy/readAheadWindow.test.ts` checks middle-file time holds and run/owner isolation. There is no dedicated held-header or held-time-window edge-read assertion in these tests; the broader exemption is verified from the pump condition.
+
+Upstream stretches end at block boundaries so complete cached blocks survive; a middle-file loopback reader stays connected while held. A discard cut is intentionally different: it destroys responses and returns 503 to reconnects until the next launch reset. The edge exemption does not bypass discard cuts. Other owners and extractor reads remain unaffected by an owner's main-input cut. See [playback lifecycle](playback/lifecycle.md) and [subtitles](playback/subtitles.md).
 
 ## Pacing and link recovery
 
-Warm/demand remote media reads share one [download gate](network.md). `RatePacer` in `apps/server/src/sourceproxy/pacer.ts` spreads finite extractor reads over time; the proxy raises finite proposals to at least the gate's 20% extractor share. Cached reads bypass pacing, not holds. URL-resolution probes and upstream metadata clients are separate from media-body scheduling.
+Warm/demand remote media reads share one [download gate](network.md). `RatePacer` in `apps/server/src/sourceproxy/pacer.ts` spreads finite extractor reads over time; the proxy raises finite proposals to at least the gate's 20% extractor share. Cached reads bypass pacing; middle-file cached reads still obey holds, while header/tail reads bypass the pump's hold wait. URL-resolution probes and upstream metadata clients are separate from media-body scheduling.
 
 `UpstreamClient` in `apps/server/src/sourceproxy/upstream.ts` uses keep-alive ranged HTTP(S), a 30-second socket-idle timeout and placeholder-aware redirects. Expiry statuses 401/403/404/410 trigger refresh. `SourceEntry.open` in `apps/server/src/sourceproxy/sourceEntry.ts` permits at most four attempts, retries transient network/429+ failures, and coalesces refresh by generation. Cached/probed content survives refresh under the assumption that the raw link still identifies the same resource.
 
@@ -88,9 +94,10 @@ Change handles/retention in `apps/server/src/sourceproxy/proxy.ts`, range pumpin
 | `apps/server/src/sourceproxy/leadBound.ts`             | Cache-sized extractor lead                            |
 | `apps/server/src/sourceproxy/inputCuts.ts`             | Discarded encoder input                               |
 | `apps/server/test/sourceproxy/sessionSharing.test.ts`  | Follower reuse and capacity-limited refetch           |
+| `apps/server/test/sourceproxy/readAheadWindow.test.ts` | Middle-file time holds and owner/run separation       |
 | `apps/server/test/sourceproxy/leadBound.test.ts`       | Strict hold threshold, hysteresis and owner isolation |
 | `apps/server/test/sourceproxy/encoderInputCut.test.ts` | Cut/reconnect behavior                                |
 
 ## Measured scope
 
-At **`0a8f04f`**, scoped `git ls-tree` counts **9 `.ts` source / 12 `*.test.ts` files** under the matching sourceproxy source/test directories: **1.33 test files/source file**. Helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. Tests were read; no network measurements or encoders were launched.
+Historical snapshot dated **2026-11-08**, revision **`0a8f04f`**: scoped `git ls-tree` counts **9 `.ts` source / 12 `*.test.ts` files** under the matching sourceproxy source/test directories: **1.33 test files/source file**. Helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. Tests were read; no network measurements or encoders were launched.

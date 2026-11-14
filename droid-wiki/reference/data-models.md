@@ -6,7 +6,7 @@ SQLite stores durable state; active sessions, source-cache bytes, metrics, and H
 
 `openDatabase` in `apps/server/src/db/index.ts` creates `homestream.db` under `DATA_DIR`, or uses memory for the `:memory:` sentinel. It enables WAL, a 5000 ms busy timeout, and foreign-key mode. Built-in synchronous `node:sqlite` avoids a native npm dependency.
 
-Migrations run in numeric order, each in its own transaction with `PRAGMA user_version`; failure rolls back both schema and version. There are four versions and eight application tables. Foreign-key mode is on, but the migrations declare no foreign keys or cascades (`apps/server/src/db/migrations.ts`).
+Migrations run in numeric order, each in its own transaction with `PRAGMA user_version`; failure rolls back both schema and version. There are five versions and eight application tables. Foreign-key mode is on, but the migrations declare no foreign keys or cascades (`apps/server/src/db/migrations.ts`).
 
 | Version | Change                                                                       |
 | ------- | ---------------------------------------------------------------------------- |
@@ -14,6 +14,7 @@ Migrations run in numeric order, each in its own transaction with `PRAGMA user_v
 | 2       | Rebuild events to admit prefetch source                                      |
 | 3       | Rebuild events to admit downloads; add download queue and partial uniqueness |
 | 4       | Add server settings key/value store                                          |
+| 5       | Add persistent download absence and metadata-lookup timers                   |
 
 ```mermaid
 graph LR
@@ -56,6 +57,10 @@ Play rows snapshot device details rather than depending on a join. Finalization 
 
 A partial unique index allows only one `status='pending'` download per media key, while terminal rows can coexist. Coarse status and detailed state are separate; readiness notification time is persisted (`apps/server/src/db/migrations.ts`). See [downloads](../features/downloads.md).
 
+Migration 5 adds nullable epoch-millisecond columns `absent_since` and `metadata_since` to `pending_downloads`. `DownloadStore` maps them to `absentSince` and `metadataSince` in `apps/server/src/downloads/store.ts`; they are internal scheduling state, not fields of the public `Download` schema (`packages/shared/src/downloads.ts`). Persisting them keeps server restart from resetting a ten-minute absence or thirty-minute metadata-lookup window.
+
+`apps/server/src/downloads/service.ts` starts absence tracking at the first successful listing that misses the hash and clears it when the item is listed again. A missing item clears the metadata timer; leaving `metaDL` clears it, while new progress restarts it. TorBox listing errors back off without recording a new absence observation. Gateway cached availability can still resolve a missing item as ready before the vanished failure check. The [download feature](../features/downloads.md) explains the full polling policy and its gateway-only fallback.
+
 ## Lifetime and sensitivity
 
 Do not confuse expiry/freshness with physical deletion. Progress, plays, devices and settings have no general TTL in their adapters; session directories and byte-cache eviction are separate from SQLite retention.
@@ -79,4 +84,4 @@ The optional analytics install id is a persisted random UUID, not a hardware fin
 
 Append migrations; never rewrite applied versions. Update adapters, shared contracts and consumers together, run `pnpm db:schema`, document tables in `docs/database.md`, and check `pnpm db:schema:check`. Use `docs/schema.sql` for exhaustive DDL and [API](../api/index.md) for external models.
 
-This inventory was source-checked against four migrations and eight application tables at **`0a8f04f`, 2026-11-08**. It did not inspect a user's database or execute migration/application tests.
+This inventory was source-checked against five migrations and eight application tables at **`3c31c45`, collected 2026-11-14**. It did not inspect a user's database or execute migration/application tests.

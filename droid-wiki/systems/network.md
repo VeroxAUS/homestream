@@ -49,7 +49,7 @@ graph LR
 
 `ReadAheadPacing` in `apps/server/src/playback/readAheadPacing.ts` feeds progress, requested/reported position and recent speed to the source handle. Subtitle reach includes the latest video segment request. `ReaderHolds` in `apps/server/src/sourceproxy/readerHolds.ts` keeps viewers independent even when their bytes are shared.
 
-A separate cache-sized byte-gap bound keeps extractor data from evicting what its encoder still needs. Held remote stretches end at block boundaries and stop remote reads; cached bytes also obey holds. These controls differ from [disk parking](playback/lifecycle.md).
+A separate cache-sized byte-gap bound keeps extractor data from evicting what its encoder still needs. In the file's middle, held remote stretches end at block boundaries and wait; cached bytes also obey holds. Header and tail-index reads bypass the pump's time/byte-gap hold wait so a held demuxer can open its input (`apps/server/src/sourceproxy/serve.ts`). The exact edge condition is `pos < headTarget` or `pos >= Math.max(headTarget, size - TAIL_BYTES)`, where headTarget is at most **16 MiB** and TAIL_BYTES is **8 MiB** (`apps/server/src/sourceproxy/sourceEntry.ts`). This exemption is checked per pump iteration; it does not disable remote-byte accounting, aggregate limits, finite extractor pacing or discard cuts. See [source proxy](source-proxy.md) for range boundaries and test limits. These controls differ from [disk parking](playback/lifecycle.md).
 
 ## LAN addresses and mDNS
 
@@ -73,19 +73,21 @@ Change fairness in `apps/server/src/network/downloadGate.ts`, window rules in `a
 
 ## Key source files
 
-| File                                                 | Purpose                                             |
-| ---------------------------------------------------- | --------------------------------------------------- |
-| `apps/server/src/network/downloadGate.ts`            | Cap, risk guard and shared extractor rate           |
-| `apps/server/src/network/tokenBucket.ts`             | Whole-chunk token accounting                        |
-| `apps/server/src/network/limits.ts`                  | Validation and unit conversion                      |
-| `apps/server/src/network/readAhead.ts`               | Hysteresis/pipeline allowance                       |
-| `apps/server/src/net.ts`                             | Filter/rank addresses and normalize request IP      |
-| `apps/server/src/discovery.ts`                       | Filtered mDNS record publication                    |
-| `apps/server/test/network/bandwidthPriority.test.ts` | Low-lead protection with fake clocks                |
-| `apps/server/test/network/extractorShare.test.ts`    | Aggregate share, risk suspension and no reservation |
-| `apps/server/test/net.test.ts`                       | Virtual/link-local fallback and ranking             |
-| `apps/server/test/discovery.test.ts`                 | A/AAAA replacement and advertised records           |
+| File                                                  | Purpose                                             |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| `apps/server/src/network/downloadGate.ts`             | Cap, risk guard and shared extractor rate           |
+| `apps/server/src/network/tokenBucket.ts`              | Whole-chunk token accounting                        |
+| `apps/server/src/network/limits.ts`                   | Validation and unit conversion                      |
+| `apps/server/src/network/readAhead.ts`                | Hysteresis/pipeline allowance                       |
+| `apps/server/src/sourceproxy/serve.ts`                | Holds with header/tail pump exemption               |
+| `apps/server/test/sourceproxy/sessionSharing.test.ts` | Tail-index exemption and middle-file byte lead      |
+| `apps/server/src/net.ts`                              | Filter/rank addresses and normalize request IP      |
+| `apps/server/src/discovery.ts`                        | Filtered mDNS record publication                    |
+| `apps/server/test/network/bandwidthPriority.test.ts`  | Low-lead protection with fake clocks                |
+| `apps/server/test/network/extractorShare.test.ts`     | Aggregate share, risk suspension and no reservation |
+| `apps/server/test/net.test.ts`                        | Virtual/link-local fallback and ranking             |
+| `apps/server/test/discovery.test.ts`                  | A/AAAA replacement and advertised records           |
 
 ## Measured scope
 
-At **`0a8f04f`**, scoped `git ls-tree` counts **7 network `.ts` source / 8 matching `*.test.ts` files**, ratio **1.14**. Adjacent LAN discovery scope is **2 source / 2 test files** (`apps/server/src/net.ts`, `apps/server/src/discovery.ts` and their root tests). Proxy/playback, helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. No tests, mDNS publication or bandwidth measurements were run.
+Historical snapshot dated **2026-11-08**, revision **`0a8f04f`**: scoped `git ls-tree` counts **7 network `.ts` source / 8 matching `*.test.ts` files**, ratio **1.14**. Adjacent LAN discovery scope is **2 source / 2 test files** (`apps/server/src/net.ts`, `apps/server/src/discovery.ts` and their root tests). Proxy/playback, helpers and integration elsewhere are excluded. CODEOWNERS and supplied default-branch history identify **1 unique human**, excluding bots, not an ownership guarantee. No tests, mDNS publication or bandwidth measurements were run.
