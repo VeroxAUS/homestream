@@ -11,7 +11,18 @@ const WORDS = ['no', 'one', 'two', 'three', 'four'];
 const CHECK_ATTEMPTS = 20;
 const CHECK_WAIT_MS = 1000;
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
+/** Resolves after `ms`, or as soon as `cancel` is called, so an unmounted screen leaves no timer behind. */
+function cancellableWait(ms: number): { done: Promise<void>; cancel: () => void } {
+  let cancel = (): void => undefined;
+  const done = new Promise<void>((resolve) => {
+    const id = window.setTimeout(resolve, ms);
+    cancel = () => {
+      window.clearTimeout(id);
+      resolve();
+    };
+  });
+  return { done, cancel };
+}
 
 function KeyRow({ item }: { item: ConfigKey }) {
   return (
@@ -35,10 +46,12 @@ function useCheckAgain() {
   const [message, setMessage] = useState('');
   // Home replaces this screen as soon as the keys are in, which can happen while a check is still finishing.
   const mounted = useRef(true);
+  const cancelWait = useRef<() => void>(() => undefined);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      cancelWait.current();
     };
   }, []);
   const check = async (): Promise<void> => {
@@ -49,15 +62,17 @@ function useCheckAgain() {
     try {
       const result = await bridge.restartServer();
       if (!result.ok && mounted.current) setMessage(result.message ?? '');
-      for (let attempt = 0; attempt < CHECK_ATTEMPTS; attempt += 1) {
+      for (let attempt = 0; attempt < CHECK_ATTEMPTS && mounted.current; attempt += 1) {
         await queryClient.refetchQueries({ queryKey: ['health'] });
         const keys = configKeys(queryClient.getQueryData(healthQuery().queryKey));
         if (keys && missingRequired(keys).length === 0) {
           await queryClient.invalidateQueries();
           return;
         }
-        if (!result.ok) return;
-        await wait(CHECK_WAIT_MS);
+        if (!result.ok || !mounted.current) return;
+        const pause = cancellableWait(CHECK_WAIT_MS);
+        cancelWait.current = pause.cancel;
+        await pause.done;
       }
     } finally {
       if (mounted.current) setChecking(false);
