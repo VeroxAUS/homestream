@@ -259,6 +259,19 @@ describe('extractor lead over the encoder', () => {
     expect(encoder.ended).toBe(false);
   }, 60_000);
 
+  it('does not hold an extractor read of the file index at the end while the encoder is far from it', async () => {
+    const handle = await session('lead-index');
+    const encoder = new PacedReader(handle.url, LO, LONG_HI - 1, 5 * MB);
+    while (encoder.received === 0) await sleep(5);
+    // ffmpeg reads Cues and tags from the end of an MKV when it opens the input, before the sequential read starts.
+    const index = new Reader(handle.extractorRunUrl(1), 396 * MB, '', true);
+    await sleep(1500);
+    expect(index.ended).toBe(true);
+    expect(index.received).toBe(4 * MB);
+    expect(index.matches()).toBe(true);
+    expect(encoder.ended).toBe(false);
+  }, 60_000);
+
   it('never holds an extractor that has no encoder reader, and frees a held one when the encoder goes away', async () => {
     const handle = await session('lead-alone');
     const alone = new Reader(handle.extractorRunUrl(1), LO, LONG_HI - 1);

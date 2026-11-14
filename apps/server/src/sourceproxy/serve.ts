@@ -309,8 +309,10 @@ async function pumpRange(
 
   while (pos <= range.end && !sink.closed) {
     entry.touch();
-    // The reader stays connected and simply gets no more bytes until the window opens again.
-    if (entry.isHeld(reader)) {
+    // The reader stays connected and simply gets no more bytes until the window opens again. The header and the index at
+    // the end of the file are exempt: a demuxer reads them before anything else, and an extractor held there never opens its input.
+    const inEdgeRegion = pos < entry.headTarget || pos >= tailRegion;
+    if (!inEdgeRegion && entry.isHeld(reader)) {
       await entry.waitForRelease(lifetime.signal);
       continue;
     }
