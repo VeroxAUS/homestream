@@ -2,39 +2,28 @@
   "mode": "incremental",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
-  "baseCommit": "663492c256cb1f3c715f761a9d44e23db4c68b33",
+  "commitHash": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
+  "baseCommit": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
   "delta": {
-    "files": 42,
-    "insertions": 790,
-    "deletions": 1593,
-    "changedLines": 2383,
-    "outsideWiki": { "files": 17, "insertions": 348, "deletions": 22 }
+    "files": 51,
+    "insertions": 1279,
+    "deletions": 427,
+    "changedLines": 1706,
+    "outsideWiki": {
+      "files": 36,
+      "insertions": 1025,
+      "deletions": 158
+    }
   },
-  "summary": "HomeStream is a LAN media server in a TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB metadata, AIOStreams discovery, FFmpeg/NVENC encoding, a loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite implements browsing, search, title details, spoiler protection, HLS playback, Settings and desktop renderer views. Electron 45 adds tray, supervision and a mini player. Shared Zod schemas, desktop IPC contracts and telemetry sanitizers connect the runtimes.",
-  "architecture": "buildApp constructs services and thin routes; server main starts listeners and workers. PlaybackManager owns session slots, candidate fallback, encoding, HLS and subtitles. Session creation returns either 201 playback or 202 download tracking. Query hooks validate HTTP responses through the API wrapper; Home content and idle gate background startup. Desktop distinguishes attached and owned server processes; typed preload IPC is allowlisted.",
-  "patterns": "Strict TypeScript, full repo-root source references, shared Zod contracts, AppError envelopes and redaction. Tests isolate random ports and temp directories. No real keys or upstream calls for wiki generation. Video always re-encodes; streamId is auto; devices are not accounts; deployment is LAN-only. Telemetry is optional, scrubbed, manual and nonblocking. Preserve unchanged wiki pages byte-for-byte. Domain bylines use VeroxAUS from origin/main and CODEOWNERS, excluding bots.",
-  "glossary": [
-    "session",
-    "session slot",
-    "source proxy",
-    "prefetch",
-    "TorBox tracking",
-    "HLS",
-    "WebVTT",
-    "burn-in",
-    "encoder lead",
-    "content mark",
-    "supervisor",
-    "desktop bridge",
-    "mini player",
-    "spoiler protection"
-  ],
+  "summary": "HomeStream is a trusted-LAN TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB, AIOStreams, FFmpeg/NVENC, the loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite provides browsing, title details, HLS playback, Settings and the desktop renderer. Electron 45 adds tray, supervision and mini player. Shared Zod schemas, IPC contracts and sanitizers connect runtimes.",
+  "architecture": "buildApp constructs services and thin routes. PlaybackManager owns slots, automatic candidate fallback, encoding, HLS and subtitles. Session creation returns 201 playback or 202 download tracking. Web Query hooks validate HTTP responses; Home content and idle gate background startup. Desktop distinguishes attached and owned servers with allowlisted preload IPC.",
+  "patterns": "Strict TypeScript; shared Zod contracts; AppError envelopes and redaction. Offline tests isolate temp directories and random ports. No real keys/upstream calls for wiki generation. Video always re-encodes, streamId is auto, devices are not accounts, LAN-only deployment. Preserve unaffected pages byte-for-byte. Domain bylines use VeroxAUS from origin/main, excluding bots. Source references must use full repository-root paths.",
   "changes": [
-    "Show-details misses append season/1, move it into tv:<id>:season:1 and strip it from the show row. Missing appended data or a missing/expired season row follows the normal season-fetch path. HTTP contracts and database schema do not change.",
-    "Native range inputs retain arrow-key defaults instead of also running global seek/volume shortcuts. The seek bar is a custom div with role=slider, so document-level arrow shortcuts still apply there; non-arrow shortcuts remain available on the volume input. Browser regression tests hold media requests and start no encoder.",
-    "Download-notice tests preload lazy routes before assertions rather than increasing assertion timeouts.",
-    "Root Turbo build env declares all ten web-build variables. apps/web/turbo.json disables build caching. Test/off telemetry builds contain no Sentry key, PostHog key or PostHog host. Tests compare env reads/declarations and guard cache:false."
+    "Migration 5 adds persistent absent_since and metadata_since. Successful TorBox lists missing a tracked hash start a 10-minute absence timer; gateway cached availability can win first. metaDL without progress fails after 30 minutes; progress/leaving metaDL resets its timer. Listing errors back off, not new absence observations. Existing 6-hour stall and 24-hour total limits remain.",
+    "Timed-out gateway probes now create detailed state pending and honest unconfirmed-start logs; accepted probes create downloading. New failure reasons vanished and metadata_stuck reach schemas, OpenAPI and events. messages.ts/view.ts extract helpers from DownloadService.",
+    "Web player 202 handoff and title badges say Waiting for TorBox for pending, with no fabricated progress; live download progress confirms a still-pending snapshot. FinishSetup cancels its wait and stops further health checks after unmount.",
+    "Desktop replaces custom toast XML with Electron native action buttons and indexed event binding. Dismiss/Got it/unknown buttons do nothing; body uses the first action; one interaction is handled once.",
+    "Source-proxy pumpRange exempts header and tail-index regions from time/byte-gap holds so a held subtitle extractor can open input. Middle-file reads remain held."
   ],
   "coverage": {
     "apps": {
@@ -42,7 +31,9 @@
       "web": "apps/web/index.md and focused subpages",
       "desktop": "apps/desktop/index.md and focused subpages"
     },
-    "packages": { "shared": "packages/shared.md" },
+    "packages": {
+      "shared": "packages/shared.md"
+    },
     "serverDirectories": {
       "db": "reference/data-models.md",
       "docs": "api/index.md and how-to-contribute/tooling.md",
@@ -51,7 +42,7 @@
       "gateway": "systems/gateway.md",
       "health": "systems/health.md",
       "home": "features/catalog.md",
-      "http": "how-to-monitor/logging.md and tracing.md",
+      "http": "how-to-monitor/logging.md",
       "metrics": "how-to-monitor/metrics.md",
       "network": "systems/network.md",
       "playback": "systems/playback/index.md and focused subpages",
@@ -72,22 +63,26 @@
       "device": "apps/web/data-and-startup.md",
       "events": "apps/web/data-and-startup.md",
       "lib": "apps/web/data-and-startup.md and settings-and-spoilers.md",
-      "notices": "apps/web/screens.md and build-and-tests.md",
-      "pages": "apps/web/screens.md, player.md and settings-and-spoilers.md",
+      "notices": "apps/web/screens.md",
+      "pages": "apps/web/screens.md and player.md",
       "player": "apps/web/player.md",
-      "styles": "apps/web/screens.md and build-and-tests.md",
-      "telemetry": "systems/telemetry.md and apps/web/build-and-tests.md",
-      "test": "apps/web/build-and-tests.md and how-to-contribute/testing.md",
-      "directFiles": "apps/web/index.md and build-and-tests.md"
+      "styles": "apps/web/screens.md",
+      "telemetry": "systems/telemetry.md",
+      "test": "apps/web/build-and-tests.md",
+      "directFiles": "apps/web/index.md"
     },
     "desktopDirectories": {
       "shell": "apps/desktop/windows-and-ipc.md",
       "telemetry": "systems/telemetry.md",
       "directFiles": "apps/desktop/index.md, supervisor.md and windows-and-ipc.md"
     },
-    "automationAndInfrastructure": "scripts and scripts/lib: how-to-contribute/tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: overview/getting-started.md; .factory/skills: tooling and testing; docs/runbooks: debugging and reference."
+    "automationAndInfrastructure": "scripts and scripts/lib: how-to-contribute/tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: overview/getting-started.md; .factory/skills: tooling/testing; docs/runbooks: debugging/reference."
   },
-  "pagePolicy": "Retain the 56-page tree. No new or deleted subsystem; audit referenced source paths during assembly. Refresh by-the-numbers. Preserve lore for this minor bug-fix delta. Keep dated unchanged subsystem inventories. No maintainers page for solo human ownership. No new dead-code, dependency-freshness or trivia claims.",
-  "validationPlan": "Run existing format:check, docs:check and agents:check when dependencies are available. Explicitly audit generated wiki headings, relative links and anchors, full source paths, page ordering, indexes, depth, size and Mermaid syntax because normal docs tooling excludes droid-wiki. Skip application/GPU/live/Electron tests for documentation-only output.",
-  "preflight": { "factoryUpload": "allowed", "fullHistory": true, "qaConfigPresent": false }
+  "pagePolicy": "Retain all 56 pages. No new or removed subsystem. Keep lore unchanged for five minor fixes. No maintainers page for solo human ownership. Foundation pages reviewed before delegation. Update current stats, preserve explicit older snapshot dates elsewhere. Audit referenced paths for deletions.",
+  "validationPlan": "Existing format:check, docs:check and agents:check where tools are available; explicit wiki headings, links/anchors, source paths, pageOrder, index, depth, size and Mermaid audit because normal docs tooling excludes generated wiki. Application, GPU, live and Electron tests are unnecessary for generated docs.",
+  "preflight": {
+    "factoryUpload": "allowed",
+    "fullHistory": true,
+    "qaConfigPresent": false
+  }
 }

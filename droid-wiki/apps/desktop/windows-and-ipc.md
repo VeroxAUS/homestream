@@ -79,13 +79,31 @@ The renderer's `useFullscreen` in `apps/web/src/player/usePlayerActions.ts` lock
 
 `apps/desktop/src/shell/shell.ts` tracks local playback per web-contents ID, clearing it on main-frame document navigation and window close. Paused/remote sessions can retain only the weaker server-session mode. Errored/stopped sessions are excluded by [monitoring](supervisor.md).
 
-Pure toast planning lives in `apps/desktop/src/notifications.ts`: ready notifications respect their switch even while focused; failure notifications require their switch and no focused main/mini window. Title text is control-cleaned, bounded and XML-escaped. Actions open title details or health; toast activation tokens are fixed words, not server-provided URLs. `ToastCenter` in `apps/desktop/src/shell/toasts.ts` retains Electron notification references until close/failure and skips unsupported platforms. A planned tag is not itself an implemented replacement/deduplication mechanism in this adapter.
+### Native toast actions and lifetime
+
+Pure toast planning lives in `apps/desktop/src/notifications.ts`: ready notifications respect their switch even while focused; failure notifications require their switch and no focused main/mini window. Title text is plain text, stripped of control characters, whitespace-normalized and bounded to **80 characters** including the truncation ellipsis. It is passed directly to Electron, not XML-escaped or embedded in custom toast XML.
+
+`toastButtons` maps `ToastSpec.actions` in order to Electron `{ type: 'button', text }` entries. `ToastCenter` constructs `Notification({ title, body, actions })` in `apps/desktop/src/shell/toasts.ts`. Its body `click` and indexed `action` events are separate: the pressed button index is Electron's **second event argument**, not an event-object field or an activation token.
+
+| Plan                     | Body / button 0        | Button 1           | Shell destination                                       |
+| ------------------------ | ---------------------- | ------------------ | ------------------------------------------------------- |
+| Ready                    | `open` (Play)          | Dismiss: no action | Movie details or show details with the episode selected |
+| Session/download failure | `health` (Open Health) | Dismiss: no action | `/dashboard/health`                                     |
+| Close-to-tray notice     | No action (Got it)     | Not present        | None                                                    |
+
+`toastActionFor` uses the first action for the body and the indexed action for a button. Dismiss, Got it and unknown indexes return `null`; they cannot invoke the shell callback. Despite its Play label, the ready action opens **details**, not a playback session. `Shell.notify` shows/navigates main only when the binding invokes its callback with a route-bearing spec (`apps/desktop/src/notifications.ts`, `apps/desktop/src/shell/shell.ts`).
+
+`bindToast` in `apps/desktop/src/toastBinding.ts` consumes the **first interaction**, including an inert Dismiss or unknown button: mark handled, call cleanup, then activate only if the decision is non-null. A subsequent body/button report cannot open the window or activate twice. Close/failure events call cleanup directly; they do **not** mark the interaction handled, remove listeners or activate the toast. Cleanup can therefore run more than once, and a close notification alone is not an explicit ban on a later interaction. In the adapter, cleanup only deletes a reference from the live Set, an idempotent operation; it is not a call to close the OS notification (`apps/desktop/src/shell/toasts.ts`).
+
+`ToastCenter` retains references until interaction, close or failure and returns false when Electron reports notifications unsupported. A planned `tag` is still not an implemented replacement/deduplication mechanism in the adapter; the per-toast handled flag deduplicates interaction reports, not separately shown notifications.
+
+Known runtime limit: Electron registers the running executable as the toast COM server. Activating an old toast after quitting the development app can start `electron.exe` without HomeStream's app path and show Electron's default window. The installed packaged-app case still needs a quit-from-tray/old-toast check; the in-process binding does not solve executable relaunch (`apps/desktop/README.md`). Do not read the offline action tests as proof of native Windows delivery or post-quit behavior.
 
 ## Modification entry points and tests
 
 Change bridge shape in shared, update both the IPC allowlist and preload channel table, and update renderer callers together. Keep handoff/session cleanup in the appropriate layer rather than adding media side effects to the pure handoff state machine.
 
-`apps/desktop/test/ipc.test.ts` checks handlers, hostile origins, invalid inputs and preload channel consistency. `apps/desktop/test/miniPlayer.test.ts` exercises routing, one-session handoff and power transitions; `apps/desktop/test/windowState.test.ts` checks display recovery; `apps/desktop/test/notifications.test.ts` covers focus policy, title safety and XML. `apps/desktop/test/windowBounds.test.ts` models exact placement, 4×3 border inflation, shifted coordinates and a stubborn window capped at two writes. `apps/desktop/test/permissions.test.ts` captures both session handlers and checks URL precedence/fallback, server-origin keyboard lock, fullscreen and other-permission denials. These tests do not launch Electron.
+`apps/desktop/test/ipc.test.ts` checks handlers, hostile origins, invalid inputs and preload channel consistency. `apps/desktop/test/miniPlayer.test.ts` exercises routing, one-session handoff and power transitions; `apps/desktop/test/windowState.test.ts` checks display recovery. `apps/desktop/test/notifications.test.ts` covers focus/settings policy, cleaned titles, routes, native button order, body/primary mapping, inert dismiss/close notice and unknown indexes. `apps/desktop/test/toastBinding.test.ts` uses an EventEmitter stand-in to check Electron-style second-argument indexes, body/Play activation, Dismiss cleanup, duplicate action/body reports, body-after-Dismiss suppression, inert close notices and close-without-activation. It does not exercise the real Electron adapter or native OS notifications. `apps/desktop/test/windowBounds.test.ts` models exact placement, 4×3 border inflation, shifted coordinates and a stubborn window capped at two writes. `apps/desktop/test/permissions.test.ts` captures both session handlers and checks URL precedence/fallback, server-origin keyboard lock, fullscreen and other-permission denials. These tests do not launch Electron.
 
 Renderer ordering/cleanup regressions live in `apps/web/src/pages/PlayerControls.test.tsx` and `apps/web/src/player/hooks.test.tsx`; refused-lock/fullscreen cleanup is covered in `apps/web/src/pages/PlayerFailures.test.tsx`. They test renderer policy with stubs, not native OS key delivery or real display scaling. Change geometry policy in `apps/desktop/src/windowBounds.ts` / `apps/desktop/src/windowState.ts`, session permission policy in `apps/desktop/src/permissions.ts`, and their Electron application in `apps/desktop/src/shell/windows.ts` / `apps/desktop/src/shell/shell.ts`.
 
@@ -93,19 +111,24 @@ The separate first-run smoke checks the real preload's exact 20-member surface, 
 
 ## Key source files
 
-| File                                | Purpose                                   |
-| ----------------------------------- | ----------------------------------------- |
-| `apps/desktop/src/shell/windows.ts` | Window configuration and navigation       |
-| `apps/desktop/src/windowState.ts`   | Geometry validation and persistence rules |
-| `apps/desktop/src/windowBounds.ts`  | Observed border/position correction       |
-| `apps/desktop/src/permissions.ts`   | Shared-session request/check policy       |
-| `apps/desktop/src/miniPlayer.ts`    | Handoff state and attach routes           |
-| `apps/desktop/src/ipc.ts`           | Trusted URLs and validated named handlers |
-| `apps/desktop/src/preload.cts`      | Sandboxed capability exposure             |
-| `packages/shared/src/desktop.ts`    | Bridge, handover and diagnostic contracts |
-| `apps/desktop/src/keepAwake.ts`     | Pure power-blocker policy                 |
-| `apps/desktop/src/notifications.ts` | Notification planning and escaping        |
+| File                                      | Purpose                                                |
+| ----------------------------------------- | ------------------------------------------------------ |
+| `apps/desktop/src/shell/windows.ts`       | Window configuration and navigation                    |
+| `apps/desktop/src/windowState.ts`         | Geometry validation and persistence rules              |
+| `apps/desktop/src/windowBounds.ts`        | Observed border/position correction                    |
+| `apps/desktop/src/permissions.ts`         | Shared-session request/check policy                    |
+| `apps/desktop/src/miniPlayer.ts`          | Handoff state and attach routes                        |
+| `apps/desktop/src/ipc.ts`                 | Trusted URLs and validated named handlers              |
+| `apps/desktop/src/preload.cts`            | Sandboxed capability exposure                          |
+| `packages/shared/src/desktop.ts`          | Bridge, handover and diagnostic contracts              |
+| `apps/desktop/src/keepAwake.ts`           | Pure power-blocker policy                              |
+| `apps/desktop/src/notifications.ts`       | Plain-text plans, native buttons and indexed decisions |
+| `apps/desktop/src/toastBinding.ts`        | Once-only interaction handling and separate cleanup    |
+| `apps/desktop/src/shell/toasts.ts`        | Electron events, native actions and live references    |
+| `apps/desktop/test/notifications.test.ts` | Policy, routes and inert button decisions              |
+| `apps/desktop/test/toastBinding.test.ts`  | Event indexes, duplicate reports and cleanup           |
+| `apps/desktop/README.md`                  | Post-quit notification relaunch limit                  |
 
 ## Measured scope
 
-Desktop-wide committed inventory at `663492c`: **33 source / 21 test files** (19 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.64**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. See the [overview](index.md#measured-scope) for the committed-path count method; these are app-wide counts, not coverage.
+Desktop-wide committed inventory at `3c31c45`: **34 source / 22 test files** (20 `.test.ts`, two `.smoke.ts`; three helpers excluded), ratio **0.65**, **1 unique human author** from `origin/main` excluding bots, VeroxAUS. See the [overview](index.md#measured-scope) for the committed-path count method; these are app-wide counts, not coverage.

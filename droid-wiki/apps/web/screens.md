@@ -43,6 +43,10 @@ The web routes implement browsing, search, title details, playback and Settings.
 
 `PlayActions` in `apps/web/src/components/PlayActions.tsx` gives pending downloads precedence over actions, then waits for progress, then offers Play/Watched or Resume plus Start over. Resume floors saved seconds into `?start=...`; Start over explicitly uses zero. These routes now create real sessions. An episode-row Play link is separate from the panel's download-suppressed actions.
 
+`DownloadBadge` in `apps/web/src/components/DownloadBadge.tsx` is a disabled status, not a control. For detailed `state: 'pending'` without live confirmation, it shows **Waiting for TorBox** and **Sent to TorBox, not confirmed yet. HomeStream keeps checking.**, with no percentage or progress bar. It does not call the start accepted or downloading. The shared copy lives in `apps/web/src/lib/downloadWording.ts`; the two-line badge can grow vertically (`apps/web/src/components/DownloadBadge.module.css`).
+
+Once confirmed, the badge says **Downloading** at zero progress, or **Downloading N%** with a bar for a positive fraction, capped at 100%. A live progress event confirms even a details response still carrying `state: 'pending'` (`apps/web/src/events/usePendingDownload.ts`). Movie and selected-episode regressions cover that transition in `apps/web/src/pages/MovieDetailsPage.test.tsx` and `apps/web/src/pages/ShowDetailsPage.test.tsx`. Broad `status: 'pending'` still means tracked caching; detailed state distinguishes unconfirmed from confirmed. Server confirmation, failure windows and timers belong to [downloads](../../features/downloads.md), not a client polling loop.
+
 `MovieDetailsPage` in `apps/web/src/pages/MovieDetailsPage.tsx` prefetches its title on mount. `ShowDetailsPage` in `apps/web/src/pages/ShowDetailsPage.tsx` prefetches when an episode is selected, not merely on season change. The shared prefetch helper deduplicates each title for **1 second**, including interleaved A/B/A requests; failures are ignored. See [prefetch](../../features/prefetch.md).
 
 Shows put nonempty numbered seasons before Specials, fall back to available selections, replace season/episode URL parameters and render episodes in **100-item** increments. Episode rows/panels share saved progress; missing artwork falls back to dimmed show art.
@@ -73,24 +77,28 @@ Both details pages pass their existing metadata response to `DetailsExtras` in `
 
 Change route/chrome composition centrally; reuse shared action and error components rather than implementing parallel progress policy. Add notice behavior through the outcome subscription and store, not a second EventSource.
 
-| File                                                   | Purpose                                         |
-| ------------------------------------------------------ | ----------------------------------------------- |
-| `apps/web/src/App.tsx`                                 | Route table                                     |
-| `apps/web/src/components/Layout.tsx`                   | Chrome, boundaries and notice hosts             |
-| `apps/web/src/components/HealthPill.module.css`        | Ordinary and compact status-text breakpoints    |
-| `apps/web/src/desktop/useMissingKeys.ts`               | Bridge-gated first-run eligibility              |
-| `apps/web/src/pages/HomePage.tsx`                      | Home and setup composition                      |
-| `apps/web/src/components/Banner.tsx`                   | Rotation, accessibility and image scheduling    |
-| `apps/web/src/pages/ShowDetailsPage.tsx`               | Season/episode state and pagination             |
-| `apps/web/src/components/DetailsExtras.tsx`            | Conditional cast and More like this composition |
-| `apps/web/src/components/CastRow.tsx`                  | Cast text, headshots and initials               |
-| `apps/web/src/components/RowSection.tsx`               | Shared horizontal rows                          |
-| `apps/web/src/components/EpisodePanel.tsx`             | Selected episode and spoiler-aware presentation |
-| `apps/web/src/components/PlayActions.tsx`              | Play, resume and download precedence            |
-| `apps/web/src/notices/DownloadNotices.tsx`             | Ready/failure actions                           |
-| `apps/web/src/pages/ResumeFlow.test.tsx`               | Home/progress refresh after playback            |
-| `apps/web/src/components/DetailsExtras.test.tsx`       | Ordering, empty rows and image failures         |
-| `apps/web/src/pages/ShowDetailsPage.spoilers.test.tsx` | Completion/loading/local preference rules       |
-| `apps/web/src/notices/notices.test.tsx`                | Notice rendering and actions                    |
+| File                                                   | Purpose                                            |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| `apps/web/src/App.tsx`                                 | Route table                                        |
+| `apps/web/src/components/Layout.tsx`                   | Chrome, boundaries and notice hosts                |
+| `apps/web/src/components/HealthPill.module.css`        | Ordinary and compact status-text breakpoints       |
+| `apps/web/src/desktop/useMissingKeys.ts`               | Bridge-gated first-run eligibility                 |
+| `apps/web/src/pages/HomePage.tsx`                      | Home and setup composition                         |
+| `apps/web/src/components/Banner.tsx`                   | Rotation, accessibility and image scheduling       |
+| `apps/web/src/pages/ShowDetailsPage.tsx`               | Season/episode state and pagination                |
+| `apps/web/src/components/DetailsExtras.tsx`            | Conditional cast and More like this composition    |
+| `apps/web/src/components/CastRow.tsx`                  | Cast text, headshots and initials                  |
+| `apps/web/src/components/RowSection.tsx`               | Shared horizontal rows                             |
+| `apps/web/src/components/EpisodePanel.tsx`             | Selected episode and spoiler-aware presentation    |
+| `apps/web/src/components/PlayActions.tsx`              | Play, resume and download precedence               |
+| `apps/web/src/components/DownloadBadge.tsx`            | Unconfirmed status versus confirmed progress       |
+| `apps/web/src/lib/downloadWording.ts`                  | Shared TorBox waiting label and caption            |
+| `apps/web/src/pages/MovieDetailsPage.test.tsx`         | Waiting badge, zero progress and live confirmation |
+| `apps/web/src/pages/ShowDetailsPage.test.tsx`          | Episode waiting-to-downloading transition          |
+| `apps/web/src/notices/DownloadNotices.tsx`             | Ready/failure actions                              |
+| `apps/web/src/pages/ResumeFlow.test.tsx`               | Home/progress refresh after playback               |
+| `apps/web/src/components/DetailsExtras.test.tsx`       | Ordering, empty rows and image failures            |
+| `apps/web/src/pages/ShowDetailsPage.spoilers.test.tsx` | Completion/loading/local preference rules          |
+| `apps/web/src/notices/notices.test.tsx`                | Notice rendering and actions                       |
 
-Measured tracked scope: `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/notices/` contain **45 production files**, **19 unit/component tests**, **19/45 = 0.42** test-to-source file ratio. Browser specs are excluded from this narrower ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).
+Measured tracked scope at `3c31c45`: `apps/web/src/pages/`, `apps/web/src/components/`, `apps/web/src/notices/` contain **45 production files**, **19 unit/component tests**, **19/45 = 0.42** test-to-source file ratio. Browser specs are excluded from this narrower ratio. Unique human authors: **1**. Method and exclusions: [web inventory](index.md#measured-scope).

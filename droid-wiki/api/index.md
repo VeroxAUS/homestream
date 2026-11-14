@@ -60,12 +60,14 @@ Settings/About does not introduce a settings HTTP endpoint. Device-name saving u
 `SessionStartRequestSchema` in `packages/shared/src/playback.ts` requires `mediaType`, `tmdbId`, `streamId` and the full `device` capability profile. TV also requires season and episode. Clients always send `streamId: "auto"`. Optional fields include `startPositionSec`, `audioIndex` and `subtitle`: omission selects defaults, `null` means Off, and `{ index, mode: "sidecar" | "burn" }` selects a track.
 
 - **201** returns `SessionResponseSchema`: `sessionId`, **`playlistUrl`**, `mediaPlaylistUrl`, decision, timing/state, audio/subtitle tracks, selection, successful stream ID, earlier attempts, stats and nullable error. There is no `hlsUrl`.
-- **202** returns `{ status: "downloading", download }`, not a playable session. Track completion and retry when ready.
+- **202** returns `{ status: "downloading", download }`, not a playable session. The nested `download.state` matters: `pending` is an unconfirmed start after a probe timeout; `downloading` is a confirmed start or an item TorBox has listed. Track completion and retry when ready (`packages/shared/src/downloads.ts`, `apps/server/src/downloads/service.ts`).
 - **PATCH** accepts audio and/or subtitle changes; at least one is required. Omitted subtitle preserves selection; `null` clears it. Some changes restart encoding.
 - **POST progress** accepts `{ positionSec, state? }`, with `playing`, `paused` or `buffering`; playing is the default (`ProgressPingRequestSchema` in `packages/shared/src/progress.ts`). Paused clients keep pinging to preserve the session.
 - **DELETE** stops the session; send no body or content-type. Seeking is driven by requested HLS segments, not a separate seek endpoint.
 
 `PrefetchRequestSchema` uses media identity and full device, without a manually selected stream. Its 202 body is `{streamId: string | null}`, not a session or a promise that a warm source is ready. Device IDs identify capabilities; they do not authenticate the caller. See [web player](../apps/web/player.md) and [playback lifecycle](../systems/playback/lifecycle.md).
+
+Download responses and `download.failed` events admit five failure reasons: `torbox_error`, `stalled`, `timeout`, `vanished` and `metadata_stuck`. The added reasons cover ten minutes missing from successful TorBox listings and thirty minutes in metadata lookup without progress. These are additive enum values on existing contracts, not new endpoints (`packages/shared/src/downloads.ts`, `docs/openapi.json`). See [downloads](../features/downloads.md) for timer resets, gateway confirmation and unavailable-service behavior.
 
 ## HLS and subtitles
 

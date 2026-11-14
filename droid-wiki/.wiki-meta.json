@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-13T22:28:31.178Z",
-  "commitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
+  "generatedAt": "2026-11-14T21:12:28.817Z",
+  "commitHash": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
   "branch": "main",
   "pageCount": 56,
   "topLevelSections": [
@@ -82,14 +82,14 @@
   },
   "warnings": [
     "Phase 3.5 requires a QA skill. Run /install-qa to set one up, then re-run wiki generation.",
-    "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Required checks failed despite exit 0, so video rendering was skipped in non-interactive mode. None of the seven prior wiki runs has a playable video."
+    "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Required checks failed despite exit 0, so rendering was skipped in non-interactive mode. None of the eight prior wiki runs has a playable video."
   ],
   "videoOverview": {
     "status": "failed",
     "warnings": [
-      "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Required checks failed despite exit 0, so video rendering was skipped in non-interactive mode. None of the seven prior wiki runs has a playable video."
+      "HyperFrames 0.4.44 doctor reported missing FFmpeg and FFprobe. Required checks failed despite exit 0, so rendering was skipped in non-interactive mode. None of the eight prior wiki runs has a playable video."
     ]
   },
   "mode": "incremental",
-  "baseCommitHash": "663492c256cb1f3c715f761a9d44e23db4c68b33"
+  "baseCommitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87"
 }

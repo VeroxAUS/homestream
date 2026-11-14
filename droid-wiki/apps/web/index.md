@@ -51,25 +51,28 @@ Add routes in `apps/web/src/App.tsx`, endpoint queries in `apps/web/src/api/quer
 
 Search typing updates the URL before the data request, while spoiler changes update a local external store without a server mutation. Do not merge those states into Query or make either action register a device (`apps/web/src/components/useNavSearch.ts`, `apps/web/src/lib/spoilers.ts`). Server-side metadata assembly belongs to [catalog](../../features/catalog.md), not these components.
 
+Download tracking distinguishes an unconfirmed TorBox start from confirmed downloading. The player 202 handoff and details badge share “Waiting for TorBox” wording; live progress can confirm a still-pending details snapshot (`apps/web/src/lib/downloadWording.ts`, `apps/web/src/events/usePendingDownload.ts`). See [screens](screens.md#details-and-actions), [player handoff](player.md#routes-and-session-startup) and the server's [download lifecycle](../../features/downloads.md). Desktop setup also stops subsequent Check again iterations and clears its wait on unmount; it does not abort work already in flight ([renderer boundary](desktop-integration.md#setup-chrome-and-settings)).
+
 ## Key source files
 
-| File                                           | Purpose                                                 |
-| ---------------------------------------------- | ------------------------------------------------------- |
-| `apps/web/src/main.tsx`                        | Root providers, prefetch and deferred startup           |
-| `apps/web/src/App.tsx`                         | Lazy route table                                        |
-| `apps/web/src/components/Layout.tsx`           | Chrome, route boundaries and global notices             |
-| `apps/web/src/components/NavSearch.tsx`        | Static-shell search entry and responsive field          |
-| `apps/web/src/pages/settings/SettingsTabs.tsx` | Settings tab keyboard and ARIA relationships            |
-| `apps/web/src/lib/spoilers.ts`                 | Default-on local spoiler store                          |
-| `apps/web/src/api/queries.ts`                  | Cache, cancellation and query deadlines                 |
-| `apps/web/src/events/serverEvents.ts`          | Latest-answer health reconciliation and download events |
-| `apps/web/src/pages/PlayerPage.tsx`            | Start/attach/retry route state                          |
-| `apps/web/src/player/usePlaybackModel.ts`      | Playback composition                                    |
-| `apps/web/src/desktop/bridge.ts`               | Browser-safe bridge detection                           |
-| `apps/web/src/App.test.tsx`                    | Route composition tests                                 |
+| File                                           | Purpose                                                   |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| `apps/web/src/main.tsx`                        | Root providers, prefetch and deferred startup             |
+| `apps/web/src/App.tsx`                         | Lazy route table                                          |
+| `apps/web/src/components/Layout.tsx`           | Chrome, route boundaries and global notices               |
+| `apps/web/src/components/NavSearch.tsx`        | Static-shell search entry and responsive field            |
+| `apps/web/src/pages/settings/SettingsTabs.tsx` | Settings tab keyboard and ARIA relationships              |
+| `apps/web/src/lib/spoilers.ts`                 | Default-on local spoiler store                            |
+| `apps/web/src/api/queries.ts`                  | Cache, cancellation and query deadlines                   |
+| `apps/web/src/events/serverEvents.ts`          | Latest-answer health reconciliation and download events   |
+| `apps/web/src/lib/downloadWording.ts`          | Shared unconfirmed-start label, caption and notice detail |
+| `apps/web/src/pages/PlayerPage.tsx`            | Start/attach/retry route state                            |
+| `apps/web/src/player/usePlaybackModel.ts`      | Playback composition                                      |
+| `apps/web/src/desktop/bridge.ts`               | Browser-safe bridge detection                             |
+| `apps/web/src/App.test.tsx`                    | Route composition tests                                   |
 
 ## Measured scope
 
-At commit `0b766e2f21a19468e04d0a9c7352c635a4357c87`, the committed web tree contains **119 production TS/TSX files**, **49 unit/component test files** and **11 browser specs**: **60/119 = 0.50 test files per production file**. Unit/component files alone give **49/119 = 0.41**. Method: enumerate `git ls-tree -r --name-only 0b766e2f21a19468e04d0a9c7352c635a4357c87 -- apps/web`; production means TS/TSX under `apps/web/src/` excluding declarations, test files and `apps/web/src/test/`; tests mean `*.test.ts(x)` plus `*.spec.ts`. CSS, fonts, fixture helpers and build configuration are excluded from the production denominator. This is a file inventory, not executed coverage or test-case counts.
+At commit `3c31c453d49a737e9d51ba39c6bd41bfc4dbd092`, the committed web tree contains **120 production TS/TSX files**, **50 unit/component test files** and **11 browser specs**: **61/120 = 0.51 test files per production file**. Unit/component files alone give **50/120 = 0.42**. Method: enumerate `git ls-tree -r --name-only 3c31c453d49a737e9d51ba39c6bd41bfc4dbd092 -- apps/web`; production means TS/TSX under `apps/web/src/` excluding declarations, test files and `apps/web/src/test/`; tests mean `*.test.ts(x)` plus `*.spec.ts`. CSS, fonts, fixture helpers and build configuration are excluded from the production denominator. This is a file inventory, not executed coverage or test-case counts.
 
 Unique human authors: **1**, VeroxAUS, using the supplied verified `origin/main` history with bots excluded and `.github/CODEOWNERS` as the ownership cross-check. Unchanged narrower subpage counts retain their original revision. See [repository statistics](../../by-the-numbers.md) for the wider inventory and [build and tests](build-and-tests.md) for the added range-input browser regression and build-environment guard.

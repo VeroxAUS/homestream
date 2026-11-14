@@ -1,8 +1,8 @@
 {
   "mode": "incremental",
-  "commitHash": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
-  "baseCommit": "663492c256cb1f3c715f761a9d44e23db4c68b33",
-  "reason": "2383 changed lines; 370 outside the generated wiki. Retain the existing 56-page tree. Keep every page not listed for update byte-for-byte.",
+  "commitHash": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
+  "baseCommit": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
+  "reason": "1706 changed lines, including 1183 outside generated wiki. Retain the 56-page tree.",
   "create": [],
   "remove": [],
   "update": [
@@ -10,160 +10,181 @@
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "brief": "Update the documented source revision and preserve shared vocabulary.",
-      "sources": ["apps/server/src/app.ts", "apps/web/src/App.tsx", "apps/desktop/src/main.ts"],
-      "related": ["overview/architecture.md", "by-the-numbers.md"]
+      "brief": "Update source revision; preserve introduction.",
+      "sources": ["apps/server/src/app.ts"],
+      "related": ["overview/architecture.md"]
     },
     {
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "brief": "Describe first-season cache separation and refresh aggregate statistics from the data report.",
-      "sources": ["apps/server/src/tmdb/service.ts", "apps", "packages", "scripts"],
-      "related": ["features/catalog.md", "by-the-numbers.md"]
+      "brief": "Clarify unconfirmed start and refresh measured inventory.",
+      "sources": ["apps/server/src/downloads/service.ts"],
+      "related": ["by-the-numbers.md"]
     },
     {
-      "path": "how-to-contribute/patterns-and-conventions.md",
-      "title": "Patterns and conventions",
+      "path": "overview/glossary.md",
+      "title": "Glossary",
       "criticality": "normal",
-      "brief": "Document web build env declarations, disabled web caching and key-free off builds.",
-      "sources": [
-        "turbo.json",
-        "apps/web/turbo.json",
-        "apps/web/src/telemetry/buildEnv.ts",
-        "apps/web/src/telemetry/turboEnv.test.ts"
-      ],
-      "related": ["systems/telemetry.md", "apps/web/build-and-tests.md"]
+      "brief": "Add unconfirmed-start and metaDL vocabulary.",
+      "sources": ["packages/shared/src/downloads.ts"],
+      "related": ["features/downloads.md"]
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "brief": "Recompute committed-tree inventory, activity, churn, bot attribution, import graph and exported symbols using the prior methodology. Provide architecture totals separately.",
+      "brief": "Recompute prior committed-tree metrics, activity, bot attribution, import chains and exports.",
       "sources": ["apps", "packages", "scripts", ".github"],
-      "related": ["overview/architecture.md", "lore.md"]
+      "related": ["overview/architecture.md"]
+    },
+    {
+      "path": "features/downloads.md",
+      "title": "Downloads",
+      "criticality": "critical",
+      "brief": "Explain honest start states, persistent absence/metadata windows, resets, error backoff and existing confirmation rules.",
+      "sources": ["apps/server/src/downloads", "apps/server/test/integration/downloads-vanished.test.ts"],
+      "related": ["packages/shared.md"]
+    },
+    {
+      "path": "systems/source-proxy.md",
+      "title": "Source proxy",
+      "criticality": "normal",
+      "brief": "Document header/tail hold exemption and middle-file pacing.",
+      "sources": ["apps/server/src/sourceproxy/serve.ts"],
+      "related": ["systems/network.md"]
+    },
+    {
+      "path": "systems/network.md",
+      "title": "Network controls",
+      "criticality": "normal",
+      "brief": "Qualify hold rules with edge-region exemption.",
+      "sources": ["apps/server/src/sourceproxy/serve.ts"],
+      "related": ["systems/source-proxy.md"]
+    },
+    {
+      "path": "systems/playback/subtitles.md",
+      "title": "Subtitles",
+      "criticality": "normal",
+      "brief": "Explain demuxer bootstrap edge reads despite held extraction.",
+      "sources": ["apps/server/src/sourceproxy/serve.ts"],
+      "related": ["systems/source-proxy.md"]
     },
     {
       "path": "apps/web/index.md",
       "title": "Web app",
-      "criticality": "critical",
-      "brief": "Update the inventory from committed paths after inspecting changed web sources; preserve focused subpage structure.",
-      "sources": ["apps/web/src", "apps/web/e2e"],
-      "related": ["apps/web/player.md", "apps/web/build-and-tests.md"]
+      "criticality": "normal",
+      "brief": "Refresh current inventory and linked behavior summaries.",
+      "sources": ["apps/web/src"],
+      "related": ["apps/web/screens.md"]
+    },
+    {
+      "path": "apps/web/screens.md",
+      "title": "Screens",
+      "criticality": "normal",
+      "brief": "Distinguish unconfirmed badge from downloading.",
+      "sources": ["apps/web/src/components/DownloadBadge.tsx"],
+      "related": ["features/downloads.md"]
     },
     {
       "path": "apps/web/player.md",
       "title": "Player",
       "criticality": "normal",
-      "brief": "Explain native volume range arrow defaults, seek-bar ownership and retained non-arrow shortcuts. Link real-browser regression coverage without claiming it was run.",
-      "sources": [
-        "apps/web/src/player/useShortcuts.ts",
-        "apps/web/src/pages/PlayerControls.test.tsx",
-        "apps/web/e2e/player-volume-keys.spec.ts"
-      ],
-      "related": ["apps/web/build-and-tests.md", "systems/playback/index.md"]
-    },
-    {
-      "path": "apps/web/build-and-tests.md",
-      "title": "Build and tests",
-      "criticality": "normal",
-      "brief": "Document Turbo env/cache policy, key-free off builds, lazy route preload in notices tests, first-season stub coverage and range-input browser tests.",
-      "sources": [
-        "turbo.json",
-        "apps/web/turbo.json",
-        "apps/web/src/telemetry/turboEnv.test.ts",
-        "apps/web/src/notices/notices.test.tsx",
-        "apps/web/e2e/details-api.spec.ts",
-        "apps/web/playwright.config.ts"
-      ],
-      "related": ["systems/telemetry.md", "features/catalog.md"]
+      "brief": "Explain pending 202 handoff wording and shared helper.",
+      "sources": ["apps/web/src/pages/PlayerPage.tsx"],
+      "related": ["features/downloads.md"]
     },
     {
       "path": "apps/web/data-and-startup.md",
       "title": "Data and startup",
       "criticality": "normal",
-      "brief": "Clarify build-time key stripping and cross-link the build policy without changing documented startup gates.",
-      "sources": ["apps/web/src/telemetry/buildEnv.ts", "apps/web/vite.config.ts"],
-      "related": ["apps/web/build-and-tests.md", "systems/telemetry.md"]
+      "brief": "Describe live progress confirming pending detail snapshot.",
+      "sources": ["apps/web/src/events/usePendingDownload.ts"],
+      "related": ["apps/web/screens.md"]
     },
     {
-      "path": "features/catalog.md",
-      "title": "Catalog",
+      "path": "apps/web/desktop-integration.md",
+      "title": "Desktop integration",
       "criticality": "normal",
-      "brief": "Update exact appended show sections, separate season cache row, old-cache/missing-section fallback and regression references.",
-      "sources": [
-        "apps/server/src/tmdb/service.ts",
-        "apps/server/test/integration/catalog-routes.test.ts",
-        "apps/web/e2e/details-api.spec.ts"
-      ],
-      "related": ["reference/data-models.md", "apps/web/screens.md"]
+      "brief": "Document cancellable setup wait and unmount boundaries.",
+      "sources": ["apps/web/src/desktop/FinishSetup.tsx"],
+      "related": ["apps/desktop/index.md"]
     },
     {
-      "path": "systems/telemetry.md",
-      "title": "Telemetry",
+      "path": "apps/desktop/index.md",
+      "title": "Desktop shell",
       "criticality": "normal",
-      "brief": "Explain key-free test/off builds, strict env passthrough and disabled web build cache with regression source references.",
+      "brief": "Refresh inventory for extracted toast binding.",
+      "sources": ["apps/desktop/src"],
+      "related": ["apps/desktop/windows-and-ipc.md"]
+    },
+    {
+      "path": "apps/desktop/windows-and-ipc.md",
+      "title": "Windows and IPC",
+      "criticality": "critical",
+      "brief": "Replace obsolete XML account with indexed native buttons, no-op dismiss and once-only binding.",
       "sources": [
-        "apps/web/src/telemetry/buildEnv.ts",
-        "apps/web/src/telemetry/turboEnv.test.ts",
-        "apps/web/turbo.json",
-        "turbo.json"
+        "apps/desktop/src/notifications.ts",
+        "apps/desktop/src/toastBinding.ts",
+        "apps/desktop/src/shell/toasts.ts"
       ],
-      "related": ["apps/web/build-and-tests.md", "security.md"]
+      "related": ["apps/web/desktop-integration.md"]
+    },
+    {
+      "path": "packages/shared.md",
+      "title": "Shared",
+      "criticality": "normal",
+      "brief": "Update detailed pending semantics and five failure reasons.",
+      "sources": ["packages/shared/src/downloads.ts"],
+      "related": ["features/downloads.md"]
+    },
+    {
+      "path": "api/index.md",
+      "title": "API",
+      "criticality": "normal",
+      "brief": "Clarify existing 202 envelope and additive failure enums; no new endpoint.",
+      "sources": ["docs/openapi.json", "packages/shared/src/downloads.ts"],
+      "related": ["features/downloads.md"]
     },
     {
       "path": "reference/data-models.md",
       "title": "Data models",
       "criticality": "normal",
-      "brief": "Document separate season-one raw-cache row without implying any SQLite migration or HTTP contract change.",
-      "sources": ["apps/server/src/tmdb/service.ts", "docs/database.md"],
-      "related": ["features/catalog.md"]
-    },
-    {
-      "path": "security.md",
-      "title": "Security",
-      "criticality": "normal",
-      "brief": "Clarify that telemetry-off web builds embed no keys and that web build caching is disabled to avoid stale key-bearing assets.",
-      "sources": ["apps/web/src/telemetry/buildEnv.ts", "apps/web/turbo.json", "turbo.json"],
-      "related": ["systems/telemetry.md", "apps/web/build-and-tests.md"]
+      "brief": "Describe migration 5 nullable persistent timers and reset behavior.",
+      "sources": ["apps/server/src/db/migrations.ts", "apps/server/src/downloads/store.ts"],
+      "related": ["features/downloads.md"]
     }
   ],
   "keepUnchanged": [
     "overview/getting-started.md",
-    "overview/glossary.md",
     "lore.md",
     "how-to-contribute/index.md",
     "how-to-contribute/development-workflow.md",
     "how-to-contribute/testing.md",
     "how-to-contribute/debugging.md",
+    "how-to-contribute/patterns-and-conventions.md",
     "how-to-contribute/tooling.md",
     "apps/index.md",
     "apps/server.md",
-    "apps/web/screens.md",
     "apps/web/search.md",
     "apps/web/settings-and-spoilers.md",
-    "apps/web/desktop-integration.md",
-    "apps/desktop/index.md",
+    "apps/web/build-and-tests.md",
     "apps/desktop/supervisor.md",
-    "apps/desktop/windows-and-ipc.md",
     "systems/index.md",
     "systems/playback/index.md",
     "systems/playback/encoding.md",
     "systems/playback/lifecycle.md",
-    "systems/playback/subtitles.md",
-    "systems/source-proxy.md",
-    "systems/network.md",
     "systems/gateway.md",
     "systems/health.md",
+    "systems/telemetry.md",
     "features/index.md",
+    "features/catalog.md",
     "features/stream-selection.md",
     "features/prefetch.md",
-    "features/downloads.md",
     "features/viewing-progress.md",
     "packages/index.md",
-    "packages/shared.md",
-    "api/index.md",
     "deployment.md",
+    "security.md",
     "how-to-monitor/index.md",
     "how-to-monitor/logging.md",
     "how-to-monitor/metrics.md",

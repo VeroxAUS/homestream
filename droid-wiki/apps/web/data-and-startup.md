@@ -63,7 +63,9 @@ Health updates are global, not restricted to dashboard paths. Missing EventSourc
 
 ## Download events and device identity
 
-Download progress validates the event then updates `downloadKey` entries in `apps/web/src/events/downloadProgress.ts`: `movie:<id>` or `tv:<id>:<season>:<episode>`. The Map uses `useSyncExternalStore` and avoids notifications for unchanged fractions. `usePendingDownload` in `apps/web/src/events/usePendingDownload.ts` requires pending metadata, preferring live fractions over the snapshot. An event alone does not invent pending status.
+Download progress validates the event then updates `downloadKey` entries in `apps/web/src/events/downloadProgress.ts`: `movie:<id>` or `tv:<id>:<season>:<episode>`. The Map uses `useSyncExternalStore` and avoids notifications for unchanged fractions. `usePendingDownload` in `apps/web/src/events/usePendingDownload.ts` requires metadata with broad `status: 'pending'`; an event alone does not invent pending status.
+
+The hook returns `{ progress, confirmed }`. Without a live fraction, detailed `state: 'pending'` returns `confirmed: false` and `progress: undefined`, even if the snapshot contains zero. A different detailed state confirms the start and permits snapshot progress, including zero. Any defined live fraction, including zero, takes precedence and confirms a still-unconfirmed metadata snapshot because progress events represent an item TorBox has listed. This changes the [badge](screens.md#details-and-actions) from **Waiting for TorBox** to normal downloading without waiting for a details refetch. It does not rewrite the Query metadata state (`apps/web/src/events/usePendingDownload.ts`, `apps/web/src/events/events.test.tsx`). The [download service](../../features/downloads.md) owns confirmation checks and failure timers.
 
 Ready/failed events clear the fraction, invalidate matching movie/show details and notify subscribers for [toasts](screens.md#notifications-and-toasts). Malformed JSON/schema-invalid events are ignored. There is no download polling loop here.
 
@@ -75,18 +77,20 @@ Ready/failed events clear the fraction, invalidate matching movie/show details a
 
 Centralize query keys/schema validation, preserve cancellation when changing health, and keep unrelated startup off the first-content path. Do not add separate snapshot fetches or blanket reconnect invalidation that races health reconciliation.
 
-| File                                  | Purpose                                                |
-| ------------------------------------- | ------------------------------------------------------ |
-| `apps/web/src/api/client.ts`          | Request correlation, errors and parsing                |
-| `apps/web/src/api/queries.ts`         | Timeouts, retries, keys and staleness                  |
-| `apps/web/src/events/serverEvents.ts` | Singleton SSE and health ordering                      |
-| `apps/web/src/events/events.test.tsx` | Late poll/snapshot, reconnect and download regressions |
-| `apps/web/src/device/identity.ts`     | Persistent identity and capabilities                   |
-| `apps/web/src/lib/uuid.ts`            | Secure random plain-HTTP fallback                      |
-| `apps/web/src/lib/startup.ts`         | Content/idle gate                                      |
-| `apps/web/src/lib/searchUrl.ts`       | Shared URL/search constants and focus marker           |
-| `apps/web/src/lib/spoilers.ts`        | Reactive browser-local preference                      |
-| `apps/web/src/telemetry/index.ts`     | Deferred SDK-free facade                               |
-| `apps/web/src/telemetry/buildEnv.ts`  | Build-time telemetry configuration and key stripping   |
+| File                                        | Purpose                                                |
+| ------------------------------------------- | ------------------------------------------------------ |
+| `apps/web/src/api/client.ts`                | Request correlation, errors and parsing                |
+| `apps/web/src/api/queries.ts`               | Timeouts, retries, keys and staleness                  |
+| `apps/web/src/events/serverEvents.ts`       | Singleton SSE and health ordering                      |
+| `apps/web/src/events/usePendingDownload.ts` | Metadata eligibility, live confirmation and progress   |
+| `apps/web/src/events/downloadProgress.ts`   | Per-title external progress store                      |
+| `apps/web/src/events/events.test.tsx`       | Late poll/snapshot, reconnect and download regressions |
+| `apps/web/src/device/identity.ts`           | Persistent identity and capabilities                   |
+| `apps/web/src/lib/uuid.ts`                  | Secure random plain-HTTP fallback                      |
+| `apps/web/src/lib/startup.ts`               | Content/idle gate                                      |
+| `apps/web/src/lib/searchUrl.ts`             | Shared URL/search constants and focus marker           |
+| `apps/web/src/lib/spoilers.ts`              | Reactive browser-local preference                      |
+| `apps/web/src/telemetry/index.ts`           | Deferred SDK-free facade                               |
+| `apps/web/src/telemetry/buildEnv.ts`        | Build-time telemetry configuration and key stripping   |
 
-Measured tracked `apps/web/src/api/`, `apps/web/src/device/`, `apps/web/src/events/`, `apps/web/src/lib/` scope at `663492c`: **20 production files**, **9 tests**, **9/20 = 0.45** test-to-source file ratio; unique human authors **1**. See [inventory method](index.md#measured-scope).
+Measured tracked `apps/web/src/api/`, `apps/web/src/device/`, `apps/web/src/events/`, `apps/web/src/lib/` scope at `3c31c45`: **21 production files**, **9 tests**, **9/21 = 0.43** test-to-source file ratio; unique human authors **1**. The added source is `apps/web/src/lib/downloadWording.ts`. See [inventory method](index.md#measured-scope).
