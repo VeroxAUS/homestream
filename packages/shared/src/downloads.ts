@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { MediaTypeSchema, MovieDetailsSchema, ShowDetailsSchema } from './catalog.js';
 
 /**
- * `pending`: the gateway accepted the add, TorBox has not reported the item yet. `downloading`: TorBox reports it.
- * `ready`: a cached stream exists. `failed`: TorBox failed, stalled or the 24 h limit passed.
+ * `pending`: the add was sent (the gateway may not have confirmed it), TorBox has not reported the item yet.
+ * `downloading`: TorBox reports it. `ready`: a cached stream exists. `failed`: TorBox failed, the item vanished or
+ * stayed in metadata lookup, it stalled, or the 24 h limit passed.
  */
 export const DOWNLOAD_STATES = ['pending', 'downloading', 'ready', 'failed'] as const;
 export const DownloadStateSchema = z.enum(DOWNLOAD_STATES);
@@ -14,7 +15,11 @@ export const DOWNLOAD_STATUSES = ['pending', 'ready', 'failed'] as const;
 export const DownloadStatusSchema = z.enum(DOWNLOAD_STATUSES);
 export type DownloadStatus = z.infer<typeof DownloadStatusSchema>;
 
-export const DOWNLOAD_FAILURE_REASONS = ['torbox_error', 'stalled', 'timeout'] as const;
+/**
+ * `vanished`: TorBox stopped listing the item for 10 minutes. `metadata_stuck`: it stayed in metaDL (TorBox still
+ * looking up the torrent's file list) for 30 minutes.
+ */
+export const DOWNLOAD_FAILURE_REASONS = ['torbox_error', 'stalled', 'timeout', 'vanished', 'metadata_stuck'] as const;
 export const DownloadFailureReasonSchema = z.enum(DOWNLOAD_FAILURE_REASONS);
 export type DownloadFailureReason = z.infer<typeof DownloadFailureReasonSchema>;
 

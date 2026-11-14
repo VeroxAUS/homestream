@@ -41,7 +41,7 @@ Cache of parsed gateway stream lists per title and device query, with an expiry 
 
 ### `pending_downloads`
 
-The TorBox caching queue. Playing a title that has no cached stream asks TorBox to cache it and adds a row here. A poller updates `state`, `progress` and `eta_sec` until the download is `ready` or `failed`, then a "ready to watch" notification is sent once (`notified_at`). A partial unique index allows only one pending row per `media_key`. The playback link is never stored; it is looked up again with `query_key` when the title is played.
+The TorBox caching queue. Playing a title that has no cached stream asks TorBox to cache it and adds a row here. A poller updates `state`, `progress` and `eta_sec` until the download is `ready` or `failed`, then a "ready to watch" notification is sent once (`notified_at`). A partial unique index allows only one pending row per `media_key`. `absent_since` and `metadata_since` hold when TorBox first stopped listing the hash and when it first reported the item in `metaDL`; the poller fails the row (`vanished` after 10 minutes, `metadata_stuck` after 30) and clears them when the item reappears or moves on. The playback link is never stored; it is looked up again with `query_key` when the title is played.
 
 ### `settings`
 

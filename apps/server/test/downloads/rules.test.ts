@@ -6,6 +6,8 @@ import {
   matchesHash,
   pollIntervalMs,
   shouldEmitProgress,
+  trackAbsence,
+  trackMetadata,
   type TorboxItem,
 } from '../../src/downloads/rules.js';
 
@@ -93,5 +95,53 @@ describe('shouldEmitProgress', () => {
     expect(shouldEmitProgress({ progress: 0.1, lastEventAt: 0 }, 0.2, MIN)).toBe(true);
     expect(shouldEmitProgress({ progress: 0.2, lastEventAt: 0 }, 0.2, 5 * MIN)).toBe(false);
     expect(shouldEmitProgress({ progress: 0.3, lastEventAt: 0 }, 0.2, 5 * MIN)).toBe(false);
+  });
+});
+
+describe('trackAbsence', () => {
+  it('starts counting at the first missed poll and fails at exactly 10 minutes', () => {
+    expect(trackAbsence(null, 5 * MIN)).toEqual({ since: 5 * MIN, vanished: false });
+    expect(trackAbsence(5 * MIN, 15 * MIN - 1)).toEqual({ since: 5 * MIN, vanished: false });
+    expect(trackAbsence(5 * MIN, 15 * MIN)).toEqual({ since: 5 * MIN, vanished: true });
+  });
+
+  it('honours a different limit', () => {
+    expect(trackAbsence(0, 1_000, { ...DEFAULT_LIMITS, vanishedGiveUpMs: 1_000 }).vanished).toBe(true);
+  });
+});
+
+describe('trackMetadata', () => {
+  const row = { progress: 0, metadataSince: null as number | null };
+  const meta = { downloadState: 'metaDL', progress: 0 };
+
+  it('starts the timer on the first metaDL poll and fails at exactly 30 minutes', () => {
+    expect(trackMetadata(meta, row, 2 * MIN)).toEqual({ since: 2 * MIN, stuck: false });
+    expect(trackMetadata(meta, { ...row, metadataSince: 2 * MIN }, 32 * MIN - 1)).toEqual({
+      since: 2 * MIN,
+      stuck: false,
+    });
+    expect(trackMetadata(meta, { ...row, metadataSince: 2 * MIN }, 32 * MIN)).toEqual({
+      since: 2 * MIN,
+      stuck: true,
+    });
+  });
+
+  it('clears the timer when the state is not metaDL', () => {
+    expect(trackMetadata({ downloadState: 'downloading', progress: 0 }, { ...row, metadataSince: 0 }, HOUR)).toEqual({
+      since: null,
+      stuck: false,
+    });
+  });
+
+  it('restarts the timer when the progress rose', () => {
+    expect(trackMetadata({ ...meta, progress: 0.05 }, { ...row, metadataSince: 0 }, HOUR)).toEqual({
+      since: HOUR,
+      stuck: false,
+    });
+  });
+
+  it('matches the state name case-insensitively and exactly', () => {
+    expect(trackMetadata({ ...meta, downloadState: 'metadl' }, row, 0).since).toBe(0);
+    expect(trackMetadata({ ...meta, downloadState: 'metaDL extra' }, row, 0).since).toBeNull();
   });
 });

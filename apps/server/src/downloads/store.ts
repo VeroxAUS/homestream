@@ -25,6 +25,10 @@ export interface DownloadRow {
   /** Set when TorBox reported the item finished; the row then waits for a cached stream to show up. */
   readySince: number | null;
   notifiedAt: number | null;
+  /** First poll at which TorBox did not list the hash; null while it is listed. */
+  absentSince: number | null;
+  /** First poll at which TorBox reported the item in metaDL with no progress since; null otherwise. */
+  metadataSince: number | null;
 }
 
 interface RawRow {
@@ -49,10 +53,13 @@ interface RawRow {
   last_event_at: number | null;
   ready_since: number | null;
   notified_at: number | null;
+  absent_since: number | null;
+  metadata_since: number | null;
 }
 
 const COLUMNS = `id, media_key, media_type, tmdb_id, season, episode, query_key, title, info_hash, status, state, progress,
-  eta_sec, reason, created_at, updated_at, next_poll_at, progress_changed_at, last_event_at, ready_since, notified_at`;
+  eta_sec, reason, created_at, updated_at, next_poll_at, progress_changed_at, last_event_at, ready_since, notified_at,
+  absent_since, metadata_since`;
 
 function toRow(raw: RawRow): DownloadRow {
   return {
@@ -77,6 +84,8 @@ function toRow(raw: RawRow): DownloadRow {
     lastEventAt: raw.last_event_at,
     readySince: raw.ready_since,
     notifiedAt: raw.notified_at,
+    absentSince: raw.absent_since,
+    metadataSince: raw.metadata_since,
   };
 }
 
@@ -108,6 +117,8 @@ export type DownloadPatch = Partial<
     | 'lastEventAt'
     | 'readySince'
     | 'notifiedAt'
+    | 'absentSince'
+    | 'metadataSince'
   >
 >;
 
@@ -122,6 +133,8 @@ const PATCH_COLUMNS: Record<keyof DownloadPatch, string> = {
   lastEventAt: 'last_event_at',
   readySince: 'ready_since',
   notifiedAt: 'notified_at',
+  absentSince: 'absent_since',
+  metadataSince: 'metadata_since',
 };
 
 const KEEP_FINISHED_MS = 30 * 24 * 3600 * 1000;

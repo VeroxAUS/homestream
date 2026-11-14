@@ -173,4 +173,13 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // When TorBox first stopped listing a pending download, and when it first reported it in metaDL (looking up the file
+    // list). Both are cleared when the condition ends; the poller fails the download after 10 and 30 minutes.
+    version: 5,
+    sql: `
+      ALTER TABLE pending_downloads ADD COLUMN absent_since INTEGER;
+      ALTER TABLE pending_downloads ADD COLUMN metadata_since INTEGER;
+    `,
+  },
 ];

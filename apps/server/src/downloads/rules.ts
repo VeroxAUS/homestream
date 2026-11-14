@@ -13,6 +13,10 @@ export interface DownloadLimits {
   giveUpMs: number;
   /** TorBox reports "stalled (no seeds)" with no progress for this long: the download is given up. */
   stallGiveUpMs: number;
+  /** TorBox has not listed the hash for this long (counted from the first poll that missed it): the item is gone. */
+  vanishedGiveUpMs: number;
+  /** TorBox keeps the item in metaDL with no progress for this long: it will not find the torrent's files. */
+  metadataGiveUpMs: number;
   /** Largest wait after consecutive TorBox errors. */
   maxBackoffMs: number;
   /** Gap between "is a cached stream listed yet?" checks after TorBox finished the item. */
@@ -29,6 +33,8 @@ export const DEFAULT_LIMITS: DownloadLimits = {
   slowAfterMs: HOUR,
   giveUpMs: 24 * HOUR,
   stallGiveUpMs: 6 * HOUR,
+  vanishedGiveUpMs: 10 * MINUTE,
+  metadataGiveUpMs: 30 * MINUTE,
   maxBackoffMs: 10 * MINUTE,
   confirmRetryMs: 2 * MINUTE,
   confirmWindowMs: 10 * MINUTE,
@@ -66,6 +72,7 @@ export type ItemVerdict =
 
 const FAILED_STATE = /fail|invalid|error/i;
 const STALLED_STATE = /^stalled/i;
+const METADATA_STATE = /^metadl$/i;
 
 export interface RowProgress {
   progress: number;
@@ -108,4 +115,30 @@ export function shouldEmitProgress(
 ): boolean {
   if (progress <= last.progress + 1e-6) return false;
   return last.lastEventAt === null || now - last.lastEventAt >= limits.progressEventMs;
+}
+
+/** The hash is missing from the TorBox list on this poll. since is when it first went missing. */
+export function trackAbsence(
+  absentSince: number | null,
+  now: number,
+  limits: DownloadLimits = DEFAULT_LIMITS,
+): { since: number; vanished: boolean } {
+  const since = absentSince ?? now;
+  return { since, vanished: now - since >= limits.vanishedGiveUpMs };
+}
+
+/**
+ * The timer restarts when the state leaves metaDL or the progress rises. A row that was never seen in metaDL starts its
+ * timer now.
+ */
+export function trackMetadata(
+  item: Pick<TorboxItem, 'downloadState' | 'progress'>,
+  row: { progress: number; metadataSince: number | null },
+  now: number,
+  limits: DownloadLimits = DEFAULT_LIMITS,
+): { since: number | null; stuck: boolean } {
+  if (!METADATA_STATE.test(item.downloadState)) return { since: null, stuck: false };
+  const progressed = item.progress > row.progress + 1e-6;
+  const since = progressed ? now : (row.metadataSince ?? now);
+  return { since, stuck: now - since >= limits.metadataGiveUpMs };
 }

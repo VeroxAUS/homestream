@@ -4,7 +4,7 @@
       "functionLines": 172
     },
     "apps/server/src/downloads/service.ts": {
-      "lines": 491
+      "lines": 460
     },
     "apps/server/src/health/checks/ffmpeg.ts": {
       "functionLines": 86

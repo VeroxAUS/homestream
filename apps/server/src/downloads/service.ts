@@ -11,7 +11,6 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from '../config.js';
 import type { Db } from '../db/index.js';
 import { mediaKeyFor } from '../db/plays.js';
-import { AppError } from '../errors.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import type { GatewayClient, PlaybackProbe } from '../gateway/client.js';
@@ -25,11 +24,15 @@ import {
   matchesHash,
   pollIntervalMs,
   shouldEmitProgress,
+  trackAbsence,
+  trackMetadata,
   type DownloadLimits,
   type TorboxItem,
 } from './rules.js';
+import { FAILURE_MESSAGES, placeholderError, startedMessage } from './messages.js';
 import { DownloadStore, type DownloadRow } from './store.js';
 import { TorboxClient, TorboxError, type TorboxFetch } from './torbox.js';
+import { eventBase, toDownload } from './view.js';
 
 /** How often a failing TorBox connection is mentioned in the log. */
 const TORBOX_WARN_EVERY_MS = 10 * 60_000;
@@ -71,67 +74,6 @@ interface PlayableLink {
 }
 
 export type BeginResult = DownloadStartedResponse | PlayableLink | null;
-
-function toDownload(row: DownloadRow): Download {
-  const download: Download = {
-    id: row.id,
-    mediaType: row.mediaType,
-    tmdbId: row.tmdbId,
-    title: row.title,
-    state: row.state,
-    status: row.status,
-    progress: row.progress,
-    startedAt: row.createdAt,
-  };
-  if (row.season !== null) download.season = row.season;
-  if (row.episode !== null) download.episode = row.episode;
-  if (row.etaSec !== null && row.status === 'pending') download.etaSec = row.etaSec;
-  if (row.reason) download.reason = row.reason;
-  return download;
-}
-
-function eventBase(row: DownloadRow) {
-  return {
-    downloadId: row.id,
-    title: row.title,
-    mediaType: row.mediaType,
-    tmdbId: row.tmdbId,
-    ...(row.season !== null ? { season: row.season } : {}),
-    ...(row.episode !== null ? { episode: row.episode } : {}),
-  };
-}
-
-const FAILURE_MESSAGES: Record<DownloadFailureReason, string> = {
-  torbox_error: 'TorBox reported an error for this download.',
-  stalled: 'The download has had no seeds and no progress for 6 hours.',
-  timeout: 'The download did not finish, or did not show up as cached, within 24 hours.',
-};
-
-function placeholderError(name: string): AppError {
-  switch (name) {
-    case 'store_limit_exceeded':
-      return new AppError(
-        409,
-        'torbox_slots_full',
-        'TorBox has no free download slots right now.',
-        'Wait for a running TorBox download to finish or remove one in the TorBox dashboard, then try again.',
-      );
-    case '429':
-      return new AppError(
-        429,
-        'gateway_rate_limited',
-        'The stream gateway is rate limited right now.',
-        'Wait a few minutes and try again.',
-      );
-    default:
-      return new AppError(
-        502,
-        'download_failed',
-        "TorBox couldn't start downloading this title.",
-        'The release may be broken or gone. Try again later, or try another title.',
-      );
-  }
-}
 
 export class DownloadService {
   private readonly store: DownloadStore;
@@ -276,10 +218,7 @@ export class DownloadService {
     this.lastGatewayCheck.set(row.id, now);
     this.event({
       level: 'info',
-      message:
-        outcome === 'timeout'
-          ? `TorBox did not answer within the time limit; assuming it is downloading "${title}".`
-          : `TorBox accepted "${title}" and started downloading it.`,
+      message: startedMessage(title, outcome),
       details: { downloadId: row.id, tracked: row.infoHash !== null },
     });
     this.options.bus.emit('download.started', eventBase(row));
@@ -431,12 +370,26 @@ export class DownloadService {
     }
 
     const item = (items ?? []).find((candidate) => matchesHash(candidate, row.infoHash as string));
-    if (!item) {
-      // TorBox does not list the item (yet, or any more): fall back to asking the gateway now and then.
-      await this.checkGateway(row, interval, GATEWAY_CHECK_MS);
+    if (item) await this.pollListed(row, item, now, interval);
+    else await this.pollMissing(row, now, interval);
+  }
+
+  /**
+   * TorBox does not list the item (yet, or any more). The gateway may still show a cached stream, so it is asked now and
+   * then; an absence that lasts past the limit fails the download.
+   */
+  private async pollMissing(row: DownloadRow, now: number, interval: number): Promise<void> {
+    await this.checkGateway(row, interval, GATEWAY_CHECK_MS);
+    if (this.store.get(row.id)?.status !== 'pending') return;
+    const absence = trackAbsence(row.absentSince, now, this.limits);
+    if (absence.vanished) {
+      this.fail(row, 'vanished');
       return;
     }
+    this.store.update(row.id, { absentSince: absence.since, metadataSince: null }, now);
+  }
 
+  private async pollListed(row: DownloadRow, item: TorboxItem, now: number, interval: number): Promise<void> {
     const verdict = judgeItem(item, row, now, this.limits);
     if (verdict.kind === 'failed') {
       this.fail(row, verdict.reason);
@@ -445,7 +398,15 @@ export class DownloadService {
     if (verdict.kind === 'ready') {
       this.store.update(
         row.id,
-        { state: 'downloading', progress: 1, etaSec: null, readySince: now, nextPollAt: now },
+        {
+          state: 'downloading',
+          progress: 1,
+          etaSec: null,
+          readySince: now,
+          nextPollAt: now,
+          absentSince: null,
+          metadataSince: null,
+        },
         now,
       );
       this.event({
@@ -457,11 +418,18 @@ export class DownloadService {
       return;
     }
 
+    const metadata = trackMetadata(item, row, now, this.limits);
+    if (metadata.stuck) {
+      this.fail(row, 'metadata_stuck');
+      return;
+    }
     const progress = Math.max(row.progress, verdict.progress);
     const emit = shouldEmitProgress(row, progress, now, this.limits);
     this.store.update(
       row.id,
       {
+        absentSince: null,
+        metadataSince: metadata.since,
         state: 'downloading',
         progress,
         etaSec: verdict.etaSec,
@@ -542,6 +510,7 @@ export class DownloadService {
     const live = this.store.get(row.id);
     if (!live || live.status !== 'pending') return;
     const now = this.now();
+    this.lastGatewayCheck.delete(row.id);
     this.store.update(row.id, { status: 'failed', state: 'failed', reason, etaSec: null }, now);
     this.event({
       level: 'warn',

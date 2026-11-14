@@ -167,7 +167,7 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
     expect(((await rig.app.inject('/api/movie/278')).json() as { download?: unknown }).download).toBeUndefined();
   });
 
-  it('assumes TorBox is downloading when the gateway does not answer within the time limit', async () => {
+  it('answers 202 downloading and keeps checking when the gateway does not answer within the time limit', async () => {
     const fakes = makeFakes();
     seedUncachedMovie(fakes, { mode: 'hang' });
     const rig = await boot({ fakes, playbackTimeoutMs: 60 });

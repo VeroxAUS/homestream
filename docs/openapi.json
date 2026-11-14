@@ -1244,7 +1244,9 @@
                           "enum": [
                             "torbox_error",
                             "stalled",
-                            "timeout"
+                            "timeout",
+                            "vanished",
+                            "metadata_stuck"
                           ]
                         }
                       },
@@ -1572,7 +1574,9 @@
                             "enum": [
                               "torbox_error",
                               "stalled",
-                              "timeout"
+                              "timeout",
+                              "vanished",
+                              "metadata_stuck"
                             ]
                           }
                         },
@@ -2768,7 +2772,9 @@
                           "enum": [
                             "torbox_error",
                             "stalled",
-                            "timeout"
+                            "timeout",
+                            "vanished",
+                            "metadata_stuck"
                           ]
                         }
                       },
@@ -4457,7 +4463,9 @@
                             "enum": [
                               "torbox_error",
                               "stalled",
-                              "timeout"
+                              "timeout",
+                              "vanished",
+                              "metadata_stuck"
                             ]
                           }
                         },
