@@ -13,7 +13,27 @@
   font-weight: 600;
 }
 
+.unconfirmed {
+  max-width: 100%;
+  height: auto;
+  min-height: 46px;
+  padding-block: 8px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.caption {
+  color: var(--mut);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .icon {
+  flex-shrink: 0;
   color: var(--warn);
 }
 

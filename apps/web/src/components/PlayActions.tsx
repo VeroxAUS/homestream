@@ -25,7 +25,7 @@ export function PlayActions({ playPath, progress, download, subject, wide = fals
   if (download) {
     return (
       <div className={layout}>
-        <DownloadBadge progress={download.progress} />
+        <DownloadBadge progress={download.progress} confirmed={download.confirmed} />
       </div>
     );
   }

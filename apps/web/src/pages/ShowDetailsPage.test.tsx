@@ -185,6 +185,21 @@ describe('ShowDetailsPage', () => {
     expect(within(panel).getByRole('link', { name: 'Play' })).toBeInTheDocument();
   });
 
+  it('says the start is not confirmed for an episode whose download is still pending', async () => {
+    open({
+      'GET /api/tv/1396': showDetails({
+        downloads: [download({ mediaType: 'tv', tmdbId: 1396, season: 1, episode: 1, state: 'pending', progress: 0 })],
+      }),
+    });
+    const panel = await screen.findByRole('complementary', { name: 'Selected episode' });
+    expect(await within(panel).findByText('Waiting for TorBox')).toBeInTheDocument();
+    expect(within(panel).queryByText(/Downloading/)).not.toBeInTheDocument();
+
+    act(() => setDownloadProgress('tv:1396:1:1', 0.2));
+    expect(within(panel).getByText('Downloading 20%')).toBeInTheDocument();
+    expect(within(panel).queryByText('Waiting for TorBox')).not.toBeInTheDocument();
+  });
+
   it('uses the show backdrop, dimmed, for an episode without a still', async () => {
     open({
       'GET /api/tv/1396/season/1': { ...season(1, 1), episodes: [episode(1, { stillUrl: null })] },

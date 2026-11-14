@@ -133,6 +133,25 @@ describe('downloading (HTTP 202)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'The Shawshank Redemption' })).toBeInTheDocument();
     expect(screen.getByText('Downloading 42%')).toBeInTheDocument();
   });
+
+  it('uses the unconfirmed wording in the notice and on the badge when TorBox has not confirmed the start', async () => {
+    const pending = download({ state: 'pending', progress: 0 });
+    openPlayer({
+      'POST /api/sessions': () => Response.json({ status: 'downloading', download: pending }, { status: 202 }),
+      'GET /api/movie/278': () => movieDetails({ download: pending }),
+    });
+    expect(await screen.findByText('Waiting for TorBox')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Sent "The Shawshank Redemption" to TorBox, but it is not confirmed yet. HomeStream keeps checking and will let you know when it\'s ready.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Downloading, try again later')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('player-stage')).not.toBeInTheDocument());
+    expect(await screen.findByRole('heading', { level: 1, name: 'The Shawshank Redemption' })).toBeInTheDocument();
+    expect(screen.queryByText(/^Downloading/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Waiting for TorBox').length).toBeGreaterThan(0);
+  });
 });
 
 describe('leaving', () => {

@@ -76,7 +76,7 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
       mediaType: 'movie',
       tmdbId: 278,
       title,
-      state: 'pending',
+      state: 'downloading',
       progress: 0,
     });
     expect(body.download.id).toEqual(expect.any(String));
@@ -160,7 +160,7 @@ describe('Play on a title with no cached stream (VAL-DL-001)', () => {
     expect(((await rig.app.inject('/api/movie/278')).json() as { download?: unknown }).download).toBeUndefined();
     const { body } = await rig.play();
     const details = (await rig.app.inject('/api/movie/278')).json() as { download?: Download };
-    expect(details.download).toMatchObject({ id: body.download.id, state: 'pending' });
+    expect(details.download).toMatchObject({ id: body.download.id, state: 'downloading' });
     expect((await rig.app.inject({ method: 'DELETE', url: `/api/downloads/${body.download.id}` })).statusCode).toBe(
       200,
     );
@@ -457,7 +457,7 @@ describe('poller (VAL-DL-006)', () => {
     await rig.tick();
     expect(rig.fakes.torbox.calls).toHaveLength(2);
     const pending = (await rig.app.inject('/api/downloads')).json() as { downloads: Download[] };
-    expect(pending.downloads[0]?.state).toBe('pending');
+    expect(pending.downloads[0]).toMatchObject({ state: 'downloading', progress: 0 });
 
     rig.fakes.torbox.failNetwork = false;
     rig.fakes.torbox.items = [downloadingItem(0.2)];

@@ -100,6 +100,7 @@ export type NewDownload = Pick<
   | 'queryKey'
   | 'title'
   | 'infoHash'
+  | 'state'
   | 'createdAt'
   | 'nextPollAt'
 >;
@@ -148,7 +149,7 @@ export class DownloadStore {
       .prepare(
         `INSERT INTO pending_downloads (id, media_key, media_type, tmdb_id, season, episode, query_key, title, info_hash,
            status, state, progress, created_at, updated_at, next_poll_at, progress_changed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', 0, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?, ?)`,
       )
       .run(
         download.id,
@@ -160,6 +161,7 @@ export class DownloadStore {
         download.queryKey,
         download.title,
         download.infoHash,
+        download.state,
         download.createdAt,
         download.createdAt,
         download.nextPollAt,

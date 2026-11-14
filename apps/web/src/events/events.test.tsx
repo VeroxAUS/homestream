@@ -66,14 +66,33 @@ describe('usePendingDownload', () => {
   it('uses the details response, then live events', () => {
     const pending = download({ status: 'pending', state: 'downloading', progress: 0.25 });
     const { result } = renderHook(() => usePendingDownload('movie:2', pending));
-    expect(result.current).toEqual({ progress: 0.25 });
+    expect(result.current).toEqual({ progress: 0.25, confirmed: true });
     act(() => setDownloadProgress('movie:2', 0.5));
-    expect(result.current).toEqual({ progress: 0.5 });
+    expect(result.current).toEqual({ progress: 0.5, confirmed: true });
   });
 
-  it('has no progress while TorBox has not reported the item', () => {
+  it('has no progress, and is not confirmed, while TorBox has not reported the item', () => {
     const queued = download({ status: 'pending', state: 'pending', progress: 0 });
-    expect(renderHook(() => usePendingDownload('movie:2', queued)).result.current).toEqual({ progress: undefined });
+    expect(renderHook(() => usePendingDownload('movie:2', queued)).result.current).toEqual({
+      progress: undefined,
+      confirmed: false,
+    });
+  });
+
+  it('becomes confirmed with progress when a live event arrives for an unconfirmed download', () => {
+    const queued = download({ status: 'pending', state: 'pending', progress: 0 });
+    const { result } = renderHook(() => usePendingDownload('movie:2', queued));
+    expect(result.current?.confirmed).toBe(false);
+    act(() => setDownloadProgress('movie:2', 0.1));
+    expect(result.current).toEqual({ progress: 0.1, confirmed: true });
+  });
+
+  it('treats a confirmed start with no progress yet as confirmed', () => {
+    const accepted = download({ status: 'pending', state: 'downloading', progress: 0 });
+    expect(renderHook(() => usePendingDownload('movie:2', accepted)).result.current).toEqual({
+      progress: 0,
+      confirmed: true,
+    });
   });
 });
 

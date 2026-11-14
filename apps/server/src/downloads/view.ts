@@ -1,5 +1,15 @@
-import type { Download } from '@homestream/shared';
+import type { Download, SessionStartRequest } from '@homestream/shared';
+import type { StreamQuery } from '../gateway/types.js';
 import type { DownloadRow } from './store.js';
+
+export function startQuery(
+  body: Pick<SessionStartRequest, 'mediaType' | 'season' | 'episode'>,
+  imdbId: string,
+): StreamQuery {
+  return body.mediaType === 'movie'
+    ? { type: 'movie', imdbId }
+    : { type: 'tv', imdbId, season: body.season as number, episode: body.episode as number };
+}
 
 export function toDownload(row: DownloadRow): Download {
   const download: Download = {

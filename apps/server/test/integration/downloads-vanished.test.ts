@@ -337,8 +337,10 @@ describe('a probe timeout is not reported as accepted (VAL-DL-011)', () => {
 
   it('keeps the accepted wording when the gateway answers with the downloading clip', async () => {
     const { rig } = await boot();
-    const { status } = await rig.play();
+    const { status, body } = await rig.play();
     expect(status).toBe(202);
+    expect(body.download.state).toBe('downloading');
+    expect((await listed(rig)).state).toBe('downloading');
     const messages = (await downloadLogs(rig)).map((entry) => entry.message);
     expect(messages.some((message) => /TorBox accepted ".+" and started downloading it\./.test(message))).toBe(true);
     expect(messages.join('\n')).not.toMatch(/did not confirm/);

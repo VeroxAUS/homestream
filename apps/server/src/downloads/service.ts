@@ -14,7 +14,7 @@ import { mediaKeyFor } from '../db/plays.js';
 import type { EventBus } from '../events/bus.js';
 import { logEvent, type LogEventInput } from '../events/record.js';
 import type { GatewayClient, PlaybackProbe } from '../gateway/client.js';
-import { queryFromKey, queryKey, type StreamQuery } from '../gateway/types.js';
+import { queryFromKey, queryKey } from '../gateway/types.js';
 import { redact } from '../redact.js';
 import type { StreamService } from '../streams/service.js';
 import {
@@ -32,7 +32,7 @@ import {
 import { FAILURE_MESSAGES, placeholderError, startedMessage } from './messages.js';
 import { DownloadStore, type DownloadRow } from './store.js';
 import { TorboxClient, TorboxError, type TorboxFetch } from './torbox.js';
-import { eventBase, toDownload } from './view.js';
+import { eventBase, startQuery, toDownload } from './view.js';
 
 /** How often a failing TorBox connection is mentioned in the log. */
 const TORBOX_WARN_EVERY_MS = 10 * 60_000;
@@ -197,10 +197,6 @@ export class DownloadService {
     }
     const outcome = this.interpret(probe, title);
 
-    const query: StreamQuery =
-      body.mediaType === 'movie'
-        ? { type: 'movie', imdbId }
-        : { type: 'tv', imdbId, season: body.season as number, episode: body.episode as number };
     const now = this.now();
     const row = this.store.insert({
       id: randomUUID(),
@@ -209,9 +205,10 @@ export class DownloadService {
       tmdbId: body.tmdbId,
       season: body.mediaType === 'tv' ? (body.season ?? null) : null,
       episode: body.mediaType === 'tv' ? (body.episode ?? null) : null,
-      queryKey: queryKey(query),
+      queryKey: queryKey(startQuery(body, imdbId)),
       title,
       infoHash: stream.raw.infoHash ?? null,
+      state: outcome === 'accepted' ? 'downloading' : 'pending',
       createdAt: now,
       nextPollAt: now + (this.torbox && stream.raw.infoHash ? this.limits.fastPollMs : GATEWAY_CHECK_MS),
     });

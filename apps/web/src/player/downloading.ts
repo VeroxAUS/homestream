@@ -4,7 +4,8 @@ import type { PlayTarget } from './target';
 
 /**
  * A 202 answer means TorBox is caching the title. Writing the download into the cached details response makes the
- * details page show its "Downloading" badge at once, and the refetch confirms it.
+ * details page show its download badge at once ("Downloading", or the unconfirmed wording for a `pending` download),
+ * and the refetch confirms it.
  */
 export function markDownloading(queryClient: QueryClient, target: PlayTarget, download: Download): void {
   if (target.mediaType === 'movie') {

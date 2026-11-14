@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { desktopBridge, inMiniPlayer } from '../desktop/bridge';
 import { useAttachedSession } from '../desktop/useAttachedSession';
 import { NotFound } from '../components/NotFound';
+import { UNCONFIRMED_LABEL, unconfirmedDetail } from '../lib/downloadWording';
 import { describeError } from '../lib/errors';
 import { INFO_TOAST_MS, showToast } from '../notices/toastStore';
 import { outputSummary } from '../player/decisionText';
@@ -57,17 +58,23 @@ function useEscapeToLeave(active: boolean, onLeave: () => void): void {
   }, [active, onLeave]);
 }
 
-/** A 202 answer: TorBox is caching the title. Say so, mark the details page and return to it. */
+/**
+ * A 202 answer: the title is being cached. Say so, mark the details page and return to it. A `pending` download was
+ * sent but not confirmed by TorBox, so the notice must not claim it is downloading.
+ */
 function useDownloadingHandoff(state: StartState, target: PlayTarget, leave: () => void): void {
   const queryClient = useQueryClient();
   useEffect(() => {
     if (state.status !== 'downloading') return;
     const { download } = state;
     markDownloading(queryClient, target, download);
+    const unconfirmed = download.state === 'pending';
     showToast({
       kind: 'info',
-      message: 'Downloading, try again later',
-      detail: `TorBox is caching ${download.title}. We'll let you know when it's ready.`,
+      message: unconfirmed ? UNCONFIRMED_LABEL : 'Downloading, try again later',
+      detail: unconfirmed
+        ? unconfirmedDetail(download.title)
+        : `TorBox is caching ${download.title}. We'll let you know when it's ready.`,
       actions: [],
       autoDismissMs: INFO_TOAST_MS,
     });

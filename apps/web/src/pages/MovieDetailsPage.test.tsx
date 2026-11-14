@@ -109,12 +109,38 @@ describe('MovieDetailsPage', () => {
     expect(screen.getByText('Downloading 60%')).toBeInTheDocument();
   });
 
-  it('shows just "Downloading" while TorBox has not reported progress yet', async () => {
+  it('shows just "Downloading" for a confirmed start that has no progress yet', async () => {
+    open({
+      'GET /api/movie/278': movieDetails({ download: download({ state: 'downloading', progress: 0 }) }),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+    });
+    expect(await screen.findByText('Downloading')).toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for TorBox/)).not.toBeInTheDocument();
+  });
+
+  it('says the start is not confirmed, never "Downloading" or "accepted", while the download is pending', async () => {
     open({
       'GET /api/movie/278': movieDetails({ download: download({ state: 'pending', progress: 0 }) }),
       'GET /api/progress/movie:278': NO_PROGRESS,
     });
-    expect(await screen.findByText('Downloading')).toBeInTheDocument();
+    const badge = (await screen.findByText('Waiting for TorBox')).closest('[role="status"]');
+    expect(badge).toHaveAttribute('aria-disabled', 'true');
+    expect(badge).toHaveTextContent('Sent to TorBox, not confirmed yet. HomeStream keeps checking.');
+    expect(badge?.textContent).not.toMatch(/downloading|accepted/i);
+    expect(screen.queryByRole('link', { name: 'Play' })).not.toBeInTheDocument();
+  });
+
+  it('switches from the unconfirmed wording to Downloading with progress once TorBox reports the item', async () => {
+    open({
+      'GET /api/movie/278': movieDetails({ download: download({ state: 'pending', progress: 0 }) }),
+      'GET /api/progress/movie:278': NO_PROGRESS,
+    });
+    await screen.findByText('Waiting for TorBox');
+
+    act(() => setDownloadProgress('movie:278', 0.3));
+    expect(screen.getByText('Downloading 30%')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for TorBox')).not.toBeInTheDocument();
+    expect(screen.queryByText(/not confirmed/)).not.toBeInTheDocument();
   });
 
   it('shows Play for a download that already finished or failed', async () => {

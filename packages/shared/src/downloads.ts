@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { MediaTypeSchema, MovieDetailsSchema, ShowDetailsSchema } from './catalog.js';
 
 /**
- * `pending`: the add was sent (the gateway may not have confirmed it), TorBox has not reported the item yet.
- * `downloading`: TorBox reports it. `ready`: a cached stream exists. `failed`: TorBox failed, the item vanished or
+ * `pending`: the add was sent but nothing confirmed it (the gateway probe timed out), and TorBox has not reported the
+ * item yet; clients must not call it downloading. `downloading`: the gateway confirmed the start or TorBox reports
+ * the item. `ready`: a cached stream exists. `failed`: TorBox failed, the item vanished or
  * stayed in metadata lookup, it stalled, or the 24 h limit passed.
  */
 export const DOWNLOAD_STATES = ['pending', 'downloading', 'ready', 'failed'] as const;
