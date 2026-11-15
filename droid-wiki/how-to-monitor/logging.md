@@ -24,6 +24,26 @@ Select-String -Path "$env:DATA_DIR\server.log" -SimpleMatch 'client.req_42-A'
 
 Substitute the actual configured data directory if configuration came from a file rather than shell environment. Optional unexpected-error reports use `request_id`. Background work need not retain request scope; IDs are neither credentials nor a guaranteed upstream trace. See [tracing](tracing.md).
 
+## Read-ahead transitions
+
+`createReadAheadNotes` in `apps/server/src/sourceproxy/readAheadNotes.ts` writes info-level **`Read-ahead window closed`** and **`Read-ahead window reopened`** lines. `ReaderHolds` in `apps/server/src/sourceproxy/readerHolds.ts` reports changes between `waiting` and `filling`, not every progress update. Resetting a waiting window on start, seek or restart also reports reopening with zero lead.
+
+| Field                          | Meaning                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `sessionId`, `state`           | Owner whose window changed, and its new `waiting` or `filling` state                                  |
+| `leadSec`                      | Actual encoded lead rounded to one decimal, not the anticipated closing lead                          |
+| `rssMb`, `heapUsedMb`          | Server process resident memory and used JavaScript heap                                               |
+| `externalMb`, `arrayBuffersMb` | Node external allocations and ArrayBuffer/Buffer memory; these overlap and must not be added together |
+| `cacheMb`, `cacheBlocks`       | Rolling block-cache bytes and block count across the proxy, not only this session                     |
+
+Despite the `Mb` suffix, memory fields are rounded **MiB** (bytes divided by 1,048,576), not decimal MB or megabits. Process figures come from `process.memoryUsage()` in `apps/server/src/sourceproxy/readAheadNotes.ts`; they do not measure FFmpeg child-process RSS. Cache figures come from `BlockCache.stats` in `apps/server/src/sourceproxy/blockCache.ts`, not all buffers or pinned head/tail data.
+
+`SourceProxy` in `apps/server/src/sourceproxy/proxy.ts` creates one logger callback shared across its sources and sessions. It suppresses transitions less than **one second** after the last emitted line and samples memory only when emitting. Suppressed transitions are dropped, not queued, so these lines are diagnostic snapshots rather than a complete state history. They are process-log entries, not durable database events or new analytics events.
+
+Compare close/reopen snapshots when investigating memory growth or a download rate that stays low after resuming. A close can occur below the nominal measured lead because pacing anticipates progress latency and in-flight bytes; see [network controls](../systems/network.md#read-ahead-and-feedback). The smaller [extractor byte-gap bound](../systems/source-proxy.md#three-independent-reader-controls) reduces how much cached subtitle-reader data the encoder consumes before downloading again.
+
+`apps/server/test/sourceproxy/readAheadNotes.test.ts` covers transition/reset notifications, MiB formatting, throttling and proxy wiring. These tests were inspected for this documentation refresh; no live memory or download measurement was run.
+
 ## Durable event history
 
 `logEvent` in `apps/server/src/events/record.ts` redacts a message/details, inserts an SQLite `events` row, then emits a `log` bus event. Rows contain ID, epoch timestamp, level, source, message, nullable details and nullable session ID.
@@ -68,15 +88,18 @@ SSE opening logs and desktop breadcrumb wiring were refreshed against **`663492c
 
 ## Key source files
 
-| File                                                 | Purpose                                           |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| `apps/server/src/logger.ts`                          | Pino destinations, redaction and request mixin    |
-| `apps/server/src/http/observability.ts`              | Completion fields/exclusions                      |
-| `apps/server/src/requestContext.ts`                  | ID validation and async scope                     |
-| `apps/server/src/events/record.ts`                   | Durable writes and pruning                        |
-| `apps/server/src/events/query.ts`                    | Filtering/read-time redaction                     |
-| `apps/server/src/routes/events.ts`                   | SSE framing and lifetime                          |
-| `apps/desktop/src/shell/telemetry.ts`                | Main log sink and startup rollover                |
-| `apps/server/test/integration/observability.test.ts` | Request/log/probe integration                     |
-| `apps/server/test/integration/events.test.ts`        | One correlated opening line per live subscription |
-| `apps/server/test/integration/health-routes.test.ts` | Event queries and SSE                             |
+| File                                                  | Purpose                                           |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `apps/server/src/logger.ts`                           | Pino destinations, redaction and request mixin    |
+| `apps/server/src/http/observability.ts`               | Completion fields/exclusions                      |
+| `apps/server/src/requestContext.ts`                   | ID validation and async scope                     |
+| `apps/server/src/sourceproxy/readAheadNotes.ts`       | Throttled read-ahead transition memory snapshots  |
+| `apps/server/src/sourceproxy/readerHolds.ts`          | Window state-change and reset notifications       |
+| `apps/server/test/sourceproxy/readAheadNotes.test.ts` | Transition, formatting, throttle and wiring tests |
+| `apps/server/src/events/record.ts`                    | Durable writes and pruning                        |
+| `apps/server/src/events/query.ts`                     | Filtering/read-time redaction                     |
+| `apps/server/src/routes/events.ts`                    | SSE framing and lifetime                          |
+| `apps/desktop/src/shell/telemetry.ts`                 | Main log sink and startup rollover                |
+| `apps/server/test/integration/observability.test.ts`  | Request/log/probe integration                     |
+| `apps/server/test/integration/events.test.ts`         | One correlated opening line per live subscription |
+| `apps/server/test/integration/health-routes.test.ts`  | Event queries and SSE                             |

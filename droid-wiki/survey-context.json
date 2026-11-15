@@ -2,28 +2,27 @@
   "mode": "incremental",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
-  "baseCommit": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
+  "commitHash": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
+  "baseCommit": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
   "delta": {
-    "files": 51,
-    "insertions": 1279,
-    "deletions": 427,
-    "changedLines": 1706,
+    "files": 34,
+    "insertions": 1013,
+    "deletions": 405,
+    "changedLines": 1418,
     "outsideWiki": {
-      "files": 36,
-      "insertions": 1025,
-      "deletions": 158
+      "files": 13,
+      "insertions": 550,
+      "deletions": 70
     }
   },
   "summary": "HomeStream is a trusted-LAN TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB, AIOStreams, FFmpeg/NVENC, the loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite provides browsing, title details, HLS playback, Settings and the desktop renderer. Electron 45 adds tray, supervision and mini player. Shared Zod schemas, IPC contracts and sanitizers connect runtimes.",
   "architecture": "buildApp constructs services and thin routes. PlaybackManager owns slots, automatic candidate fallback, encoding, HLS and subtitles. Session creation returns 201 playback or 202 download tracking. Web Query hooks validate HTTP responses; Home content and idle gate background startup. Desktop distinguishes attached and owned servers with allowlisted preload IPC.",
   "patterns": "Strict TypeScript; shared Zod contracts; AppError envelopes and redaction. Offline tests isolate temp directories and random ports. No real keys/upstream calls for wiki generation. Video always re-encodes, streamId is auto, devices are not accounts, LAN-only deployment. Preserve unaffected pages byte-for-byte. Domain bylines use VeroxAUS from origin/main, excluding bots. Source references must use full repository-root paths.",
   "changes": [
-    "Migration 5 adds persistent absent_since and metadata_since. Successful TorBox lists missing a tracked hash start a 10-minute absence timer; gateway cached availability can win first. metaDL without progress fails after 30 minutes; progress/leaving metaDL resets its timer. Listing errors back off, not new absence observations. Existing 6-hour stall and 24-hour total limits remain.",
-    "Timed-out gateway probes now create detailed state pending and honest unconfirmed-start logs; accepted probes create downloading. New failure reasons vanished and metadata_stuck reach schemas, OpenAPI and events. messages.ts/view.ts extract helpers from DownloadService.",
-    "Web player 202 handoff and title badges say Waiting for TorBox for pending, with no fabricated progress; live download progress confirms a still-pending snapshot. FinishSetup cancels its wait and stops further health checks after unmount.",
-    "Desktop replaces custom toast XML with Electron native action buttons and indexed event binding. Dismiss/Got it/unknown buttons do nothing; body uses the first action; one interaction is handled once.",
-    "Source-proxy pumpRange exempts header and tail-index regions from time/byte-gap holds so a held subtitle extractor can open input. Middle-file reads remain held."
+    "ReadAheadPacing supplies actual and anticipated lead separately. Closing anticipates 1.5 seconds of recent encoding speed plus the extra duration of 8 MiB in-flight input beyond the fixed four seconds; reopening still uses actual lead strictly below 120 seconds by default. Offline modeled tests cover a 184-second finished-lead gate, not a production hard guarantee.",
+    "SourceProxy caps extractor byte lead at min(effective per-source cache budget / 2, 16 MiB), releasing at half that distance. Header/tail exemptions, owner/run isolation and time holds remain. resumeAfterHold.test.ts uses 256 MiB global and per-source caps and asserts renewed upstream reads, not a measured download-rate curve.",
+    "New readAheadNotes.ts logs actual window state transitions with sessionId, state, rounded actual lead, process RSS/heap/external/arrayBuffers and cache MiB/block count. A one-second throttle is shared per proxy, sampling memory only when a line is emitted; reset of a waiting window can emit reopened.",
+    "The remaining diff is the previous generated-wiki commit, not new application work."
   ],
   "coverage": {
     "apps": {
@@ -78,8 +77,8 @@
     },
     "automationAndInfrastructure": "scripts and scripts/lib: how-to-contribute/tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: overview/getting-started.md; .factory/skills: tooling/testing; docs/runbooks: debugging/reference."
   },
-  "pagePolicy": "Retain all 56 pages. No new or removed subsystem. Keep lore unchanged for five minor fixes. No maintainers page for solo human ownership. Foundation pages reviewed before delegation. Update current stats, preserve explicit older snapshot dates elsewhere. Audit referenced paths for deletions.",
-  "validationPlan": "Existing format:check, docs:check and agents:check where tools are available; explicit wiki headings, links/anchors, source paths, pageOrder, index, depth, size and Mermaid audit because normal docs tooling excludes generated wiki. Application, GPU, live and Electron tests are unnecessary for generated docs.",
+  "pagePolicy": "Retain all 56 pages. No new or removed subsystem after directory reconciliation. Preserve unaffected pages byte-for-byte and keep lore unchanged for focused pacing fixes. No maintainers page for solo human ownership. Foundation reviewed before delegation. Update overview revision/glossary and architecture inventory; domain pages network/source-proxy/subtitles, logging and statistics. Historical snapshots remain explicitly dated.",
+  "validationPlan": "Existing format:check passed through corepack pnpm; docs:check and agents:check entry scripts passed. Add a generated-wiki-specific structural/link/source/Mermaid audit because normal checks exclude generated wiki. No app, GPU or live tests for docs-only generation. Corepack resolved pnpm 12.21.0 and provisioned locked dependencies automatically.",
   "preflight": {
     "factoryUpload": "allowed",
     "fullHistory": true,

@@ -43,13 +43,23 @@ graph LR
 
 ## Read-ahead and feedback
 
-`leadSeconds` in `apps/server/src/network/readAhead.ts` uses the end of the head segment minus playhead. A window holds at its threshold and resumes **strictly below** the resume point. Start/seek/restart resets filling.
+`leadSeconds` in `apps/server/src/network/readAhead.ts` uses the end of the last finished segment minus playhead. `ReadAheadPacing` in `apps/server/src/playback/readAheadPacing.ts` clamps that playhead to at least the current encoder run's start. A window closes on **anticipated lead**, but resumes on **actual lead strictly below** the resume point. Start/seek/restart resets filling.
 
-`encoderWindowSec` in `apps/server/src/network/readAhead.ts` subtracts a **four-second pipeline allowance**. Defaults therefore hold owned readers at **176 seconds**, then resume below 120. This is intentional headroom, not a configuration mismatch.
+`encoderWindowSec` in `apps/server/src/network/readAhead.ts` subtracts a **four-second pipeline allowance**, with a minimum threshold of one second. At the defaults, **176 seconds is the anticipated closing threshold, not a fixed actual lead at which reads stop**. `holdLeadSec` computes:
 
-`ReadAheadPacing` in `apps/server/src/playback/readAheadPacing.ts` feeds progress, requested/reported position and recent speed to the source handle. Subtitle reach includes the latest video segment request. `ReaderHolds` in `apps/server/src/sourceproxy/readerHolds.ts` keeps viewers independent even when their bytes are shared.
+```text
+sourceBytesPerSec = source.sizeBytes / probe.durationSec
+pipelineAllowanceSec = max(4, 8 MiB / sourceBytesPerSec)
+closeLeadSec = actualLeadSec + max(0, recentSpeed) * 1.5 + (pipelineAllowanceSec - 4)
+```
 
-A separate cache-sized byte-gap bound keeps extractor data from evicting what its encoder still needs. In the file's middle, held remote stretches end at block boundaries and wait; cached bytes also obey holds. Header and tail-index reads bypass the pump's time/byte-gap hold wait so a held demuxer can open its input (`apps/server/src/sourceproxy/serve.ts`). The exact edge condition is `pos < headTarget` or `pos >= Math.max(headTarget, size - TAIL_BYTES)`, where headTarget is at most **16 MiB** and TAIL_BYTES is **8 MiB** (`apps/server/src/sourceproxy/sourceEntry.ts`). This exemption is checked per pump iteration; it does not disable remote-byte accounting, aggregate limits, finite extractor pacing or discard cuts. See [source proxy](source-proxy.md) for range boundaries and test limits. These controls differ from [disk parking](playback/lifecycle.md).
+The source rate is a whole-file average, not a measured instantaneous bitrate; unknown/nonpositive source rate falls back to the four-second allowance. The **8 MiB** models buffered input and **1.5 seconds** allows for progress-report latency. Recent speed uses output-time deltas over a roughly four-second sample window, requires at least **1.5 seconds** of samples and is zero while unknown; it is not FFmpeg's whole-run average. A new encoder run clears those samples. Reopening still uses actual lead below **120 seconds**, even if anticipated lead remains above the closing threshold.
+
+`apps/server/test/network/readAhead.test.ts` models once-per-second reports, several report offsets, 8 MiB in flight and roughly 7/25/35 Mbps sources at 8.4×/2.4×/1.7× encoding speed. Its **184-second finished-lead assertion is offline model evidence, not a real-world hard ceiling**. `apps/server/test/playback/readAheadPacing.test.ts` checks that actual and predicted values reach the source handle, including low-bitrate and unknown-speed cases.
+
+`ReaderHolds` in `apps/server/src/sourceproxy/readerHolds.ts` keeps viewers independent even when their bytes are shared. [Subtitle time windows](playback/subtitles.md) still use each run's read head relative to player reach, including the latest video segment request, without this encoder prediction. Encoder window transitions produce URL-free memory/cache notes through `apps/server/src/sourceproxy/readAheadNotes.ts`; see [logging](../how-to-monitor/logging.md) for fields, scope and throttling.
+
+A separate byte-gap bound keeps extractor data near its own encoder: hold strictly beyond **min(effective per-source cache budget / 2, 16 MiB)**, release at/below half that distance (**16/8 MiB** by default). This both limits cache eviction of unread encoder bytes and prevents a large extractor cache lead from masking renewed upstream demand after reopening. In the file's middle, held remote stretches end at block boundaries and wait; cached bytes also obey holds. Header and tail-index reads bypass the pump's time/byte-gap hold wait so a held demuxer can open its input (`apps/server/src/sourceproxy/serve.ts`). The exact edge condition is `pos < headTarget` or `pos >= Math.max(headTarget, size - TAIL_BYTES)`, where headTarget is at most **16 MiB** and TAIL_BYTES is **8 MiB** (`apps/server/src/sourceproxy/sourceEntry.ts`). This exemption is checked per pump iteration; it does not disable remote-byte accounting, aggregate limits, finite extractor pacing or discard cuts. See [source proxy](source-proxy.md) for range boundaries and test limits. These controls differ from [disk parking](playback/lifecycle.md).
 
 ## LAN addresses and mDNS
 
@@ -69,24 +79,29 @@ Discovery is best effort, can be disabled with `HOMESTREAM_MDNS=off`, and does n
 
 `buildNetworkCheck` in `apps/server/src/network/check.ts` warns after the cap has continuously bound for more than **30 seconds**; it does not turn normal limiting into an error. [Health](health.md) separately interprets falling-behind encoding.
 
-Change fairness in `apps/server/src/network/downloadGate.ts`, window rules in `apps/server/src/network/readAhead.ts`, settings in `apps/server/src/network/limits.ts`, and address heuristics in `apps/server/src/net.ts` plus discovery regression tests. See [playback](playback/index.md) and [configuration](../reference/configuration.md).
+Change fairness in `apps/server/src/network/downloadGate.ts`, prediction/window rules in `apps/server/src/network/readAhead.ts`, feedback and recent-speed sampling in `apps/server/src/playback/readAheadPacing.ts`, settings in `apps/server/src/network/limits.ts`, and address heuristics in `apps/server/src/net.ts` plus discovery regression tests. Keep modeled lead tests separate from live measurements. See [playback](playback/index.md) and [configuration](../reference/configuration.md).
 
 ## Key source files
 
-| File                                                  | Purpose                                             |
-| ----------------------------------------------------- | --------------------------------------------------- |
-| `apps/server/src/network/downloadGate.ts`             | Cap, risk guard and shared extractor rate           |
-| `apps/server/src/network/tokenBucket.ts`              | Whole-chunk token accounting                        |
-| `apps/server/src/network/limits.ts`                   | Validation and unit conversion                      |
-| `apps/server/src/network/readAhead.ts`                | Hysteresis/pipeline allowance                       |
-| `apps/server/src/sourceproxy/serve.ts`                | Holds with header/tail pump exemption               |
-| `apps/server/test/sourceproxy/sessionSharing.test.ts` | Tail-index exemption and middle-file byte lead      |
-| `apps/server/src/net.ts`                              | Filter/rank addresses and normalize request IP      |
-| `apps/server/src/discovery.ts`                        | Filtered mDNS record publication                    |
-| `apps/server/test/network/bandwidthPriority.test.ts`  | Low-lead protection with fake clocks                |
-| `apps/server/test/network/extractorShare.test.ts`     | Aggregate share, risk suspension and no reservation |
-| `apps/server/test/net.test.ts`                        | Virtual/link-local fallback and ranking             |
-| `apps/server/test/discovery.test.ts`                  | A/AAAA replacement and advertised records           |
+| File                                                   | Purpose                                             |
+| ------------------------------------------------------ | --------------------------------------------------- |
+| `apps/server/src/network/downloadGate.ts`              | Cap, risk guard and shared extractor rate           |
+| `apps/server/src/network/tokenBucket.ts`               | Whole-chunk token accounting                        |
+| `apps/server/src/network/limits.ts`                    | Validation and unit conversion                      |
+| `apps/server/src/network/readAhead.ts`                 | Actual/predicted hysteresis and pipeline allowance  |
+| `apps/server/src/playback/readAheadPacing.ts`          | Source-rate estimate and recent-speed feedback      |
+| `apps/server/src/sourceproxy/leadBound.ts`             | Owner-specific capped extractor byte lead           |
+| `apps/server/test/network/readAhead.test.ts`           | Prediction, hysteresis and modeled finished lead    |
+| `apps/server/test/playback/readAheadPacing.test.ts`    | Actual/predicted source-handle feedback             |
+| `apps/server/test/sourceproxy/resumeAfterHold.test.ts` | Bounded cached lead before upstream reads resume    |
+| `apps/server/src/sourceproxy/serve.ts`                 | Holds with header/tail pump exemption               |
+| `apps/server/test/sourceproxy/sessionSharing.test.ts`  | Tail-index exemption and middle-file byte lead      |
+| `apps/server/src/net.ts`                               | Filter/rank addresses and normalize request IP      |
+| `apps/server/src/discovery.ts`                         | Filtered mDNS record publication                    |
+| `apps/server/test/network/bandwidthPriority.test.ts`   | Low-lead protection with fake clocks                |
+| `apps/server/test/network/extractorShare.test.ts`      | Aggregate share, risk suspension and no reservation |
+| `apps/server/test/net.test.ts`                         | Virtual/link-local fallback and ranking             |
+| `apps/server/test/discovery.test.ts`                   | A/AAAA replacement and advertised records           |
 
 ## Measured scope
 
