@@ -1,8 +1,8 @@
 {
   "mode": "incremental",
-  "commitHash": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
-  "baseCommit": "0b766e2f21a19468e04d0a9c7352c635a4357c87",
-  "reason": "1706 changed lines, including 1183 outside generated wiki. Retain the 56-page tree.",
+  "commitHash": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
+  "baseCommit": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
+  "reason": "1418 changed lines, 620 outside generated wiki. Retain the existing 56-page tree.",
   "create": [],
   "remove": [],
   "update": [
@@ -10,7 +10,7 @@
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "brief": "Update source revision; preserve introduction.",
+      "brief": "Refresh source revision; preserve introduction.",
       "sources": ["apps/server/src/app.ts"],
       "related": ["overview/architecture.md"]
     },
@@ -18,144 +18,84 @@
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "brief": "Clarify unconfirmed start and refresh measured inventory.",
-      "sources": ["apps/server/src/downloads/service.ts"],
-      "related": ["by-the-numbers.md"]
+      "brief": "Refresh physical-line and file inventories from the statistics report; describe anticipatory read-ahead briefly without duplicating domain pages.",
+      "sources": ["apps/server/src/playback/readAheadPacing.ts"],
+      "related": ["by-the-numbers.md", "systems/network.md"]
     },
     {
       "path": "overview/glossary.md",
       "title": "Glossary",
       "criticality": "normal",
-      "brief": "Add unconfirmed-start and metaDL vocabulary.",
-      "sources": ["packages/shared/src/downloads.ts"],
-      "related": ["features/downloads.md"]
+      "brief": "Define anticipated lead and capped extractor byte-gap control.",
+      "sources": ["apps/server/src/network/readAhead.ts", "apps/server/src/sourceproxy/leadBound.ts"],
+      "related": ["systems/network.md"]
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "brief": "Recompute prior committed-tree metrics, activity, bot attribution, import chains and exports.",
+      "brief": "Recompute committed-tree statistics, activity, bot-attributed commits, import chains and exports; retain reproducible definitions.",
       "sources": ["apps", "packages", "scripts", ".github"],
       "related": ["overview/architecture.md"]
     },
     {
-      "path": "features/downloads.md",
-      "title": "Downloads",
+      "path": "systems/network.md",
+      "title": "Network controls",
       "criticality": "critical",
-      "brief": "Explain honest start states, persistent absence/metadata windows, resets, error backoff and existing confirmation rules.",
-      "sources": ["apps/server/src/downloads", "apps/server/test/integration/downloads-vanished.test.ts"],
-      "related": ["packages/shared.md"]
+      "brief": "Explain predictive close lead versus actual resume lead, in-flight/latency constants, and small extractor bound; distinguish modeled test evidence from live measurements.",
+      "sources": [
+        "apps/server/src/network/readAhead.ts",
+        "apps/server/src/playback/readAheadPacing.ts",
+        "apps/server/test/network/readAhead.test.ts"
+      ],
+      "related": ["systems/source-proxy.md", "systems/playback/subtitles.md"]
     },
     {
       "path": "systems/source-proxy.md",
       "title": "Source proxy",
       "criticality": "normal",
-      "brief": "Document header/tail hold exemption and middle-file pacing.",
-      "sources": ["apps/server/src/sourceproxy/serve.ts"],
-      "related": ["systems/network.md"]
-    },
-    {
-      "path": "systems/network.md",
-      "title": "Network controls",
-      "criticality": "normal",
-      "brief": "Qualify hold rules with edge-region exemption.",
-      "sources": ["apps/server/src/sourceproxy/serve.ts"],
-      "related": ["systems/source-proxy.md"]
+      "brief": "Replace obsolete 192/96 MiB extractor thresholds with min(cache/2,16 MiB) and half-distance resume; link transition logging and document renewed upstream-read assertions with explicit 256 MiB test budgets.",
+      "sources": [
+        "apps/server/src/sourceproxy/proxy.ts",
+        "apps/server/src/sourceproxy/leadBound.ts",
+        "apps/server/src/sourceproxy/readerHolds.ts",
+        "apps/server/test/sourceproxy/resumeAfterHold.test.ts"
+      ],
+      "related": ["systems/network.md", "how-to-monitor/logging.md"]
     },
     {
       "path": "systems/playback/subtitles.md",
       "title": "Subtitles",
       "criticality": "normal",
-      "brief": "Explain demuxer bootstrap edge reads despite held extraction.",
-      "sources": ["apps/server/src/sourceproxy/serve.ts"],
+      "brief": "Update extractor lead-gap semantics without changing header/tail exemptions, time holds or local pacing.",
+      "sources": ["apps/server/src/sourceproxy/leadBound.ts", "apps/server/src/sourceproxy/proxy.ts"],
       "related": ["systems/source-proxy.md"]
     },
     {
-      "path": "apps/web/index.md",
-      "title": "Web app",
+      "path": "how-to-monitor/logging.md",
+      "title": "Logging",
       "criticality": "normal",
-      "brief": "Refresh current inventory and linked behavior summaries.",
-      "sources": ["apps/web/src"],
-      "related": ["apps/web/screens.md"]
-    },
-    {
-      "path": "apps/web/screens.md",
-      "title": "Screens",
-      "criticality": "normal",
-      "brief": "Distinguish unconfirmed badge from downloading.",
-      "sources": ["apps/web/src/components/DownloadBadge.tsx"],
-      "related": ["features/downloads.md"]
-    },
-    {
-      "path": "apps/web/player.md",
-      "title": "Player",
-      "criticality": "normal",
-      "brief": "Explain pending 202 handoff wording and shared helper.",
-      "sources": ["apps/web/src/pages/PlayerPage.tsx"],
-      "related": ["features/downloads.md"]
-    },
-    {
-      "path": "apps/web/data-and-startup.md",
-      "title": "Data and startup",
-      "criticality": "normal",
-      "brief": "Describe live progress confirming pending detail snapshot.",
-      "sources": ["apps/web/src/events/usePendingDownload.ts"],
-      "related": ["apps/web/screens.md"]
-    },
-    {
-      "path": "apps/web/desktop-integration.md",
-      "title": "Desktop integration",
-      "criticality": "normal",
-      "brief": "Document cancellable setup wait and unmount boundaries.",
-      "sources": ["apps/web/src/desktop/FinishSetup.tsx"],
-      "related": ["apps/desktop/index.md"]
-    },
-    {
-      "path": "apps/desktop/index.md",
-      "title": "Desktop shell",
-      "criticality": "normal",
-      "brief": "Refresh inventory for extracted toast binding.",
-      "sources": ["apps/desktop/src"],
-      "related": ["apps/desktop/windows-and-ipc.md"]
-    },
-    {
-      "path": "apps/desktop/windows-and-ipc.md",
-      "title": "Windows and IPC",
-      "criticality": "critical",
-      "brief": "Replace obsolete XML account with indexed native buttons, no-op dismiss and once-only binding.",
+      "brief": "Document URL-free read-ahead close/reopen info lines, fields, process-wide memory scope, proxy-wide throttling and reset behavior.",
       "sources": [
-        "apps/desktop/src/notifications.ts",
-        "apps/desktop/src/toastBinding.ts",
-        "apps/desktop/src/shell/toasts.ts"
+        "apps/server/src/sourceproxy/readAheadNotes.ts",
+        "apps/server/src/sourceproxy/readerHolds.ts",
+        "apps/server/test/sourceproxy/readAheadNotes.test.ts"
       ],
-      "related": ["apps/web/desktop-integration.md"]
-    },
-    {
-      "path": "packages/shared.md",
-      "title": "Shared",
-      "criticality": "normal",
-      "brief": "Update detailed pending semantics and five failure reasons.",
-      "sources": ["packages/shared/src/downloads.ts"],
-      "related": ["features/downloads.md"]
-    },
-    {
-      "path": "api/index.md",
-      "title": "API",
-      "criticality": "normal",
-      "brief": "Clarify existing 202 envelope and additive failure enums; no new endpoint.",
-      "sources": ["docs/openapi.json", "packages/shared/src/downloads.ts"],
-      "related": ["features/downloads.md"]
-    },
-    {
-      "path": "reference/data-models.md",
-      "title": "Data models",
-      "criticality": "normal",
-      "brief": "Describe migration 5 nullable persistent timers and reset behavior.",
-      "sources": ["apps/server/src/db/migrations.ts", "apps/server/src/downloads/store.ts"],
-      "related": ["features/downloads.md"]
+      "related": ["systems/network.md", "systems/source-proxy.md"]
     }
   ],
   "keepUnchanged": [
+    "features/downloads.md",
+    "apps/web/index.md",
+    "apps/web/screens.md",
+    "apps/web/player.md",
+    "apps/web/data-and-startup.md",
+    "apps/web/desktop-integration.md",
+    "apps/desktop/index.md",
+    "apps/desktop/windows-and-ipc.md",
+    "packages/shared.md",
+    "api/index.md",
+    "reference/data-models.md",
     "overview/getting-started.md",
     "lore.md",
     "how-to-contribute/index.md",
@@ -186,7 +126,6 @@
     "deployment.md",
     "security.md",
     "how-to-monitor/index.md",
-    "how-to-monitor/logging.md",
     "how-to-monitor/metrics.md",
     "how-to-monitor/tracing.md",
     "how-to-monitor/alerting.md",

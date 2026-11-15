@@ -52,11 +52,15 @@ A useful unheld run within **120 seconds** ahead is waited for rather than dupli
 
 A failed run retries once from **20 seconds before committed head**, overlapping the failed run's coverage lag. A second failure marks unread intervals failed while leaving covered cues usable.
 
-`ExtractorWindows` in `apps/server/src/playback/extractorWindow.ts` applies time hysteresis per run. The default window holds at **176 seconds** ahead (configured 180 minus four seconds pipeline allowance) and resumes below **120 seconds**. The [source proxy](../source-proxy.md) separately bounds extractor byte lead over its own session's encoder; neither bound is merely a fixed rate.
+`ExtractorWindows` in `apps/server/src/playback/extractorWindow.ts` applies time hysteresis per run. Its default window holds at **176 seconds** of run read-head lead (configured 180 minus four seconds pipeline allowance) and resumes **strictly below 120 seconds**. Player reach includes the latest requested video segment. Unlike the encoder's [anticipated closing lead](../network.md), this per-run time window uses the actual read head; encoder prediction does not replace it.
+
+The [source proxy](../source-proxy.md) separately holds an owned extractor run **strictly beyond min(effective per-source cache budget / 2, 16 MiB)** ahead of its own owner's most recently advanced main reader and releases it at/below half that distance: **16/8 MiB by default**. The effective budget is the smaller global/per-source cap (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/sourceproxy/leadBound.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`). This prevents both cache-driven refetching and an excessive cached lead that could hide renewed upstream demand when the encoder window reopens. Owners and run IDs remain isolated; without a main reader there is no byte-gap hold. Neither this byte bound nor the time window is merely a fixed rate.
 
 A hold must not prevent the demuxer from opening its input. `pumpRange` in `apps/server/src/sourceproxy/serve.ts` skips its time/byte-gap wait in the header (`pos < headTarget`, at most **16 MiB**) and tail-index region (`pos >= Math.max(headTarget, size - TAIL_BYTES)`, with **8 MiB** TAIL_BYTES from `apps/server/src/sourceproxy/sourceEntry.ts`). The comparison uses the current pump position, not the original request start, and applies even when edge bytes need remote fetching. Middle-file reads remain held, including cached reads; applicable remote pacing and the shared bandwidth gate remain in force at the edges.
 
 `apps/server/test/sourceproxy/sessionSharing.test.ts` verifies an extractor gets matching final 4 MiB index bytes from a 400 MiB source while its slower encoder is still far behind. Its middle-file lead tests and `apps/server/test/sourceproxy/readAheadWindow.test.ts` retain byte-gap/time-hold coverage. The header and time-held edge cases follow from the shared pump condition, not dedicated assertions in those tests.
+
+`apps/server/test/sourceproxy/resumeAfterHold.test.ts` checks that the encoder reaches upstream again after consuming a bounded cached lead, with stub traffic and explicit 256 MiB budgets, not a live throughput measurement. Encoder window-transition diagnostics are documented in [logging](../../how-to-monitor/logging.md).
 
 Local rate policy in `apps/server/src/playback/extractorSchedule.ts` proposes:
 
@@ -85,7 +89,7 @@ Text cues survive video restarts. Bitmap/audio changes require a checked seriali
 
 ## Modification entry points
 
-Change automatic defaults separately from explicit validation. Preserve interval coverage when changing extraction and actual-exit slot retention when changing launch/retry. Keep unread readiness in handoff rather than synthesizing empty cues. Cross-runtime response changes belong in [shared contracts](../../packages/shared.md).
+Change automatic defaults separately from explicit validation. Preserve interval coverage when changing extraction and actual-exit slot retention when changing launch/retry. Keep unread readiness in handoff rather than synthesizing empty cues. Change per-run time hysteresis in `apps/server/src/playback/extractorWindow.ts` separately from the byte bound in `apps/server/src/sourceproxy/leadBound.ts`; retain owner isolation and header/tail bootstrap. Cross-runtime response changes belong in [shared contracts](../../packages/shared.md).
 
 ## Key source files
 
@@ -97,8 +101,11 @@ Change automatic defaults separately from explicit validation. Preserve interval
 | `apps/server/src/playback/subtitleStore.ts`                  | Session cues/coverage                               |
 | `apps/server/src/playback/subtitleHandoff.ts`                | HTTP readiness and failure behavior                 |
 | `apps/server/src/playback/extractorSchedule.ts`              | Heavy-source warm-up and rate policy                |
+| `apps/server/src/playback/extractorWindow.ts`                | Per-run actual read-head time hysteresis            |
+| `apps/server/src/sourceproxy/leadBound.ts`                   | Capped extractor-to-owner-encoder byte gap          |
 | `apps/server/src/sourceproxy/serve.ts`                       | Edge-region bootstrap despite holds                 |
 | `apps/server/test/sourceproxy/sessionSharing.test.ts`        | Tail-index exemption and byte-lead regression tests |
+| `apps/server/test/sourceproxy/resumeAfterHold.test.ts`       | Bounded cached lead before upstream restart         |
 | `apps/server/test/playback/defaultSubtitle.test.ts`          | Language, forced and text/bitmap defaults           |
 | `apps/server/test/playback/subtitleExtractorPreroll.test.ts` | Segment-aligned start and retry overlap             |
 | `apps/server/test/playback/extractorSchedule.test.ts`        | Rate/burst/worker limits                            |
