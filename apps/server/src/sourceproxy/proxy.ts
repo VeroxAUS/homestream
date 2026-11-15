@@ -10,6 +10,7 @@ import type { ProbeResult, ProbeRunner } from '../playback/probe.js';
 import type { UrlResolver } from '../playback/resolveUrl.js';
 import { BlockCache, GLOBAL_CAP_BYTES, PER_SOURCE_CAP_BYTES, type BlockCacheStats } from './blockCache.js';
 import { InputCuts } from './inputCuts.js';
+import { EXTRACTOR_MAX_LEAD_BYTES } from './leadBound.js';
 import { createReadAheadNotes } from './readAheadNotes.js';
 import { newCounters, serveSource, type ProxyCounters } from './serve.js';
 import { PREFETCH_OWNER, SourceEntry, type Consumer, type ReaderRef } from './sourceEntry.js';
@@ -249,7 +250,7 @@ export class SourceProxy {
         readAheadSec: this.options.readAheadSec ?? DEFAULT_READ_AHEAD_SEC,
         resumeSec: this.options.readAheadResumeSec ?? DEFAULT_READ_AHEAD_RESUME_SEC,
         newToken: newKey,
-        extractorLeadBytes: this.cache.perSourceBudgetBytes / 2,
+        extractorLeadBytes: Math.min(this.cache.perSourceBudgetBytes / 2, EXTRACTOR_MAX_LEAD_BYTES),
       },
     );
     entry.firstOwner = owner;

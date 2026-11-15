@@ -1,3 +1,11 @@
+/**
+ * The furthest an extractor may read past its session's encoder (the hold distance of `ExtractorLeadBound`), whatever the
+ * cache size. Bytes the extractor stores beyond the encoder are served to the encoder from memory when its read-ahead
+ * window reopens, with no download: a larger lead lets the encoder consume them and close the window again before the
+ * session's download rate has risen. About the 8 MiB the encoder itself keeps in flight, twice over.
+ */
+export const EXTRACTOR_MAX_LEAD_BYTES = 16 * 1024 * 1024;
+
 /** Who a reader is. One object stands for one loopback request for its whole life. */
 export interface LeadReader {
   consumer: 'main' | 'extractor';

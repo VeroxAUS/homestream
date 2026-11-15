@@ -1,59 +1,9 @@
-import http from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SIZE } from '../../src/sourceproxy/blockCache.js';
 import type { SourceHandle } from '../../src/sourceproxy/proxy.js';
-import { MB, Reader, acquireSettled, installRigHooks, rig, sleep, upstreamRead } from './bandwidthRig.js';
-import { expectedBytes } from './stubCdn.js';
+import { MB, PacedReader, Reader, acquireSettled, installRigHooks, rig, sleep, upstreamRead } from './bandwidthRig.js';
 
 installRigHooks();
-
-/** Reads a range at a fixed pace, like an encoder that consumes a few MB per second of media. */
-class PacedReader {
-  received = 0;
-  ended = false;
-  failed = false;
-  private readonly chunks: Buffer[] = [];
-  private req: http.ClientRequest;
-
-  constructor(
-    url: string,
-    private readonly start: number,
-    end: number,
-    private readonly bytesPerSec: number,
-    private readonly keep = false,
-  ) {
-    this.req = http.get(url, { headers: { Range: `bytes=${start}-${end}` }, agent: false }, (res) => {
-      const began = Date.now();
-      res.on('data', (chunk: Buffer) => {
-        this.received += chunk.length;
-        if (this.keep) this.chunks.push(chunk);
-        // Timers tick in ~15 ms steps on Windows, so pace against the running total rather than per chunk.
-        const ahead = began + (this.received / this.bytesPerSec) * 1000 - Date.now();
-        if (ahead < 15) return;
-        res.pause();
-        setTimeout(() => res.resume(), ahead);
-      });
-      res.on('end', () => {
-        this.ended = true;
-      });
-      res.on('error', () => {
-        this.failed = true;
-      });
-    });
-    this.req.on('error', () => {
-      this.failed = true;
-    });
-  }
-
-  stop(): void {
-    this.req.destroy();
-  }
-
-  matches(): boolean {
-    const data = Buffer.concat(this.chunks);
-    return data.equals(expectedBytes(this.start, this.start + data.length - 1));
-  }
-}
 
 async function finished(...readers: Array<{ ended: boolean; failed: boolean }>): Promise<void> {
   const deadline = Date.now() + 60_000;
