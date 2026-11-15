@@ -1,5 +1,12 @@
 import { ReadAheadWindow, type ReadAheadState } from '../network/readAhead.js';
 
+/** One owner's window changed state; leadSec is the lead that did it. */
+export interface ReadAheadChange {
+  owner: string;
+  state: ReadAheadState;
+  leadSec: number;
+}
+
 interface OwnerReaders {
   token: string;
   lead: number;
@@ -24,6 +31,7 @@ export class ReaderHolds {
     private readonly newToken: () => string,
     /** Called when a hold may have been released. */
     private readonly onRelease: () => void,
+    private readonly onChange?: (change: ReadAheadChange) => void,
   ) {}
 
   tokenFor(owner: string): string {
@@ -37,15 +45,20 @@ export class ReaderHolds {
   setLead(owner: string, leadSec: number, closeLeadSec = leadSec): void {
     const readers = this.ensure(owner);
     readers.lead = leadSec;
-    if (readers.window.update(leadSec, closeLeadSec)) this.onRelease();
+    if (readers.window.update(leadSec, closeLeadSec)) {
+      this.onRelease();
+      this.onChange?.({ owner, state: readers.window.state, leadSec });
+    }
   }
 
   /** A start, seek or encoder restart: measured from here, so the next stretch downloads freely again. */
   reset(owner: string): void {
     const readers = this.ensure(owner);
+    const before = readers.window.state;
     readers.lead = 0;
     readers.window.reset();
     this.onRelease();
+    if (before !== readers.window.state) this.onChange?.({ owner, state: readers.window.state, leadSec: 0 });
   }
 
   leadOf(owner: string): number {

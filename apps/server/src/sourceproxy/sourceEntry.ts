@@ -15,7 +15,7 @@ import { RateMeter } from '../network/rateMeter.js';
 import { encoderWindowSec, type ReadAheadState } from '../network/readAhead.js';
 import { BLOCK_SIZE, type Block, type BlockOwner } from './blockCache.js';
 import { ExtractorLeadBound } from './leadBound.js';
-import { ReaderHolds } from './readerHolds.js';
+import { ReaderHolds, type ReadAheadChange } from './readerHolds.js';
 import type { UpstreamClient } from './upstream.js';
 import {
   isAbort,
@@ -54,6 +54,8 @@ export interface SourceEntryDeps {
   onRefresh: () => void;
   /** Called when re-resolving the gateway link failed (the readers then fail with the original error). */
   onRefreshFailed?: (error: unknown) => void;
+  /** Called when an owner's read-ahead window closes or reopens. */
+  onReadAheadChange?: (change: ReadAheadChange) => void;
   /** The shared cap on upstream bytes. */
   gate: DownloadGate;
   readAheadSec: number;
@@ -151,8 +153,12 @@ export class SourceEntry implements BlockOwner {
     this.cdnUrl = resolvedUrl;
     this.keys = keys;
     this.local = !/^https?:\/\//i.test(resolvedUrl);
-    this.holds = new ReaderHolds(encoderWindowSec(deps.readAheadSec), deps.resumeSec, deps.newToken, () =>
-      this.wakeHolds(),
+    this.holds = new ReaderHolds(
+      encoderWindowSec(deps.readAheadSec),
+      deps.resumeSec,
+      deps.newToken,
+      () => this.wakeHolds(),
+      deps.onReadAheadChange,
     );
     this.leadBound = new ExtractorLeadBound(
       deps.extractorLeadBytes,
