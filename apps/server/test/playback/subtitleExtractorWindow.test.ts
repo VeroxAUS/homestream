@@ -92,6 +92,11 @@ async function headReaches(extractor: SubtitleExtractor, sec: number): Promise<v
   await until(() => extractor.readPositions.some((run) => run.headSec >= sec));
 }
 
+/** Waits until the extractor has noticed the head of one run. */
+async function runReaches(extractor: SubtitleExtractor, runId: number, sec: number): Promise<void> {
+  await until(() => extractor.readPositions.some((run) => run.runId === runId && run.headSec >= sec));
+}
+
 describe('extractor hold by read position', () => {
   it('holds a run whose head is a full window past the player even though the run started far ahead of it', async () => {
     const rig = boot();
@@ -175,15 +180,76 @@ describe('extractor after a far seek', () => {
     await until(() => rig.alive().length === 0);
   });
 
-  it('does not start a run for a position far behind the player', async () => {
+  it('serves a request far behind the player: a run starts at that position and is not stopped for being behind', async () => {
     const rig = boot();
-    rig.extractor.start(0);
-    rig.movePlayhead(1000);
-    rig.extractor.noteSeek(1000);
-    await until(() => rig.alive().length === 0);
-    rig.extractor.ensureExtractorFor(100);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(rig.children).toHaveLength(1);
+    rig.movePlayhead(1800);
+    rig.extractor.start(1800);
+    (rig.children[0] as Child).moveHead(1900);
+    await headReaches(rig.extractor, 1900);
+
+    rig.extractor.ensureExtractorFor(400);
+    await until(() => rig.children.length === 2);
+    const demand = rig.children[1] as Child;
+    expect(demand.ss).toBe(400 - PREROLL_SEC);
+
+    demand.moveHead(430);
+    await runReaches(rig.extractor, 2, 430);
+    rig.extractor.syncHolds();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(demand.handle.running).toBe(true);
+    expect(rig.holds.get(2)).not.toBe(true);
+  });
+
+  it('moves the extractor to a request far behind the player when only one extractor may run', async () => {
+    const rig = boot({ maxRuns: 1 });
+    rig.movePlayhead(1800);
+    rig.extractor.start(1800);
+    (rig.children[0] as Child).moveHead(1900);
+    await headReaches(rig.extractor, 1900);
+
+    rig.extractor.ensureExtractorFor(400);
+    await until(() => rig.children.length === 2);
+    expect((rig.children[1] as Child).ss).toBe(400 - PREROLL_SEC);
+    expect(rig.peakAlive()).toBe(1);
+  });
+
+  it('lets a run behind the player follow later requests, and stops it once it waits a window past the last one', async () => {
+    const rig = boot();
+    rig.movePlayhead(1800);
+    rig.extractor.start(1800);
+    rig.extractor.ensureExtractorFor(400);
+    await until(() => rig.children.length === 2);
+    const demand = rig.children[1] as Child;
+
+    demand.moveHead(450);
+    await runReaches(rig.extractor, 2, 450);
+    rig.extractor.ensureExtractorFor(520);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rig.children).toHaveLength(2);
+
+    demand.moveHead(520 + HOLD - 10);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(demand.handle.running).toBe(true);
+
+    demand.moveHead(520 + HOLD + 20);
+    await until(() => !demand.handle.running);
+  });
+
+  it('measures a run kept behind the player from the player again after a seek', async () => {
+    const rig = boot();
+    rig.movePlayhead(1800);
+    rig.extractor.start(1800);
+    rig.extractor.ensureExtractorFor(400);
+    await until(() => rig.children.length === 2);
+    const demand = rig.children[1] as Child;
+    demand.moveHead(430);
+    await runReaches(rig.extractor, 2, 430);
+
+    rig.movePlayhead(420);
+    rig.extractor.noteSeek(420);
+    demand.moveHead(420 + HOLD + 10);
+    await until(() => rig.holds.get(2) === true);
+    expect(demand.handle.running).toBe(true);
   });
 
   it('waits for the stopped run to leave before starting the replacement when only one extractor may run', async () => {

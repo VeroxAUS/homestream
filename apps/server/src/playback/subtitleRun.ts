@@ -133,6 +133,8 @@ export class SubtitleRun {
   committedHeadSec: number;
   /** Source time the run is expected to read quickly (see `SubtitleExtractor.bursting`); defaults to a fixed distance past `ss`. */
   needSec: number;
+  /** Set on a run started for a request far behind the player: the newest second requested of it (see `ExtractorWindows`). */
+  anchorSec?: number;
   /** The run read to the end of the file. */
   done = false;
   stopRequested = false;

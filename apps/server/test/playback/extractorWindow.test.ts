@@ -66,6 +66,15 @@ describe('ExtractorWindows', () => {
     expect(windows.sync([{ id: 1, headSec: 90 }], 100)).toEqual([]);
   });
 
+  it('measures a run that serves a request from its anchor, not from the player', () => {
+    const { windows, holds } = rig();
+    // The player is at 3600; a request for 400 started this run, so reading near 400 is neither behind nor held.
+    expect(windows.sync([{ id: 1, headSec: 430, anchorSec: 400 }], 3600)).toEqual([]);
+    expect(holds.has(1)).toBe(false);
+    windows.sync([{ id: 1, headSec: 400 + HOLD, anchorSec: 400 }], 3600);
+    expect(holds.get(1)).toBe(true);
+  });
+
   it('releases the hold of a run that is gone', () => {
     const { windows, holds } = rig();
     windows.sync([{ id: 1, headSec: 400 }], 0);

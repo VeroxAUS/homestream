@@ -4,6 +4,8 @@ export interface WindowedRun {
   id: number;
   /** Newest source second the run has read. */
   headSec: number;
+  /** The newest second a request asked this run for, set on a run started far behind the player; the run is measured from there instead of from the player. */
+  anchorSec?: number;
 }
 
 export interface ExtractorWindowOptions {
@@ -31,7 +33,7 @@ export class ExtractorWindows {
   sync(runs: Iterable<WindowedRun>, playheadSec: number): number[] {
     const behind: number[] = [];
     for (const run of runs) {
-      const lead = run.headSec - playheadSec;
+      const lead = run.headSec - (run.anchorSec ?? playheadSec);
       if (lead < -this.options.behindSec) {
         behind.push(run.id);
         continue;

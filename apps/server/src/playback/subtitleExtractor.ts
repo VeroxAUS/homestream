@@ -195,19 +195,29 @@ export class SubtitleExtractor {
    */
   noteSeek(sec: number): void {
     if (this.stopped) return;
-    for (const run of this.active()) if (!reaches(run, sec)) void run.stop();
+    for (const run of this.active()) {
+      if (!reaches(run, sec)) void run.stop();
+      else run.anchorSec = undefined;
+    }
     this.syncHolds();
+  }
+
+  /** True when a run started for `sec` would sit far behind the player, where nothing else is going to read. */
+  private farBehindPlayer(sec: number): boolean {
+    const playhead = this.options.readAhead?.playheadSec();
+    return playhead !== undefined && sec + NEAR_AHEAD_SEC < playhead;
   }
 
   /** Makes sure something is reading toward `sec`; a no-op when it is covered or an extractor is about to get there. */
   ensureExtractorFor(sec: number): void {
     if (this.stopped || this.gaveUp || this.options.tracks.length === 0) return;
     if (this.store.complete || this.store.segmentCovered(Math.floor(sec / 4))) return;
-    // A run started this far behind the player would be stopped again at once.
-    const playhead = this.options.readAhead?.playheadSec();
-    if (playhead !== undefined && sec + NEAR_AHEAD_SEC < playhead) return;
     // A run that started before `sec` covers it as soon as its head is a few seconds past; a second run there would only split the bandwidth.
-    if (this.active().some((run) => !this.isHeld(run) && reaches(run, sec))) return;
+    const reaching = this.active().find((run) => !this.isHeld(run) && reaches(run, sec));
+    if (reaching) {
+      if (reaching.anchorSec !== undefined) reaching.anchorSec = Math.max(reaching.anchorSec, sec);
+      return;
+    }
     if (this.launching) return;
     const ss = prerollStart(sec);
     this.launching = this.launchSeek(sec, ss).finally(() => {
@@ -244,7 +254,10 @@ export class SubtitleExtractor {
     }
     if (this.stopped || this.gaveUp || this.slotsTaken() >= this.maxRuns) return;
     if (this.store.segmentCovered(Math.floor(sec / 4))) return;
-    this.launch('seek', ss, false).needSec = sec + BURST_AHEAD_SEC;
+    const run = this.launch('seek', ss, false);
+    run.needSec = sec + BURST_AHEAD_SEC;
+    // Measured from the player this run would be stopped as soon as it starts; it only has to deliver what was asked for.
+    if (this.farBehindPlayer(sec)) run.anchorSec = sec;
   }
 
   private launch(kind: RunKind, ss: number, retried: boolean): SubtitleRun {
@@ -308,7 +321,8 @@ export class SubtitleExtractor {
   /** A failed run is restarted once from shortly before where it stopped; the second failure ends extraction. */
   private recover(run: SubtitleRun, exit: EncoderExit): void {
     if (!run.retried) {
-      this.launch(run.kind, Math.max(0, Math.floor(run.committedHeadSec - RETRY_PREROLL_SEC)), true);
+      const retry = this.launch(run.kind, Math.max(0, Math.floor(run.committedHeadSec - RETRY_PREROLL_SEC)), true);
+      retry.anchorSec = run.anchorSec;
       return;
     }
     this.gaveUp = true;
@@ -338,13 +352,17 @@ export class SubtitleExtractor {
   /**
    * Holds the reads of every run whose read position is a full window past the player and releases them once the player
    * has caught up to within the resume lead. The distance is the run's head minus the player, whatever second the run
-   * started at, so a run left ahead of the player by a backward seek waits as well. A run far behind the player is stopped.
+   * started at, so a run left ahead of the player by a backward seek waits as well. A run far behind the player is stopped,
+   * except one started for a request there: it is measured from the newest second requested and stopped once it has read a
+   * full window past it, having delivered what was asked for.
    */
   syncHolds(): void {
     if (!this.windows || !this.options.readAhead) return;
     const active = this.active();
     const behind = this.windows.sync(active, this.options.readAhead.playheadSec());
-    for (const run of active) if (behind.includes(run.id)) void run.stop();
+    for (const run of active) {
+      if (behind.includes(run.id) || (run.anchorSec !== undefined && this.isHeld(run))) void run.stop();
+    }
   }
 
   /** True when the run is waiting at the end of the window. */
