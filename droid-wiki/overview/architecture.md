@@ -59,6 +59,8 @@ A `202` response does not always confirm a remote download: state `pending` mean
 
 Read-ahead pacing closes source reads using an anticipated lead that includes recent encoder speed and in-flight input, but reopens using the actual lead. For middle-file subtitle reads, the configured byte-gap hold distance is capped at 16 MiB ahead of their own encoder, reducing cached work that can hide renewed downloads (`apps/server/src/playback/readAheadPacing.ts`, `apps/server/src/network/readAhead.ts`, `apps/server/src/sourceproxy/proxy.ts`). See [network controls](../systems/network.md) and [source proxy](../systems/source-proxy.md).
 
+Uncovered subtitle requests far behind the player can start a separate bounded run. That run measures its time window from its newest requested second, then stops at the window rather than scanning the whole gap (`apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/extractorWindow.ts`). See [subtitles](../systems/playback/subtitles.md#scheduling-pacing-and-lifetimes) for reuse, retry, and seek behavior.
+
 ## Workspaces and languages
 
 | Workspace         | Responsibility                                                           |
@@ -68,9 +70,9 @@ Read-ahead pacing closes source reads using an anticipated lead that includes re
 | `apps/desktop`    | Electron windows, tray, server supervisor, IPC, and mini player          |
 | `packages/shared` | Zod contracts, desktop bridge, analytics catalog, flags, and sanitizers  |
 
-TypeScript and TSX implement the runtimes, JavaScript ESM implements repository scripts, CSS styles the UI, and YAML configures automation. The committed inventory has 65,697 physical TypeScript lines, 9,953 TSX lines, 5,916 JavaScript lines, and 3,439 CSS lines, including tests, blanks, and comments. [By the numbers](../by-the-numbers.md#size) defines exclusions and distinguishes physical lines from code-only LOC. Workspace membership comes from `pnpm-workspace.yaml`; apps must not import each other (`.dependency-cruiser.cjs`). Desktop and web communicate through shared bridge types rather than cross-app imports (`packages/shared/src/desktop.ts`).
+TypeScript and TSX implement the runtimes, JavaScript ESM implements repository scripts, CSS styles the UI, and YAML configures automation. The committed inventory has 65,794 physical TypeScript lines, 9,953 TSX lines, 5,916 JavaScript lines, and 3,439 CSS lines, including tests, blanks, and comments. [By the numbers](../by-the-numbers.md#size) defines exclusions and distinguishes physical lines from code-only LOC. Workspace membership comes from `pnpm-workspace.yaml`; apps must not import each other (`.dependency-cruiser.cjs`). Desktop and web communicate through shared bridge types rather than cross-app imports (`packages/shared/src/desktop.ts`).
 
-At `4a8eb2e`, the committed inventory contains 430 source files (38,633 physical lines) and 289 test/support files (46,189 lines), including root scripts. The four workspaces contribute 152 server, 165 web, 38 desktop, and 15 shared source files. This broad inventory includes CSS and development scripts; it is not a count of TypeScript modules or a test-coverage measurement. The linked statistics page defines exact exclusions.
+At `3294bf1`, the committed inventory contains 430 source files (38,655 physical lines) and 289 test/support files (46,264 lines), including root scripts. The four workspaces contribute 152 server, 165 web, 38 desktop, and 15 shared source files. This broad inventory includes CSS and development scripts; it is not a count of TypeScript modules or a test-coverage measurement. The linked statistics page defines exact exclusions.
 
 Catalog details include bounded cast and recommendation arrays in the shared contract. The server normalizes the extra TMDB payload into the existing details response, rather than requiring an extra client request (`packages/shared/src/catalog.ts`, `apps/server/src/tmdb/normalize.ts`). Browser-only choices such as hiding unfinished episode spoilers live outside SQLite (`apps/web/src/lib/spoilers.ts`).
 

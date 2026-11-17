@@ -1,8 +1,8 @@
 {
   "mode": "incremental",
-  "commitHash": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
-  "baseCommit": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
-  "reason": "1418 changed lines, 620 outside generated wiki. Retain the existing 56-page tree.",
+  "commitHash": "3294bf15f109aed91c6842e5848d28da7d609aed",
+  "baseCommit": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
+  "reason": "634 changed lines; 133 outside generated wiki. Retain the existing 56-page tree.",
   "create": [],
   "remove": [],
   "update": [
@@ -10,92 +10,75 @@
       "path": "overview/index.md",
       "title": "HomeStream",
       "criticality": "normal",
-      "brief": "Refresh source revision; preserve introduction.",
-      "sources": ["apps/server/src/app.ts"],
-      "related": ["overview/architecture.md"]
+      "brief": "Update the measured source revision; preserve the introduction.",
+      "sources": [
+        "apps/server/src/app.ts"
+      ],
+      "related": [
+        "overview/architecture.md"
+      ]
     },
     {
       "path": "overview/architecture.md",
       "title": "Architecture",
       "criticality": "normal",
-      "brief": "Refresh physical-line and file inventories from the statistics report; describe anticipatory read-ahead briefly without duplicating domain pages.",
-      "sources": ["apps/server/src/playback/readAheadPacing.ts"],
-      "related": ["by-the-numbers.md", "systems/network.md"]
+      "brief": "Refresh committed inventory values from the statistics report and cross-link anchored subtitle demand without duplicating scheduling details.",
+      "sources": [
+        "apps/server/src/playback/subtitleExtractor.ts"
+      ],
+      "related": [
+        "by-the-numbers.md",
+        "systems/playback/subtitles.md"
+      ]
     },
     {
       "path": "overview/glossary.md",
       "title": "Glossary",
       "criticality": "normal",
-      "brief": "Define anticipated lead and capped extractor byte-gap control.",
-      "sources": ["apps/server/src/network/readAhead.ts", "apps/server/src/sourceproxy/leadBound.ts"],
-      "related": ["systems/network.md"]
+      "brief": "Define the request anchor used by a subtitle extractor launched far behind player reach.",
+      "sources": [
+        "apps/server/src/playback/extractorWindow.ts"
+      ],
+      "related": [
+        "systems/playback/subtitles.md"
+      ]
     },
     {
       "path": "by-the-numbers.md",
       "title": "By the numbers",
       "criticality": "normal",
-      "brief": "Recompute committed-tree statistics, activity, bot-attributed commits, import chains and exports; retain reproducible definitions.",
-      "sources": ["apps", "packages", "scripts", ".github"],
-      "related": ["overview/architecture.md"]
-    },
-    {
-      "path": "systems/network.md",
-      "title": "Network controls",
-      "criticality": "critical",
-      "brief": "Explain predictive close lead versus actual resume lead, in-flight/latency constants, and small extractor bound; distinguish modeled test evidence from live measurements.",
+      "brief": "Recompute current committed inventory, activity and bot attribution with explicit reproducible definitions. Revalidate import/export measurements or clearly scope carried-forward counts to unchanged module structure.",
       "sources": [
-        "apps/server/src/network/readAhead.ts",
-        "apps/server/src/playback/readAheadPacing.ts",
-        "apps/server/test/network/readAhead.test.ts"
+        "apps",
+        "packages",
+        "scripts",
+        ".github"
       ],
-      "related": ["systems/source-proxy.md", "systems/playback/subtitles.md"]
-    },
-    {
-      "path": "systems/source-proxy.md",
-      "title": "Source proxy",
-      "criticality": "normal",
-      "brief": "Replace obsolete 192/96 MiB extractor thresholds with min(cache/2,16 MiB) and half-distance resume; link transition logging and document renewed upstream-read assertions with explicit 256 MiB test budgets.",
-      "sources": [
-        "apps/server/src/sourceproxy/proxy.ts",
-        "apps/server/src/sourceproxy/leadBound.ts",
-        "apps/server/src/sourceproxy/readerHolds.ts",
-        "apps/server/test/sourceproxy/resumeAfterHold.test.ts"
-      ],
-      "related": ["systems/network.md", "how-to-monitor/logging.md"]
+      "related": [
+        "overview/architecture.md",
+        "systems/playback/subtitles.md"
+      ]
     },
     {
       "path": "systems/playback/subtitles.md",
       "title": "Subtitles",
       "criticality": "normal",
-      "brief": "Update extractor lead-gap semantics without changing header/tail exemptions, time holds or local pacing.",
-      "sources": ["apps/server/src/sourceproxy/leadBound.ts", "apps/server/src/sourceproxy/proxy.ts"],
-      "related": ["systems/source-proxy.md"]
-    },
-    {
-      "path": "how-to-monitor/logging.md",
-      "title": "Logging",
-      "criticality": "normal",
-      "brief": "Document URL-free read-ahead close/reopen info lines, fields, process-wide memory scope, proxy-wide throttling and reset behavior.",
+      "brief": "Explain far-behind on-demand extraction, request-relative windows, newest-request reuse, stop-at-window behavior, retry inheritance and seek reset. Preserve HTTP readiness, source proxy holds and real-exit slot ownership; distinguish inspected regressions from executed tests.",
       "sources": [
-        "apps/server/src/sourceproxy/readAheadNotes.ts",
-        "apps/server/src/sourceproxy/readerHolds.ts",
-        "apps/server/test/sourceproxy/readAheadNotes.test.ts"
+        "apps/server/src/playback/subtitleExtractor.ts",
+        "apps/server/src/playback/extractorWindow.ts",
+        "apps/server/src/playback/subtitleRun.ts",
+        "apps/server/test/playback/extractorWindow.test.ts",
+        "apps/server/test/playback/subtitleExtractorWindow.test.ts"
       ],
-      "related": ["systems/network.md", "systems/source-proxy.md"]
+      "related": [
+        "systems/playback/index.md",
+        "systems/network.md",
+        "systems/source-proxy.md"
+      ]
     }
   ],
   "keepUnchanged": [
-    "features/downloads.md",
-    "apps/web/index.md",
-    "apps/web/screens.md",
-    "apps/web/player.md",
-    "apps/web/data-and-startup.md",
-    "apps/web/desktop-integration.md",
-    "apps/desktop/index.md",
-    "apps/desktop/windows-and-ipc.md",
-    "packages/shared.md",
-    "api/index.md",
-    "reference/data-models.md",
     "overview/getting-started.md",
     "lore.md",
     "how-to-contribute/index.md",
@@ -106,14 +89,23 @@
     "how-to-contribute/tooling.md",
     "apps/index.md",
     "apps/server.md",
+    "apps/web/index.md",
+    "apps/web/screens.md",
     "apps/web/search.md",
     "apps/web/settings-and-spoilers.md",
+    "apps/web/player.md",
+    "apps/web/data-and-startup.md",
+    "apps/web/desktop-integration.md",
     "apps/web/build-and-tests.md",
+    "apps/desktop/index.md",
     "apps/desktop/supervisor.md",
+    "apps/desktop/windows-and-ipc.md",
     "systems/index.md",
     "systems/playback/index.md",
     "systems/playback/encoding.md",
     "systems/playback/lifecycle.md",
+    "systems/source-proxy.md",
+    "systems/network.md",
     "systems/gateway.md",
     "systems/health.md",
     "systems/telemetry.md",
@@ -121,17 +113,22 @@
     "features/catalog.md",
     "features/stream-selection.md",
     "features/prefetch.md",
+    "features/downloads.md",
     "features/viewing-progress.md",
     "packages/index.md",
+    "packages/shared.md",
+    "api/index.md",
     "deployment.md",
     "security.md",
     "how-to-monitor/index.md",
+    "how-to-monitor/logging.md",
     "how-to-monitor/metrics.md",
     "how-to-monitor/tracing.md",
     "how-to-monitor/alerting.md",
     "cleanup-opportunities.md",
     "reference/index.md",
     "reference/configuration.md",
+    "reference/data-models.md",
     "reference/dependencies.md"
   ]
 }

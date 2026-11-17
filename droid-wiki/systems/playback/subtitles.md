@@ -46,13 +46,21 @@ Files are tailed every **250 ms**. Trusted coverage starts at zero for a zero-st
 
 ## Scheduling, pacing and lifetimes
 
-A useful unheld run within **120 seconds** ahead is waited for rather than duplicated. Otherwise seek launches are serialized. On a video seek, irrelevant runs stop; later subtitle demand starts replacement work. A run more than 120 seconds behind player reach stops. Earlier gaps are filled on demand, not by an automatic full-prefix scan.
+`ensureExtractorFor` in `apps/server/src/playback/subtitleExtractor.ts` reuses an unheld run that started at/before the requested second and whose head is no more than **120 seconds** short of it. Otherwise seek launches are serialized. Earlier gaps are filled on demand, not by an automatic full-prefix scan.
+
+An uncovered request more than **120 seconds behind player reach** can also start a run. Its optional `anchorSec` records the requested second, so the ordinary behind-player stop does not immediately kill it. Later requests served by the same useful run advance the anchor with the maximum requested second; older requests cannot move it backward. With only one worker allowed, the replacement still waits for the old worker to exit.
+
+On a video seek, `noteSeek` in `apps/server/src/playback/subtitleExtractor.ts` stops runs that cannot reach the new position soon and clears the anchor on surviving runs. Those survivors return to player-relative pacing. An ordinary, unanchored run more than 120 seconds behind player reach stops.
 
 `maxExtractorRuns` in `apps/server/src/playback/extractorSchedule.ts` permits **two workers for light sources, one for heavy sources**. Heavy means height ≥2160 or estimated average source bitrate ≥45 Mbps. A stopping worker or one reading final output retains its place until exit is reported. Replacement must not overlap those places.
 
-A failed run retries once from **20 seconds before committed head**, overlapping the failed run's coverage lag. A second failure marks unread intervals failed while leaving covered cues usable.
+A failed run retries once from **20 seconds before committed head**, overlapping the failed run's coverage lag. The retry retains its predecessor's request anchor, if any (`apps/server/src/playback/subtitleExtractor.ts`). A second failure marks unread intervals failed while leaving covered cues usable.
 
-`ExtractorWindows` in `apps/server/src/playback/extractorWindow.ts` applies time hysteresis per run. Its default window holds at **176 seconds** of run read-head lead (configured 180 minus four seconds pipeline allowance) and resumes **strictly below 120 seconds**. Player reach includes the latest requested video segment. Unlike the encoder's [anticipated closing lead](../network.md), this per-run time window uses the actual read head; encoder prediction does not replace it.
+`ExtractorWindows` in `apps/server/src/playback/extractorWindow.ts` applies time hysteresis per run. Lead is the actual read head minus `anchorSec` when present, otherwise minus player reach. Its default window holds at **176 seconds** of lead (configured 180 minus four seconds pipeline allowance) and resumes **strictly below 120 seconds**. Player reach includes the latest requested video segment. Unlike the encoder's [anticipated closing lead](../network.md), this per-run time window uses the actual read head; encoder prediction does not replace it.
+
+An anchored run is **stopped**, rather than left waiting, when it reaches that window past the newest requested second. `syncHolds` in `apps/server/src/playback/subtitleExtractor.ts` requests the stop after the window becomes held. This bounds on-demand work without scanning the gap back to the player; subsequent uncovered requests can start more work.
+
+Existing offline regressions in `apps/server/test/playback/subtitleExtractorWindow.test.ts` model a player at **1800 seconds** requesting subtitles at **400 seconds**, verify the single-worker replacement limit, advance the request anchor to **520 seconds**, and check stop-at-window and seek reset. `apps/server/test/playback/extractorWindow.test.ts` separately checks anchor-relative lead. These tests were inspected for this refresh, not executed; retry-anchor inheritance is established from source rather than a dedicated new assertion.
 
 The [source proxy](../source-proxy.md) separately holds an owned extractor run **strictly beyond min(effective per-source cache budget / 2, 16 MiB)** ahead of its own owner's most recently advanced main reader and releases it at/below half that distance: **16/8 MiB by default**. The effective budget is the smaller global/per-source cap (`apps/server/src/sourceproxy/proxy.ts`, `apps/server/src/sourceproxy/leadBound.ts`, `apps/server/src/sourceproxy/sourceEntry.ts`). This prevents both cache-driven refetching and an excessive cached lead that could hide renewed upstream demand when the encoder window reopens. Owners and run IDs remain isolated; without a main reader there is no byte-gap hold. Neither this byte bound nor the time window is merely a fixed rate.
 
@@ -89,7 +97,7 @@ Text cues survive video restarts. Bitmap/audio changes require a checked seriali
 
 ## Modification entry points
 
-Change automatic defaults separately from explicit validation. Preserve interval coverage when changing extraction and actual-exit slot retention when changing launch/retry. Keep unread readiness in handoff rather than synthesizing empty cues. Change per-run time hysteresis in `apps/server/src/playback/extractorWindow.ts` separately from the byte bound in `apps/server/src/sourceproxy/leadBound.ts`; retain owner isolation and header/tail bootstrap. Cross-runtime response changes belong in [shared contracts](../../packages/shared.md).
+Change automatic defaults separately from explicit validation. Preserve interval coverage when changing extraction and actual-exit slot retention when changing launch/retry. Keep unread readiness in handoff rather than synthesizing empty cues. Keep request-anchor reuse, retry inheritance, stop-at-window and seek reset together in `apps/server/src/playback/subtitleExtractor.ts`. Change per-run time hysteresis in `apps/server/src/playback/extractorWindow.ts` separately from the byte bound in `apps/server/src/sourceproxy/leadBound.ts`; retain owner isolation and header/tail bootstrap. Cross-runtime response changes belong in [shared contracts](../../packages/shared.md).
 
 ## Key source files
 
@@ -101,7 +109,9 @@ Change automatic defaults separately from explicit validation. Preserve interval
 | `apps/server/src/playback/subtitleStore.ts`                  | Session cues/coverage                               |
 | `apps/server/src/playback/subtitleHandoff.ts`                | HTTP readiness and failure behavior                 |
 | `apps/server/src/playback/extractorSchedule.ts`              | Heavy-source warm-up and rate policy                |
-| `apps/server/src/playback/extractorWindow.ts`                | Per-run actual read-head time hysteresis            |
+| `apps/server/src/playback/extractorWindow.ts`                | Player- or request-relative read-head hysteresis    |
+| `apps/server/test/playback/extractorWindow.test.ts`          | Pure anchor-relative window regression              |
+| `apps/server/test/playback/subtitleExtractorWindow.test.ts` | Behind-player demand, worker limit and seek reset    |
 | `apps/server/src/sourceproxy/leadBound.ts`                   | Capped extractor-to-owner-encoder byte gap          |
 | `apps/server/src/sourceproxy/serve.ts`                       | Edge-region bootstrap despite holds                 |
 | `apps/server/test/sourceproxy/sessionSharing.test.ts`        | Tail-index exemption and byte-lead regression tests |

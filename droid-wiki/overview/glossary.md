@@ -27,6 +27,7 @@ These terms connect shared contracts, the server pipeline, and client playback. 
 | Encoder lead         | Encoded time ahead of the player used to gate reads, `apps/server/src/network/readAhead.ts`                                                                                     |
 | Anticipated lead     | Measured lead plus progress-latency growth and extra in-flight input allowance; closes the window early, `apps/server/src/network/readAhead.ts`                                 |
 | Extractor lead bound | Byte-gap hysteresis keeping subtitle readers near their own encoder, capped at 16 MiB ahead, `apps/server/src/sourceproxy/leadBound.ts`, `apps/server/src/sourceproxy/proxy.ts` |
+| Request anchor       | Newest requested second used instead of player reach to bound a subtitle run started far behind the player, `apps/server/src/playback/subtitleExtractor.ts`, `apps/server/src/playback/extractorWindow.ts` |
 | Event bus            | Typed in-process fan-out backing SSE, `apps/server/src/events/bus.ts`                                                                                                           |
 | Device id            | Random local client identifier, not an account, `apps/web/src/device/identity.ts`                                                                                               |
 | Install id           | Random identity for optional server analytics, `apps/server/src/db/settings.ts`                                                                                                 |
