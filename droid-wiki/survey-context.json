@@ -2,27 +2,29 @@
   "mode": "incremental",
   "repo": "HomeStream",
   "repoUrl": "https://github.com/VeroxAUS/homestream",
-  "commitHash": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
-  "baseCommit": "3c31c453d49a737e9d51ba39c6bd41bfc4dbd092",
+  "commitHash": "3294bf15f109aed91c6842e5848d28da7d609aed",
+  "baseCommit": "4a8eb2e7f61f6f773ea9179f021ec4ad6a483880",
   "delta": {
-    "files": 34,
-    "insertions": 1013,
-    "deletions": 405,
-    "changedLines": 1418,
+    "files": 16,
+    "insertions": 373,
+    "deletions": 261,
+    "changedLines": 634,
     "outsideWiki": {
-      "files": 13,
-      "insertions": 550,
-      "deletions": 70
+      "files": 5,
+      "insertions": 115,
+      "deletions": 18
     }
   },
   "summary": "HomeStream is a trusted-LAN TypeScript ESM pnpm monorepo. Fastify 5 on Node 24 owns SQLite, TMDB, AIOStreams, FFmpeg/NVENC, the loopback ranged source cache, optional TorBox caching and health workers. React 19/Vite provides browsing, title details, HLS playback, Settings and the desktop renderer. Electron 45 adds tray, supervision and mini player. Shared Zod schemas, IPC contracts and sanitizers connect runtimes.",
   "architecture": "buildApp constructs services and thin routes. PlaybackManager owns slots, automatic candidate fallback, encoding, HLS and subtitles. Session creation returns 201 playback or 202 download tracking. Web Query hooks validate HTTP responses; Home content and idle gate background startup. Desktop distinguishes attached and owned servers with allowlisted preload IPC.",
   "patterns": "Strict TypeScript; shared Zod contracts; AppError envelopes and redaction. Offline tests isolate temp directories and random ports. No real keys/upstream calls for wiki generation. Video always re-encodes, streamId is auto, devices are not accounts, LAN-only deployment. Preserve unaffected pages byte-for-byte. Domain bylines use VeroxAUS from origin/main, excluding bots. Source references must use full repository-root paths.",
   "changes": [
-    "ReadAheadPacing supplies actual and anticipated lead separately. Closing anticipates 1.5 seconds of recent encoding speed plus the extra duration of 8 MiB in-flight input beyond the fixed four seconds; reopening still uses actual lead strictly below 120 seconds by default. Offline modeled tests cover a 184-second finished-lead gate, not a production hard guarantee.",
-    "SourceProxy caps extractor byte lead at min(effective per-source cache budget / 2, 16 MiB), releasing at half that distance. Header/tail exemptions, owner/run isolation and time holds remain. resumeAfterHold.test.ts uses 256 MiB global and per-source caps and asserts renewed upstream reads, not a measured download-rate curve.",
-    "New readAheadNotes.ts logs actual window state transitions with sessionId, state, rounded actual lead, process RSS/heap/external/arrayBuffers and cache MiB/block count. A one-second throttle is shared per proxy, sampling memory only when a line is emitted; reset of a waiting window can emit reopened.",
-    "The remaining diff is the previous generated-wiki commit, not new application work."
+    "Uncovered subtitle requests more than 120 seconds behind player reach can now start a seek extractor. Previously ensureExtractorFor returned without serving them.",
+    "New optional anchorSec on SubtitleRun/WindowedRun measures those runs from their newest requested second rather than player reach. Useful unheld runs are reused; later requests advance the anchor with Math.max.",
+    "Anchored runs stop when their read head reaches the hold boundary (176 seconds by default) beyond the last request instead of remaining held. Ordinary runs still stop if more than 120 seconds behind player reach.",
+    "Seek-surviving runs clear their anchor and return to player-relative hysteresis. Failed anchored runs carry the anchor into their one retry. Launch replacement still waits for actual worker exit and respects one/two-worker limits.",
+    "Existing offline regressions cover behind-player launch, one-worker replacement, advancing anchor/stop, seek reset, and pure window anchoring. No route contract or source-proxy/network policy changed.",
+    "Other changes since the base are generated wiki content, not new application work."
   ],
   "coverage": {
     "apps": {
@@ -77,11 +79,12 @@
     },
     "automationAndInfrastructure": "scripts and scripts/lib: how-to-contribute/tooling.md and deployment.md; .github/workflows: deployment.md; monitoring: how-to-monitor; .devcontainer: overview/getting-started.md; .factory/skills: tooling/testing; docs/runbooks: debugging/reference."
   },
-  "pagePolicy": "Retain all 56 pages. No new or removed subsystem after directory reconciliation. Preserve unaffected pages byte-for-byte and keep lore unchanged for focused pacing fixes. No maintainers page for solo human ownership. Foundation reviewed before delegation. Update overview revision/glossary and architecture inventory; domain pages network/source-proxy/subtitles, logging and statistics. Historical snapshots remain explicitly dated.",
-  "validationPlan": "Existing format:check passed through corepack pnpm; docs:check and agents:check entry scripts passed. Add a generated-wiki-specific structural/link/source/Mermaid audit because normal checks exclude generated wiki. No app, GPU or live tests for docs-only generation. Corepack resolved pnpm 12.21.0 and provisioned locked dependencies automatically.",
+  "pagePolicy": "Keep all 56 pages and existing ordering. Update overview revision, glossary anchor, architecture inventory, subtitles and statistics only. No new/removed source directories after reconciliation. Preserve the other 51 pages byte-for-byte, including lore for this focused bugfix. Foundation pages reviewed before delegation. No maintainers page for solo human ownership.",
+  "validationPlan": "Existing format:check, docs:check and agents:check passed through Corepack pnpm. Generated-wiki heading, ordering, index, relative link/anchor, source-path and Mermaid-type audit passed; 51 unaffected pages are byte-identical. Eight documented generated build/report paths are not source-file references. Fresh TypeScript 6.0.3 AST/checker scans verified import and exported-name counts against both committed snapshots. No application, GPU or live tests were run for docs-only changes. No temporary helper files remain.",
   "preflight": {
     "factoryUpload": "allowed",
     "fullHistory": true,
-    "qaConfigPresent": false
+    "qaConfigPresent": false,
+    "video": "HyperFrames 0.4.44 doctor failed required FFmpeg/FFprobe checks despite exit 0; ten prior runs inspected, none playable. Video failed metadata recorded; wiki upload proceeds without video."
   }
 }
