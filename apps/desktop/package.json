@@ -18,12 +18,12 @@
   },
   "dependencies": {
     "@homestream/shared": "workspace:*",
-    "@sentry/electron": "~8.3.0",
+    "@sentry/electron": "~8.4.0",
     "posthog-node": "~5.61.2"
   },
   "devDependencies": {
     "@size-limit/file": "~14.3.0",
-    "electron": "~45.2.3",
+    "electron": "~45.4.1",
     "size-limit": "~14.3.0"
   }
 }
